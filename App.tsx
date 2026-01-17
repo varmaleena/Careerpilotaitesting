@@ -1,4 +1,4 @@
-import { Chat } from '@google/genai';
+﻿import { Chat } from '@google/genai';
 import {
   AlertCircle,
   ArrowRight,
@@ -9,17 +9,24 @@ import {
   Check,
   ChevronRight,
   Clock,
+  Code,
+  Compass,
   Copy,
   DollarSign,
   Download,
   ExternalLink,
   FileText,
   Layers,
+  Loader2,
   Lock,
   LogIn,
   Mail,
+  MapPin,
+  MessageSquare,
   Mic,
+  Play,
   PlayCircle,
+  Plus,
   RefreshCw,
   Search,
   Send,
@@ -29,13 +36,16 @@ import {
   UploadCloud,
   User,
   UserPlus,
-  X
+  Volume2,
+  VolumeX,
+  X,
+  Youtube
 } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import LandingPage from "./components/LandingPage";
-import ScoreGauge from "./components/ScoreGauge";
+import { ScoreGauge } from "./components/ScoreGauge";
 import Sidebar from "./components/Sidebar";
-import SkillCard from "./components/SkillCard";
+import { SkillCard } from "./components/SkillCard";
 import { AuthService } from './services/authService';
 import { canStartNewInterview } from './services/interviewSessionManager';
 import { generateLearningPlan, generateProjectIdeas } from './services/learningService';
@@ -727,7 +737,9 @@ const App = () => {
         userProfile.targetRole,
         acquiredSkills,
         analysis.readinessScore,
-        missingSkills
+        missingSkills,
+        userProfile.experienceLevel || 'fresher',
+        userProfile.targetCompanies || ''
       );
       setJobs(foundJobs);
       console.log("Scanner Results Debug:", { acquiredSkills, missingSkills, foundJobs });
@@ -783,24 +795,7 @@ const App = () => {
     }
   };
 
-  const handleFetchHackathons = async () => {
-    if (!analysis) return;
-    setIsFetchingHackathons(true);
-    try {
-      const acquiredSkills = analysis.skills.filter(s => s.status === 'acquired').map(s => s.name);
 
-      const hacks = await fetchHackathons(
-        userProfile.targetRole,
-        acquiredSkills,
-        analysis.readinessScore
-      );
-      setHackathons(hacks);
-    } catch (error) {
-      handleApiError(error, "Failed to fetch hackathons");
-    } finally {
-      setIsFetchingHackathons(false);
-    }
-  };
 
   const handleOptimizeResume = async () => {
     if ((!userProfile?.resumeText && !userProfile?.resumeFile) || !userProfile?.targetRole) {
@@ -956,7 +951,7 @@ const App = () => {
     } finally {
       setIsChatLoading(false);
     }
-  }, [userProfile, isSpeakingEnabled]);
+  }, [userProfile, isSpeakingEnabled, analysis]);
 
   const handleEndInterview = async () => {
     if (chatMessages.length < 2) {
@@ -1333,7 +1328,7 @@ const App = () => {
                   onChange={e => setUserProfile(prev => ({ ...prev, targetRole: e.target.value }))}
                 />
                 <p className="text-xs text-slate-500 mt-1">
-                  💡 Not sure? Try: "Software Developer", "Frontend Engineer", "Data Scientist"
+                  ðŸ’¡ Not sure? Try: "Software Developer", "Frontend Engineer", "Data Scientist"
                 </p>
               </div>
 
@@ -1350,7 +1345,7 @@ const App = () => {
                   onChange={e => setUserProfile(prev => ({ ...prev, targetCompanies: e.target.value }))}
                 />
                 <p className="text-xs text-slate-500 mt-1">
-                  🎯 We'll optimize your resume and learning path for these companies
+                  ðŸŽ¯ We'll optimize your resume and learning path for these companies
                 </p>
               </div>
             </div>
@@ -1376,7 +1371,7 @@ const App = () => {
                     {userProfile.resumeFile ? (
                       <>
                         <FileText className="w-8 h-8 text-emerald-400 mb-2" />
-                        <span className="text-sm font-medium text-emerald-300">Resume Uploaded ✓</span>
+                        <span className="text-sm font-medium text-emerald-300">Resume Uploaded âœ“</span>
                         <span className="text-xs text-emerald-500/70 mt-1">Ready to analyze</span>
                       </>
                     ) : (
@@ -1404,7 +1399,7 @@ const App = () => {
               </div>
 
               <p className="text-xs text-slate-500 mt-3 text-center">
-                📄 Don't have a resume? No problem! We'll help you build one based on your profile.
+                ðŸ“„ Don't have a resume? No problem! We'll help you build one based on your profile.
               </p>
             </div>
 
@@ -1800,7 +1795,7 @@ const App = () => {
                           </h5>
                           <a href={project.sourcePaper.url} target="_blank" rel="noreferrer" className="block group/link">
                             <p className="text-xs text-blue-300 truncate font-medium group-hover/link:underline">{project.sourcePaper.title}</p>
-                            <p className="text-[10px] text-slate-500">{project.sourcePaper.authors.join(', ')} • {project.sourcePaper.publishedDate}</p>
+                            <p className="text-[10px] text-slate-500">{project.sourcePaper.authors.join(', ')} â€¢ {project.sourcePaper.publishedDate}</p>
                           </a>
                         </div>
                       )}
@@ -2027,90 +2022,6 @@ const App = () => {
                     </div>
                   </div>
                 )}
-              </div>
-            </div>
-          )}
-
-          {view === AppView.HACKATHONS && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h2 className="text-2xl font-bold text-white">
-                    Hackathons & Challenges
-                  </h2>
-                  <p className="text-slate-400 mt-1">
-                    Complete list of active opportunities to build your portfolio.
-                  </p>
-                </div>
-                <button
-                  onClick={handleFetchHackathons}
-                  disabled={isFetchingHackathons}
-                  className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center transition-all"
-                >
-                  {isFetchingHackathons ? (
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  ) : (
-                    <RefreshCw className="w-4 h-4 mr-2" />
-                  )}
-                  Find Challenges
-                </button>
-              </div>
-
-              {isFetchingHackathons && hackathons?.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-20 bg-white/5 rounded-3xl border border-white/10 animate-pulse">
-                  <Loader2 className="w-8 h-8 text-indigo-400 animate-spin mb-4" />
-                  <p className="text-slate-400">Searching specifically for {userProfile.targetRole} hackathons...</p>
-                </div>
-              )}
-
-              {/* HACKATHON GRID - Standard Clean Style */}
-              <div className="grid grid-cols-1 gap-4">
-                {hackathons.map((hack, idx) => (
-                  <div key={idx} className="bg-white/5 backdrop-blur-xl p-6 rounded-2xl border border-white/10 hover:border-indigo-500/50 hover:bg-white/10 transition-all group shadow-lg flex flex-col md:flex-row gap-6">
-                    <div className="flex-1">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <h3 className="text-xl font-bold text-white group-hover:text-indigo-400 transition-colors">
-                            {hack.name}
-                          </h3>
-                          <div className="flex items-center space-x-2 text-sm text-slate-400 mt-1">
-                            <span className="font-medium text-slate-300">{hack.platform}</span>
-                            <span>•</span>
-                            <span className="flex items-center text-emerald-400">
-                              <Clock className="w-3 h-3 mr-1" /> {hack.deadline}
-                            </span>
-                          </div>
-                        </div>
-                        <span className="text-xs font-mono text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 px-2 py-1 rounded">
-                          {hack.difficulty}
-                        </span>
-                      </div>
-
-                      <p className="text-slate-300 text-sm mb-4 leading-relaxed">
-                        {hack.description}
-                      </p>
-
-                      <div className="flex flex-wrap gap-2">
-                        {hack.tags.map(tag => (
-                          <span key={tag} className="text-xs bg-slate-800 text-slate-400 px-2.5 py-1 rounded border border-white/5">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex md:flex-col justify-center items-end min-w-[140px]">
-                      <a
-                        href={hack.applyLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-6 rounded-xl transition-all flex items-center justify-center shadow-lg shadow-indigo-500/20"
-                      >
-                        Register <ExternalLink className="w-4 h-4 ml-2" />
-                      </a>
-                    </div>
-                  </div>
-                ))}
               </div>
             </div>
           )}
@@ -2409,10 +2320,18 @@ const App = () => {
                         <div>
                           <h4 className="text-xl font-bold text-white group-hover:text-indigo-400 transition-colors">{job.title}</h4>
                           <p className="text-slate-400 font-medium text-lg">{job.company}</p>
-                          {/* Source Type Badge */}
+                          {/* Source Type Trust Badge */}
                           {job.sourceType && (
-                            <span className="inline-block mt-1 text-[10px] uppercase font-bold text-slate-500 bg-slate-800 px-2 py-0.5 rounded tracking-wider">
-                              Source: {job.sourceType}
+                            <span className={`inline-flex items-center mt-2 text-[10px] uppercase font-bold px-2 py-0.5 rounded tracking-wider border ${job.sourceType === 'ATS' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                                job.sourceType === 'OFFICIAL' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                                  job.sourceType === 'STARTUP' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                                    'bg-slate-700/50 text-slate-400 border-slate-600/50'
+                              }`}>
+                              {job.sourceType === 'ATS' && <span className="mr-1">✓</span>}
+                              {job.sourceType === 'ATS' ? 'Verified ATS' :
+                                job.sourceType === 'OFFICIAL' ? 'Official Site' :
+                                  job.sourceType === 'STARTUP' ? 'Verified Startup' :
+                                    'Search Result (Unverified)'}
                             </span>
                           )}
                         </div>
