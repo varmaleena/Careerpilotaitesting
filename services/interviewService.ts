@@ -1,5 +1,6 @@
+
 import { Type } from "@google/genai";
-import { ChatMessage, InterviewFeedback } from "../types";
+import { ChatMessage, InterviewFeedback, UserProfile, CareerAnalysis } from "../types";
 import { getAiInstance, cleanJson, generateWithRetry, GEMINI_MODEL } from "./geminiClient";
 import axios from "axios";
 
@@ -77,30 +78,15 @@ export interface InterviewRound {
     tips: string[];
 }
 
+/**
+ * Generate a structured interview plan (InterviewRound[])
+ * This uses the JSON-based generation approach.
+ */
 export const generatePersonalizedInterview = async (
     userProfile: UserProfile,
     analysis: CareerAnalysis,
     targetCompany?: string
 ): Promise<InterviewRound[]> => {
-    Your Goal: Assess the candidate's depth of understanding, not just trivia recall.
-    
-    INTERVIEW PHASES (Do not reveal these, just flow naturally):
-    1. **The Hook**: "Tell me about yourself, but focus on why you're a fit for this specific role."
-    2. **The Deep Dive**: Pick ONE project from their resume. Ask "Why did you choose X tech?" then "What would you change if you built it today?". (Looking for self-reflection).
-    3. **Technical Pressure**: Ask a concept question. If they answer correct, ask "What if we scale it to 10M users?". (Push their limit).
-    4. **Behavioral Check**: "Tell me about a time you failed." (Look for ownership).
-    
-    RULES:
-    - **Socratic Method**: If they struggle, give a tiny hint, don't give the answer.
-    - **One Question Only**: Never double-barrel questions.
-    - **Tone**: Professional, slightly demanding, but fair.
-    - **No "Good Job"**: Don't validate every answer. Just say "Understood" or "Interesting" and move on.
-    - Keep responses concise and focused.
-  `;
-
-    // Return our custom load-balanced chat instead of native SDK chat
-    return new LoadBalancedChat(systemInstruction);
-};
 
     const company = targetCompany || userProfile.targetCompanies?.split(',')[0]?.trim() || 'Top Tech Company';
     const experienceLevel = userProfile.experienceLevel || 'fresher';
@@ -181,7 +167,6 @@ Make it feel like a REAL ${company} interview. Use their actual question pattern
                 contents: prompt,
                 config: {
                     responseMimeType: "application/json",
-                    thinkingConfig: { thinkingBudget: 0 }
                 }
             }
         );
@@ -241,12 +226,11 @@ Be constructive but honest. This is practice, so help them improve.`;
 
     try {
         const response = await generateWithRetry(
-            'gemini-3-flash-preview',
+            GEMINI_MODEL, // Switched to GEMINI_MODEL constant for consistency
             {
                 contents: prompt,
                 config: {
                     responseMimeType: "application/json",
-                    thinkingConfig: { thinkingBudget: 0 }
                 }
             }
         );
@@ -344,10 +328,10 @@ function getCompanyContext(company: string): string {
 }
 
 export const fetchInterviewQuestions = async (role: string) => {
-  try {
-    const response = await axios.get(`${INTERVIEW_API_URL}/${role}`);
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
+    try {
+        const response = await axios.get(`${INTERVIEW_API_URL}/${role}`);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
 };
