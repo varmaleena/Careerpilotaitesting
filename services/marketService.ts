@@ -1,54 +1,137 @@
-import { Type } from "@google/genai";
-import { JobListing, MarketTrend } from "../types";
-import { cleanJson, generateWithRetry, GEMINI_MODEL } from "./geminiClient";
+import { JobListing } from "../types";
+import { cleanJson, GEMINI_MODEL, generateWithRetry } from "./geminiClient";
 
 /**
- * Scans for real jobs using Google Search with optimized speed.
+ * CareerPilot Market Scanner
+ * ----------------------------------------
+ * - AI-powered search agent (NOT a scraper)
+ * - Source priority: ATS > Indeed > Career Pages > Search > HiringHustle
+ * - Resume Readiness gating enforced at runtime
+ * - Freshness: last 14 days only
+ * - Link safety & fallback protection
  */
-export const findMatchingJobs = async (targetRole: string, skills: string[]): Promise<JobListing[]> => {
-    // Example JSON structure provided by user to ensure consistency
-    const exampleJson = [
+
+export const findMatchingJobs = async (
+    targetRole: string,
+    skills: string[],
+    readinessScore: number = 50,
+    missingSkills: string[] = []
+): Promise<JobListing[]> => {
+    /* ---------------------------
+       1. Determine Access Level
+    ---------------------------- */
+    const accessLevel =
+        readinessScore >= 80
+            ? "UNRESTRICTED"
+            : readinessScore >= 60
+                ? "CONDITIONAL"
+                : "RESTRICTED";
+
+    /* ---------------------------
+       2. Expected Output Schema
+    ---------------------------- */
+    const exampleJson: JobListing[] = [
         {
-            "id": "apple-ml-2025",
-            "title": "Machine Learning Engineer, OS Intelligence",
-            "company": "Apple",
-            "location": "Cupertino, CA / Remote Eligible",
-            "salary": "$126,800 - $220,900",
-            "postedAt": "3 days ago",
-            "matchScore": 95,
-            "description": "Design deep learning architectures and implement ML algorithms to optimize operating system performance and battery life.",
-            "skillsMatched": ["Python", "PyTorch", "TensorFlow", "Deep Learning"],
-            // Link logic is key here
-            "applyLink": "https://www.google.com/search?q=Apple+Machine+Learning+Engineer+jobs"
+            id: "job-id-1",
+            title: "Backend Engineer",
+            company: "Example Corp",
+            location: "India / Remote",
+            salary: "₹10L – ₹18L PA",
+            postedAt: "5 days ago",
+            matchScore: 82,
+            description: "Build scalable backend services using Java and Spring Boot.",
+            skillsMatched: ["Java", "Spring Boot"],
+            skillsMissing: ["Docker"],
+            sourceType: "ATS", // ATS | Indeed | CareerPage | Search | HiringHustle
+            applyLink: "https://boards.greenhouse.io/example/jobs/123",
+            linkConfidence: "High", // High | Medium | Low
+            readinessStatus: "Ready to Apply"
         }
     ];
 
+    /* ---------------------------
+       3. Gemini Prompt
+    ---------------------------- */
     const prompt = `
-    Role: Senior Technical Recruiter.
-    Task: Find 5 REAL, ACTIONABLE job listings for "${targetRole}" posted in the last 7 days.
-    
-    Target Locations: LinkedIn, Naukri, Glassdoor, Indeed.
-    
-    Candidate Skills Context: ${skills.join(', ')}.
-    
-    Instructions:
-    1. Use Google Search to find specific job posting pages on the target sites (e.g., "site:linkedin.com/jobs ${targetRole}").
-    2. **CRITICAL**: The 'matchScore' (0-100) must be calculated based on the overlap between the job requirements and the candidate's skills provided above.
-    3. **LINK SECURITY**: Do NOT guess URLs. 
-       - If you find a direct valid link in the search result, use it.
-       - If NOT, simple create a google search link: "https://www.google.com/search?q=[Company]+[Job Title]+jobs".
-       - NEVER output a broken or hallucinated "linkedin.com/jobs/view/..." link if you didn't see it.
-    4. Format the output EXACTLY as this JSON array:
-    ${JSON.stringify(exampleJson)}
-    
-    Output Rules:
-    - Return ONLY the JSON array.
-    - No markdown formatting.
-    - Focus on recent (last 7 days) posts.
-    - **Market Context**: Prioritize jobs in India or remote-friendly global roles.
-    - **Currency**: Convert all salaries to INR (e.g., "₹12L - ₹20L PA"). If salary is missing, estimate based on INDIAN market standards.
-  `;
+You are a Career Intelligence Market Scanner tailored for FRESHERS and ENTRY-LEVEL candidates.
+You DISCOVER and VALIDATE job opportunities using AI-powered Google Search.
+You do NOT scrape HTML or fabricate links.
 
+[TARGET ROLE]
+${targetRole} (Entry Level / Fresher Focus)
+
+[CANDIDATE CONTEXT]
+- **ACQUIRED/VERIFIED SKILLS**: ${skills.join(", ")} (Use these to find transferable roles)
+- Missing Skills: ${missingSkills.join(", ")}
+- Resume Readiness Score: ${readinessScore}/100
+- Access Level: ${accessLevel}
+
+[STRICT SOURCE PRIORITY]
+1. ATS Platforms (greenhouse.io, lever.co, myworkdayjobs.com, ashbyhq.com)
+2. Indeed (discovery + redirect only)
+3. Official Company Career Pages
+4. Google Search fallback
+5. HiringHustle.com / LinkedIn
+
+[FRESHER-CENTRIC STRATEGY (CRITICAL)]
+The candidate is a FRESHER. You must split results:
+- **Batch A (50%)**: "Direct Role Matches" -> Entry-level ${targetRole} jobs.
+- **Batch B (50%)**: "Skill-Based Matches" -> Jobs that explicitly require their **ACQUIRED SKILLS** (${skills.slice(0, 3).join(', ')}) even if the job title is different (e.g. "Python Developer" instead of "Data Scientist").
+- **Constraint**: ALL jobs must be suitable for 0-1 years experience.
+
+[FRESHNESS RULE]
+- Only jobs posted within the last 14 days.
+- Deprioritize anything older.
+
+[READINESS GATING – NON-NEGOTIABLE]
+
+IF Access Level = UNRESTRICTED (>=80):
+- Show direct apply links.
+- Prefer ATS links.
+- readinessStatus = "Ready to Apply"
+
+IF Access Level = CONDITIONAL (60–79):
+- Show direct links.
+- readinessStatus = "Apply After Closing Gaps"
+- Explicitly mention up to 2 missing skills.
+
+IF Access Level = RESTRICTED (<60):
+- DO NOT return real apply links.
+- Provide Google Search fallback links ONLY.
+- readinessStatus = "Locked – Improve Readiness Before Applying"
+
+[SEMANTIC MATCHING]
+- Compute Match Score (0–100).
+- For freshers, prioritize POTENTIAL and CORE SKILLS over years of experience.
+
+[LINK SAFETY]
+- High Confidence → Verified ATS or official apply page
+- Medium Confidence → Company career page
+- Low Confidence → Google Search fallback
+- NEVER hallucinate deep URLs.
+
+[SEARCH QUERIES - BROADENED FOR VOLUME]
+1. site:boards.greenhouse.io "${targetRole}" (Fresher OR "Entry Level" OR Intern) India
+2. site:lever.co "${targetRole}" (Fresher OR "Entry Level") India
+3. site:hiringhustle.com "${targetRole}" Fresher
+4. site:internshala.com "${targetRole}" internship (High relevance for freshers)
+5. site:naukri.com "${targetRole}" "0-1 years" (Freshers typically here)
+6. "${targetRole}" fresher jobs India hiring now
+7. "${skills[0]} ${skills[1]}" entry level jobs India (Skill-based search)
+8. "Junior ${targetRole}" or "Associate ${targetRole}" recruitment India
+
+[OUTPUT RULES]
+- **QUANTITY**: Return **10-12** high-quality listings.
+- **RELEVANCE**: If exact "${targetRole}" matches are scarce, include **ADJACENT ROLES** (e.g., if "React Dev" is low, find "Frontend Dev" or "Web Dev").
+- Output STRICT JSON only.
+- Follow this schema exactly:
+
+${JSON.stringify(exampleJson, null, 2)}
+`;
+
+    /* ---------------------------
+       4. Execute Search
+    ---------------------------- */
     try {
         const response = await generateWithRetry(
             GEMINI_MODEL,
@@ -56,72 +139,45 @@ export const findMatchingJobs = async (targetRole: string, skills: string[]): Pr
                 contents: prompt,
                 config: {
                     tools: [{ googleSearch: {} }],
-                    thinkingConfig: { thinkingBudget: 0 }, // Disable thinking to speed up grounded response
-                    // Using prompt engineering for structure instead of responseSchema to avoid conflicts with search tools
+                    thinkingConfig: { thinkingBudget: 0 }
                 }
             }
         );
 
         if (!response.text) return [];
 
-        // cleanJson will handle stripping any accidental conversational text
         const parsed = JSON.parse(cleanJson(response.text));
-        return Array.isArray(parsed) ? parsed : [];
-    } catch (error) {
-        console.error("Job Scan Failed:", error);
-        // Rethrow so the UI can handle the specific 429 error message
-        throw error;
-    }
-};
 
-export const fetchMarketTrends = async (targetRole: string): Promise<MarketTrend> => {
-    const exampleJson = {
-        role: targetRole,
-        salaryRange: "₹12L - ₹18L PA",
-        demandLevel: "High",
-        hotTechnologies: [
-            { name: "TechName", growthReason: "Reason for growth" }
-        ],
-        industryNews: [
-            { headline: "Headline", summary: "Short summary", impact: "Impact on career" }
-        ]
-    };
+        if (!Array.isArray(parsed)) return [];
 
-    const prompt = `
-    Role: Tech Analyst.
-    Task: Provide a real-time market snapshot for "${targetRole}" including salary ranges, demand, hot technologies, and recent industry news.
-    
-     Instructions:
-    1. Use Google Search to find CURRENT data for:
-       - Salary range (INDIAN MARKET specific, in INR)
-       - Market demand level
-       - Trending technologies/skills for this role
-       - Recent news headlines affecting this role
-    2. Format the output EXACTLY as this JSON object:
-    ${JSON.stringify(exampleJson)}
-    
-    Output Rules:
-    - Return ONLY the JSON object.
-    - No markdown formatting.
-    - Start with '{' and end with '}'.
-  `;
-
-    try {
-        const response = await generateWithRetry(
-            GEMINI_MODEL,
-            {
-                contents: prompt,
-                config: {
-                    tools: [{ googleSearch: {} }],
-                    thinkingConfig: { thinkingBudget: 0 },
-                    // Note: Removed strict responseSchema to prevent conflict with Google Search tool output.
-                    // Relying on prompt engineering for JSON structure.
-                }
+        /* ---------------------------
+           5. Post-Processing Guardrails
+        ---------------------------- */
+        return parsed.map((job: JobListing) => {
+            if (accessLevel === "RESTRICTED") {
+                return {
+                    ...job,
+                    applyLink: `https://www.google.com/search?q=${encodeURIComponent(
+                        `${job.title} ${targetRole} skills`
+                    )}`,
+                    linkConfidence: "Low",
+                    readinessStatus: "Locked – Improve Readiness Before Applying"
+                };
             }
-        );
-        return JSON.parse(cleanJson(response.text || "{}"));
+
+            if (accessLevel === "CONDITIONAL") {
+                return {
+                    ...job,
+                    readinessStatus: `Apply After Learning: ${missingSkills
+                        .slice(0, 2)
+                        .join(", ")}`
+                };
+            }
+
+            return job;
+        });
     } catch (error) {
-        console.error("Trends Fetch Failed:", error);
+        console.error("❌ Market Scan Failed:", error);
         throw error;
     }
 };
