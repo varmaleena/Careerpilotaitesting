@@ -6,13 +6,15 @@ export enum AppView {
   INTERVIEW = 'INTERVIEW',
   JOBS = 'JOBS',
   PROJECTS = 'PROJECTS',
-  TRENDS = 'TRENDS',
   RESUME = 'RESUME'
 }
 
 export interface UserProfile {
   name: string;
   targetRole: string;
+  experienceLevel?: string; // student, fresher, junior, mid, senior
+  graduationYear?: string;
+  targetCompanies?: string; // Comma-separated dream companies
   resumeText?: string;
   resumeFile?: {
     data: string; // Base64
@@ -69,6 +71,10 @@ export interface JobListing {
   description: string;
   skillsMatched: string[];
   applyLink?: string; // URL to the job posting
+  skillsMissing?: string[]; // Gap analysis
+  linkConfidence?: string; // High | Medium | Low
+  readinessStatus?: string; // New field for gating feedback
+  sourceType?: string; // New field for source tracking
 }
 
 export interface ResearchPaperSource {
@@ -91,19 +97,43 @@ export interface ProjectIdea {
   implementationResources?: Array<{ name: string; url: string }>;
 }
 
-export interface MarketTrend {
-  role: string;
-  salaryRange: string;
-  demandLevel: 'High' | 'Medium' | 'Low';
-  hotTechnologies: Array<{
-    name: string;
-    growthReason: string;
-  }>;
-  industryNews: Array<{
-    headline: string;
-    summary: string;
-    impact: string; // How it affects the career
-  }>;
+
+
+// Interview System Types
+export interface InterviewQuestion {
+  id: string;
+  type: 'behavioral' | 'technical' | 'dsa' | 'system-design' | 'project' | 'conceptual';
+  difficulty: 'easy' | 'medium' | 'hard';
+  question: string;
+  context?: string;
+  expectedKeyPoints?: string[];
+  followUps?: string[];
+  topic?: string; // e.g., "OOP", "DBMS", "OS", "Networks"
+}
+
+export interface InterviewRound {
+  roundName: string;
+  duration: string;
+  questions: InterviewQuestion[];
+  tips: string[];
+}
+
+export interface InterviewAnswer {
+  questionId: string;
+  answer: string;
+  score?: number;
+  feedback?: string;
+  timestamp: number;
+}
+
+export interface InterviewSession {
+  id: string;
+  targetCompany: string;
+  rounds: InterviewRound[];
+  answers: InterviewAnswer[];
+  overallScore?: number;
+  startedAt: number;
+  completedAt?: number;
 }
 
 export interface InterviewFeedback {
@@ -111,14 +141,15 @@ export interface InterviewFeedback {
   feedbackSummary: string;
   strengths: string[];
   improvements: string[];
-  recommendedFocus: string; // One specific area to study
+  recommendedFocus: string;
 }
 
 export interface ResumeImprovement {
-  category: 'Impact' | 'Keywords' | 'Formatting' | 'Clarity';
+  category: 'Impact' | 'Keywords' | 'Formatting' | 'Clarity' | 'Quantification';
   suggestion: string;
-  originalSnippet?: string;
-  improvedSnippet?: string;
+  originalSnippet: string;
+  improvedSnippet: string;
+  impact?: 'high' | 'medium' | 'low';
 }
 
 export interface ResumeOptimizationResult {
@@ -127,9 +158,18 @@ export interface ResumeOptimizationResult {
   atsScore: {
     before: number;
     after: number;
+    breakdown?: {
+      keywordMatch: number;
+      quantification: number;
+      actionVerbs: number;
+      formatting: number;
+      relevance: number;
+    };
   };
   keyImprovements: ResumeImprovement[];
   missingKeywordsAdded: string[];
+  weaknessesAddressed?: string[];
+  nextSteps?: string[];
 }
 
 export interface LatexResumeData {

@@ -26,7 +26,8 @@ export const generateLearningPlan = async (targetRole: string, missingSkills: st
     
     Requirements:
     - Generate exactly 4 Weeks.
-    - Each week must have 3-5 high-impact tasks.
+    - Each week must have **EXACTLY 3** high-impact tasks (no more, no less).
+    - **Description**: MAX 15 WORDS. Concise and actionable.
     - Resources: strictly free and high-quality (YouTube/Docs).
     - **Video Query**: Must be very specific (e.g., "React Hooks useReducer tutorial for beginners", "System Design centralized logging architecture").
   `;
@@ -75,14 +76,21 @@ export const generateLearningPlan = async (targetRole: string, missingSkills: st
     }
 };
 
-export const generateProjectIdeas = async (targetRole: string): Promise<ProjectIdea[]> => {
+export const generateProjectIdeas = async (targetRole: string, focusTopics: string[] = []): Promise<ProjectIdea[]> => {
+    const context = focusTopics.length > 0
+        ? `Focus primarily on these concepts derived from the user's Learning Plan: ${focusTopics.join(', ')}.`
+        : "";
+
     const prompt = `
     Role: CTO of a Y-Combinator Startup.
     Task: Suggest 3 Portfolio Projects that would actually get a candidate hired for "${targetRole}".
     
+    ${context}
+    
     Criteria:
     - NO "To-Do Lists" or "Weather Apps" (Too generic).
     - Projects must solve a real problem or demonstrate a complex skill (e.g. Real-time data, Auth, AI integration).
+    - **Relevance**: Ensure the projects allow the user to apply the "Focus" concepts mentioned above (if any).
     - Levels: 
       1. **The "Proof of Concept"** (Beginner but unique).
       2. **The "Full Stack"** (Intermediate, real users).

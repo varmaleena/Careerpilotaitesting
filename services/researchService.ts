@@ -51,15 +51,20 @@ const getPaperUrl = (work: any): string => {
 /**
  * Fetches relevant research papers from OpenAlex with strict filtering and normalization.
  */
-export const fetchPapersFromOpenAlex = async (roleQuery: string): Promise<RawPaper[]> => {
+export const fetchPapersFromOpenAlex = async (roleQuery: string, focusTopics: string[] = []): Promise<RawPaper[]> => {
     // 1. Construct Query - Intelligent Keyword Extraction
     // Remove seniority/noise words to focus on the TECH DOMAIN (e.g. "Senior React Dev" -> "React Dev")
     const noiseWords = ['Junior', 'Senior', 'Lead', 'Staff', 'Principal', 'Intern', 'Entry Level', 'Associated', 'Head of', 'Director'];
-    const keywords = roleQuery
+    let keywords = roleQuery
         .split(' ')
         .filter(w => !noiseWords.includes(w))
         .slice(0, 3)
         .join(' ');
+
+    // Add the top focus topic if available to bias search towards learning path
+    if (focusTopics.length > 0) {
+        keywords += ` ${focusTopics[0]}`;
+    }
 
     const sanitizedQuery = encodeURIComponent(keywords);
 
@@ -226,9 +231,9 @@ const mapPapersToProjectsBatch = async (papers: RawPaper[]): Promise<ProjectIdea
  * Main entry point: Generates research-backed projects.
  * Enforces strict 10s timeout to prevent UI hanging.
  */
-export const generateResearchBackedProjects = async (role: string): Promise<ProjectIdea[]> => {
+export const generateResearchBackedProjects = async (role: string, focusTopics: string[] = []): Promise<ProjectIdea[]> => {
     const fetchAndMap = async () => {
-        const papers = await fetchPapersFromOpenAlex(role);
+        const papers = await fetchPapersFromOpenAlex(role, focusTopics);
         if (papers.length === 0) throw new Error("No valid papers found.");
         return await mapPapersToProjectsBatch(papers);
     };
