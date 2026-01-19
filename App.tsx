@@ -39,6 +39,8 @@ import {
   Volume2,
   VolumeX,
   X,
+  CheckCircle,
+  List,
   Youtube
 } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -53,7 +55,6 @@ import { findMatchingJobs } from './services/marketService';
 import { downloadLatexPdf, downloadResumeAsPdf } from './services/pdfExportService';
 import { extractTextFromPdf } from './services/pdfService';
 import { evaluatePremiumInterview, generatePremiumInterviewResponse } from './services/premiumInterviewService';
-import { generateResearchBackedProjects } from './services/researchService';
 import { analyzeProfile, generateLatexData, optimizeResume } from './services/resumeService';
 import {
   AppView,
@@ -346,6 +347,7 @@ const App = () => {
   const [optimizedResume, setOptimizedResume] = useState<string>('');
   const [resumeAnalysisResult, setResumeAnalysisResult] = useState<ResumeOptimizationResult | null>(null);
   const [isOptimizingResume, setIsOptimizingResume] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<ProjectIdea | null>(null);
   const [resumeFormat, setResumeFormat] = useState<'text' | 'latex'>('text');
   const [latexResume, setLatexResume] = useState<string>('');
   const [latexData, setLatexData] = useState<LatexResumeData | null>(null);
@@ -353,6 +355,7 @@ const App = () => {
 
   // Projects
   const [projects, setProjects] = useState<ProjectIdea[]>([]);
+  const [seenProjectTitles, setSeenProjectTitles] = useState<string[]>([]);
   const [isGeneratingProjects, setIsGeneratingProjects] = useState(false);
 
   // Premium Interview System
@@ -394,7 +397,8 @@ const App = () => {
 
         chatMessages,
         interviewFeedback,
-        resumeAnalysisResult
+        resumeAnalysisResult,
+        seenProjectTitles
       });
     }
   }, [
@@ -408,7 +412,8 @@ const App = () => {
 
     chatMessages,
     interviewFeedback,
-    resumeAnalysisResult
+    resumeAnalysisResult,
+    seenProjectTitles
   ]);
 
   // CRITICAL FIX: Cancel audio when switching views
@@ -519,6 +524,7 @@ const App = () => {
       setPlan(userData.plan);
       setJobs(userData.jobs || []);
       setProjects(userData.projects || []);
+      setSeenProjectTitles(userData.seenProjectTitles || []);
 
       setChatMessages(userData.chatMessages || []);
       setInterviewFeedback(userData.interviewFeedback);
@@ -545,6 +551,7 @@ const App = () => {
     setPlan(null);
     setJobs([]);
     setProjects([]);
+    setSeenProjectTitles([]);
 
     setChatMessages([]);
     setInterviewFeedback(null);
@@ -562,6 +569,7 @@ const App = () => {
         plan: null,
         jobs: [],
         projects: [],
+        seenProjectTitles: [],
 
         chatMessages: [],
         interviewFeedback: null,
@@ -575,6 +583,7 @@ const App = () => {
       setPlan(null);
       setJobs([]);
       setProjects([]);
+      setSeenProjectTitles([]);
 
       setChatMessages([]);
       setInterviewFeedback(null);
@@ -589,6 +598,7 @@ const App = () => {
       setPlan(null);
       setJobs([]);
       setProjects([]);
+      setSeenProjectTitles([]);
 
       setChatMessages([]);
       setInterviewFeedback(null);
@@ -771,22 +781,20 @@ const App = () => {
           .slice(0, 3);
       }
 
-      // 1. Try to get Research-Backed Projects first (High Value)
-      let researchProjects: ProjectIdea[] = [];
-      try {
-        researchProjects = await generateResearchBackedProjects(userProfile.targetRole, focusTopics);
-      } catch (e) {
-        console.warn("Research fetch failed, falling back to standard.", e);
-      }
+      // Generate highly tailored projects based on User's Dream Role & Company
+      const standardProjects = await generateProjectIdeas(
+        userProfile.targetRole,
+        focusTopics,
+        userProfile.targetCompanies || "Tech Company",
+        userProfile.experienceLevel || "Intermediate",
+        seenProjectTitles // Pass the history of seen titles
+      );
 
-      // 2. If we have enough, great. If not (or if failed), fill with standard AI ideas.
-      if (researchProjects.length < 3) {
-        const standardProjects = await generateProjectIdeas(userProfile.targetRole, focusTopics);
-        // Combine: Research ones first, then fill rest
-        setProjects([...researchProjects, ...standardProjects].slice(0, 3));
-      } else {
-        setProjects(researchProjects);
-      }
+      setProjects(standardProjects.slice(0, 3));
+
+      // Update history
+      const newTitles = standardProjects.map(p => p.title);
+      setSeenProjectTitles(prev => [...prev, ...newTitles]);
 
     } catch (error) {
       handleApiError(error, "Failed to generate projects");
@@ -1714,25 +1722,15 @@ const App = () => {
 
               {isGeneratingProjects && projects?.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-32 bg-white/5 rounded-3xl border border-white/10">
-                  <Loader2 className="w-12 h-12 text-indigo-500 animate-spin" />
-                  <p className="text-slate-300 font-medium text-lg">Crafting project ideas based on your skills...</p>
+                  <Loader2 className="w-12 h-12 text-indigo-500 animate-spin mb-4" />
+                  <p className="text-slate-300">Crafting project ideas based on your skills...</p>
                 </div>
               )}
 
-
-
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {projects?.map((project, idx) => (
-                  <div key={idx} className="bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 p-6 flex flex-col hover:border-indigo-500/50 transition-all group relative overflow-hidden">
-
-                    {/* Research Badge */}
-                    {project.sourcePaper && (
-                      <div className="absolute top-0 right-0 bg-blue-600/90 text-white text-[10px] uppercase font-bold px-3 py-1 rounded-bl-xl shadow-lg z-10">
-                        Research Backed
-                      </div>
-                    )}
-
-                    <div className="flex justify-between items-start mb-4 mt-2">
+                  <div key={idx} className="bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 p-6 flex flex-col hover:border-indigo-500/50 transition-all group">
+                    <div className="flex justify-between items-start mb-4">
                       <div className={`px-3 py-1 rounded-lg text-xs font-bold border ${project.difficulty === 'Beginner' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
                         project.difficulty === 'Intermediate' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
                           'bg-purple-500/10 text-purple-400 border-purple-500/20'
@@ -1743,15 +1741,8 @@ const App = () => {
                         <Layers className="w-4 h-4 text-slate-400 group-hover:text-white" />
                       </div>
                     </div>
-
-                    <h4
-                      className="text-lg font-bold text-white mb-3 group-hover:text-indigo-400 transition-colors leading-tight line-clamp-2"
-                      title={project.title}
-                    >
-                      {project.title}
-                    </h4>
-
-                    <p className="text-slate-400 text-sm mb-4 flex-1 line-clamp-4">{project.description}</p>
+                    <h4 className="text-lg font-bold text-white mb-3 group-hover:text-indigo-400 transition-colors">{project.title}</h4>
+                    <p className="text-slate-400 text-sm mb-4 flex-1">{project.description}</p>
 
                     <div className="space-y-4">
                       <div>
@@ -1765,40 +1756,12 @@ const App = () => {
                         </div>
                       </div>
 
-                      {/* Implementation Resources */}
-                      {project.implementationResources && project.implementationResources.length > 0 && (
-                        <div>
-                          <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Build Resources</h5>
-                          <div className="space-y-1">
-                            {project.implementationResources.map((res, i) => (
-                              <a key={i} href={res.url} target="_blank" rel="noreferrer" className="flex items-center text-xs text-indigo-400 hover:text-indigo-300 transition-colors group/link">
-                                <ExternalLink className="w-3 h-3 mr-1.5 opacity-70 group-hover/link:opacity-100" />
-                                <span className="truncate">{res.name}</span>
-                              </a>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
                       <div className="bg-indigo-900/20 p-3 rounded-lg border border-indigo-500/20">
                         <div className="flex items-start space-x-2">
                           <TrendingUp className="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" />
                           <p className="text-xs text-indigo-200 italic">"{project.resumeValue}"</p>
                         </div>
                       </div>
-
-                      {/* Source Paper Verification */}
-                      {project.sourcePaper && (
-                        <div className="pt-3 border-t border-white/5">
-                          <h5 className="text-[10px] font-bold text-slate-500 uppercase mb-1 flex items-center">
-                            <BookOpen className="w-3 h-3 mr-1" /> Based on Research
-                          </h5>
-                          <a href={project.sourcePaper.url} target="_blank" rel="noreferrer" className="block group/link">
-                            <p className="text-xs text-blue-300 truncate font-medium group-hover/link:underline">{project.sourcePaper.title}</p>
-                            <p className="text-[10px] text-slate-500">{project.sourcePaper.authors.join(', ')} â€¢ {project.sourcePaper.publishedDate}</p>
-                          </a>
-                        </div>
-                      )}
                     </div>
                   </div>
                 ))}
@@ -2323,9 +2286,9 @@ const App = () => {
                           {/* Source Type Trust Badge */}
                           {job.sourceType && (
                             <span className={`inline-flex items-center mt-2 text-[10px] uppercase font-bold px-2 py-0.5 rounded tracking-wider border ${job.sourceType === 'ATS' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                                job.sourceType === 'OFFICIAL' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                                  job.sourceType === 'STARTUP' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
-                                    'bg-slate-700/50 text-slate-400 border-slate-600/50'
+                              job.sourceType === 'OFFICIAL' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                                job.sourceType === 'STARTUP' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                                  'bg-slate-700/50 text-slate-400 border-slate-600/50'
                               }`}>
                               {job.sourceType === 'ATS' && <span className="mr-1">✓</span>}
                               {job.sourceType === 'ATS' ? 'Verified ATS' :

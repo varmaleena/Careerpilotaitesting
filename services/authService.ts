@@ -25,6 +25,7 @@ interface UserData {
   chatMessages: ChatMessage[];
   interviewFeedback: InterviewFeedback | null;
   resumeAnalysisResult: ResumeOptimizationResult | null;
+  seenProjectTitles?: string[];
 }
 
 // In-memory cache to speed up repeated reads
@@ -58,7 +59,8 @@ export const AuthService = {
           projects: [],
           chatMessages: [],
           interviewFeedback: null,
-          resumeAnalysisResult: null
+          resumeAnalysisResult: null,
+          seenProjectTitles: []
         };
         await AuthService.saveUserData(email, initialData);
         return { success: true };
@@ -79,7 +81,7 @@ export const AuthService = {
     const initialData = {
       userProfile: { name: email.split('@')[0], targetRole: '' },
       analysis: null, plan: null, jobs: [], projects: [], chatMessages: [], interviewFeedback: null,
-      resumeAnalysisResult: null
+      resumeAnalysisResult: null, seenProjectTitles: []
     };
     AuthService.saveUserData(email, initialData);
     return { success: true };

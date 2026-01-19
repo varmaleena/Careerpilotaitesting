@@ -93,6 +93,8 @@ export interface ProjectIdea {
   techStack: string[];
   keyFeatures: string[];
   resumeValue: string; // Why this helps on a resume
+  implementationFlow: string[]; // Step-by-step guide
+  learningOutcomes: string[]; // What the student learns
   sourcePaper?: ResearchPaperSource;
   implementationResources?: Array<{ name: string; url: string }>;
 }
