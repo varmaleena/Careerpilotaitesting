@@ -20,6 +20,7 @@ export interface UserProfile {
     mimeType: string;
   };
   isPremium?: boolean;
+  isResumePremium?: boolean;
 }
 
 export interface Skill {

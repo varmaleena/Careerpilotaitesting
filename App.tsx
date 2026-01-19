@@ -904,6 +904,38 @@ const App = () => {
     paymentObject.open();
   };
 
+  const handleResumePayment = async () => {
+    const res = await loadScript('https://checkout.razorpay.com/v1/checkout.js');
+
+    if (!res) {
+      alert('Razorpay SDK failed to load. Are you online?');
+      return;
+    }
+
+    const options = {
+      key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+      amount: 100, // 100 paise = ₹1
+      currency: "INR",
+      name: "CareerPilot",
+      description: "Resume Architect Access",
+      handler: function (response: any) {
+        setUserProfile(prev => ({ ...prev, isResumePremium: true }));
+        alert("Payment Successful! Resume Architect Unlocked.");
+      },
+      prefill: {
+        name: userProfile.name,
+        email: currentUserEmail || '',
+        contact: ""
+      },
+      theme: {
+        color: "#10b981" // Emerald color for resume section
+      }
+    };
+
+    const paymentObject = new (window as any).Razorpay(options);
+    paymentObject.open();
+  };
+
   const startInterview = useCallback(async () => {
     if (!userProfile?.targetRole) {
       alert("Please define a target role first.");
@@ -2149,8 +2181,60 @@ const App = () => {
             </div>
           )}
 
+          {/* Resume View - Payment Gate */}
+          {view === AppView.RESUME && !userProfile.isResumePremium && (
+            <div className="h-[calc(100vh-140px)] min-h-[600px] flex flex-col items-center justify-center bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-300 relative text-center px-4">
+              <div className="w-24 h-24 bg-emerald-600/20 rounded-full flex items-center justify-center mb-6 ring-4 ring-emerald-600/10">
+                <FileText className="w-10 h-10 text-emerald-400" />
+              </div>
+              <h2 className="text-3xl font-bold text-white mb-3">Resume Architect Pro</h2>
+              <p className="text-slate-400 max-w-lg mb-8 text-lg">
+                Unlock professional resume optimization and LaTeX downloads. Land 3x more interviews with an ATS-optimized resume for just <span className="text-white font-bold">₹1</span>.
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 text-left max-w-lg w-full">
+                <div className="bg-white/5 p-4 rounded-xl border border-white/5 flex items-center">
+                  <div className="p-2 bg-emerald-500/20 rounded-lg mr-3">
+                    <TrendingUp className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-white text-sm">ATS Optimization</h4>
+                    <p className="text-xs text-slate-400">Keyword injection & metric focus</p>
+                  </div>
+                </div>
+                <div className="bg-white/5 p-4 rounded-xl border border-white/5 flex items-center">
+                  <div className="p-2 bg-blue-500/20 rounded-lg mr-3">
+                    <Code className="w-5 h-5 text-blue-400" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-white text-sm">LaTeX Export</h4>
+                    <p className="text-xs text-slate-400">Get professional PDF versions</p>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={handleResumePayment}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white px-10 py-4 rounded-xl font-bold text-lg shadow-[0_0_30px_rgba(16,185,129,0.3)] hover:shadow-[0_0_50px_rgba(16,185,129,0.5)] transition-all transform hover:-translate-y-1 flex items-center"
+              >
+                Unlock Architect for ₹1
+                <ChevronRight className="w-5 h-5 ml-2" />
+              </button>
+              <p className="mt-4 text-xs text-slate-500 flex items-center">
+                <Lock className="w-3 h-3 mr-1" /> Secure payment via Razorpay
+              </p>
+              <button
+                onClick={() => setUserProfile(p => ({ ...p, isResumePremium: true }))}
+                className="mt-8 text-[10px] text-slate-700 hover:text-emerald-400 transition-colors"
+                title="Dev Bypass"
+              >
+                [Dev Bypass]
+              </button>
+            </div>
+          )}
+
           {/* Resume View */}
-          {view === AppView.RESUME && (
+          {view === AppView.RESUME && userProfile.isResumePremium && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="bg-white/5 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-xl">
                 <div className="flex justify-between items-center mb-8">
