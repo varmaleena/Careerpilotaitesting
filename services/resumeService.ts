@@ -19,12 +19,16 @@ export const analyzeProfile = async (
     
     Philosophy: Be brutally honest but highly constructive. Use current 2025 market standards.
     
+    CRITICAL: YOU MUST PROVIDE EXACTLY 3 STRENGTHS and 3 WEAKNESSES. 
+    If the resume is sparse, infer strengths from their background or potential (e.g., "Strong Academic Foundation", "Self-Driven Learning", "Technical Curiosity").
+    Do NOT return empty arrays.
+    
     Output strictly in JSON format matching the schema.
     - readinessScore: number 0-100. (Rules: <40=Junior/Student, 40-70=Mid-Level/Capable, >80=Job Ready/Senior. Be strict.)
     - summary: A 3-sentence strategic summary. 1) Current Status. 2) The Critical Gap. 3) The "Winning Move" to get hired.
     - skills: Extract and categorize. Mark 'missing' if essential for ${targetRole} but not found.
-    - strengths: 3 distinct "Selling Points" that make them stand out.
-    - weaknesses: 3 specific "Deal Breakers" or gaps they MUST fix.
+    - strengths: 3 distinct "Selling Points" that make them stand out. (MANDATORY: 3 items)
+    - weaknesses: 3 specific "Deal Breakers" or gaps they MUST fix. (MANDATORY: 3 items)
   `;
 
     const contents = [];
@@ -66,9 +70,20 @@ export const analyzeProfile = async (
                                     }
                                 }
                             },
-                            strengths: { type: Type.ARRAY, items: { type: Type.STRING } },
-                            weaknesses: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        }
+                            strengths: {
+                                type: Type.ARRAY,
+                                items: { type: Type.STRING },
+                                minItems: 3,
+                                maxItems: 3
+                            },
+                            weaknesses: {
+                                type: Type.ARRAY,
+                                items: { type: Type.STRING },
+                                minItems: 3,
+                                maxItems: 3
+                            },
+                        },
+                        required: ["readinessScore", "summary", "skills", "strengths", "weaknesses"]
                     }
                 }
             }
@@ -360,10 +375,10 @@ export const generateLatexData = async (
 };
 
 export const fetchResume = async (userId: string) => {
-  try {
-    const response = await axios.get(`${API_URL}/${userId}`);
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
+    try {
+        const response = await axios.get(`${API_URL}/${userId}`);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
 };
