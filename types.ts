@@ -4,7 +4,6 @@ export enum AppView {
   DASHBOARD = 'DASHBOARD',
   PLAN = 'PLAN',
   INTERVIEW = 'INTERVIEW',
-  JOBS = 'JOBS',
   PROJECTS = 'PROJECTS',
   RESUME = 'RESUME'
 }
@@ -60,22 +59,6 @@ export interface ChatMessage {
   timestamp: number;
 }
 
-export interface JobListing {
-  id: string;
-  title: string;
-  company: string;
-  location: string;
-  salary?: string;
-  postedAt?: string; // e.g., "2 days ago"
-  matchScore: number;
-  description: string;
-  skillsMatched: string[];
-  applyLink?: string; // URL to the job posting
-  skillsMissing?: string[]; // Gap analysis
-  linkConfidence?: string; // High | Medium | Low
-  readinessStatus?: string; // New field for gating feedback
-  sourceType?: string; // New field for source tracking
-}
 
 export interface ResearchPaperSource {
   title: string;
