@@ -12,7 +12,6 @@ import {
   Code,
   Compass,
   Copy,
-  DollarSign,
   Download,
   ExternalLink,
   FileText,
@@ -28,7 +27,6 @@ import {
   PlayCircle,
   Plus,
   RefreshCw,
-  Search,
   Send,
   Target,
   Trash2,
@@ -52,7 +50,6 @@ import { SkillCard } from "./components/SkillCard";
 import { AuthService } from './services/authService';
 import { canStartNewInterview } from './services/interviewSessionManager';
 import { generateLearningPlan, generateProjectIdeas } from './services/learningService';
-import { findMatchingJobs } from './services/marketService';
 import { downloadLatexPdf, downloadResumeAsPdf } from './services/pdfExportService';
 import { extractTextFromPdf } from './services/pdfService';
 import { evaluatePremiumInterview, generatePremiumInterviewResponse } from './services/premiumInterviewService';
@@ -62,7 +59,6 @@ import {
   CareerAnalysis,
   ChatMessage,
   InterviewFeedback,
-  JobListing,
   LatexResumeData,
   ProjectIdea,
   ResumeOptimizationResult,
@@ -339,10 +335,6 @@ const App = () => {
   const [newTaskType, setNewTaskType] = useState<'course' | 'project' | 'reading'>('reading');
   const [newTaskHours, setNewTaskHours] = useState(1);
 
-  // Jobs
-  const [jobs, setJobs] = useState<JobListing[]>([]);
-  const [isScanningJobs, setIsScanningJobs] = useState(false);
-  const [scannerStep, setScannerStep] = useState<string>('');
 
   // Resume Optimizer
   const [optimizedResume, setOptimizedResume] = useState<string>('');
@@ -393,7 +385,6 @@ const App = () => {
         userProfile,
         analysis,
         plan,
-        jobs,
         projects,
 
         chatMessages,
@@ -408,7 +399,6 @@ const App = () => {
     userProfile,
     analysis,
     plan,
-    jobs,
     projects,
 
     chatMessages,
@@ -454,9 +444,6 @@ const App = () => {
 
   // Initial scan when entering views
   useEffect(() => {
-    if (view === AppView.JOBS && jobs?.length === 0) {
-      handleScanJobs();
-    }
     if (view === AppView.PROJECTS && projects?.length === 0) {
       handleGenerateProjects();
     }
@@ -523,7 +510,6 @@ const App = () => {
       setUserProfile(userData.userProfile);
       setAnalysis(userData.analysis);
       setPlan(userData.plan);
-      setJobs(userData.jobs || []);
       setProjects(userData.projects || []);
       setSeenProjectTitles(userData.seenProjectTitles || []);
 
@@ -550,7 +536,6 @@ const App = () => {
     setUserProfile({ name: 'User', targetRole: '' });
     setAnalysis(null);
     setPlan(null);
-    setJobs([]);
     setProjects([]);
     setSeenProjectTitles([]);
 
@@ -568,7 +553,6 @@ const App = () => {
         userProfile: { name: userProfile.name, targetRole: '' },
         analysis: null,
         plan: null,
-        jobs: [],
         projects: [],
         seenProjectTitles: [],
 
@@ -582,7 +566,6 @@ const App = () => {
       setUserProfile(emptyData.userProfile);
       setAnalysis(null);
       setPlan(null);
-      setJobs([]);
       setProjects([]);
       setSeenProjectTitles([]);
 
@@ -597,7 +580,6 @@ const App = () => {
       setUserProfile(prev => ({ ...prev, targetRole: '' }));
       setAnalysis(null);
       setPlan(null);
-      setJobs([]);
       setProjects([]);
       setSeenProjectTitles([]);
 
@@ -777,42 +759,6 @@ const App = () => {
     setNewTaskHours(1);
   };
 
-  const handleScanJobs = async () => {
-    if (!analysis || !userProfile) return;
-    setIsScanningJobs(true);
-    setScannerStep('Initializing scan...');
-
-    // Simulate loading steps to improve UX
-    const steps = ['Searching global job boards...', 'Filtering for your skills...', 'Analyzing salary data...', 'Finalizing matches...'];
-    let stepIdx = 0;
-    const interval = setInterval(() => {
-      if (stepIdx < steps.length) {
-        setScannerStep(steps[stepIdx]);
-        stepIdx++;
-      }
-    }, 1500);
-
-    try {
-      const acquiredSkills = analysis.skills?.filter(s => s.status === 'acquired').map(s => s.name) || [];
-      const missingSkills = analysis.skills?.filter(s => s.status === 'missing').map(s => s.name) || [];
-      const foundJobs = await findMatchingJobs(
-        userProfile.targetRole,
-        acquiredSkills,
-        analysis.readinessScore,
-        missingSkills,
-        userProfile.experienceLevel || 'fresher',
-        userProfile.targetCompanies || ''
-      );
-      setJobs(foundJobs);
-      console.log("Scanner Results Debug:", { acquiredSkills, missingSkills, foundJobs });
-    } catch (error: any) {
-      console.error("Scanner Error:", error);
-      handleApiError(error, "Failed to scan jobs");
-    } finally {
-      clearInterval(interval);
-      setIsScanningJobs(false);
-    }
-  };
 
   const handleGenerateProjects = async () => {
     if (!userProfile?.targetRole) return;
@@ -1540,7 +1486,6 @@ const App = () => {
                 {view === AppView.DASHBOARD && 'Dashboard'}
                 {view === AppView.PLAN && 'Learning Plan'}
                 {view === AppView.INTERVIEW && 'Interview Simulator'}
-                {view === AppView.JOBS && 'Market Scanner'}
               </h2>
               <p className="text-slate-400 text-sm mt-1">Target Role: <span className="text-indigo-400 font-medium">{userProfile.targetRole}</span></p>
             </div>
@@ -2717,134 +2662,6 @@ const App = () => {
             </div>
           )}
 
-          {/* Jobs View */}
-          {view === AppView.JOBS && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="flex justify-between items-center">
-                <h3 className="text-xl font-bold text-white">Live Opportunities</h3>
-                <button
-                  onClick={handleScanJobs}
-                  disabled={isScanningJobs}
-                  className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center transition-all"
-                >
-                  <Briefcase className="w-4 h-4 mr-2" />
-                  Refresh Scanner
-                </button>
-              </div>
-
-              {isScanningJobs && jobs?.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-32 bg-white/5 rounded-3xl border border-white/10 animate-pulse">
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-indigo-500 blur-xl opacity-20 rounded-full"></div>
-                    <div className="relative bg-slate-900 p-4 rounded-full mb-6 border border-indigo-500/30 shadow-lg shadow-indigo-500/10">
-                      <Search className="w-8 h-8 text-indigo-400 animate-bounce" />
-                    </div>
-                  </div>
-                  <h4 className="text-xl font-bold text-white mb-2">Scanning Market</h4>
-                  <p className="text-indigo-300 font-medium">{scannerStep}</p>
-                  <p className="text-slate-500 text-sm mt-2">This usually takes about 10-15 seconds.</p>
-                </div>
-              )}
-
-              <div className="grid gap-6">
-                {jobs?.map((job, idx) => (
-                  <div key={idx} className={`bg-white/5 backdrop-blur-xl p-6 rounded-2xl border transition-all group shadow-lg flex flex-col md:flex-row gap-6 ${job.readinessStatus?.includes("Locked") ? 'border-red-500/30 bg-red-900/5' : 'border-white/10 hover:border-indigo-500/50 hover:bg-white/10'
-                    }`}>
-
-                    <div className="flex-1">
-                      <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <h4 className="text-xl font-bold text-white group-hover:text-indigo-400 transition-colors">{job.title}</h4>
-                          <p className="text-slate-400 font-medium text-lg">{job.company}</p>
-                          {/* Source Type Trust Badge */}
-                          {job.sourceType && (
-                            <span className={`inline-flex items-center mt-2 text-[10px] uppercase font-bold px-2 py-0.5 rounded tracking-wider border ${job.sourceType === 'ATS' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                              job.sourceType === 'OFFICIAL' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                                job.sourceType === 'STARTUP' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
-                                  'bg-slate-700/50 text-slate-400 border-slate-600/50'
-                              }`}>
-                              {job.sourceType === 'ATS' && <span className="mr-1">✓</span>}
-                              {job.sourceType === 'ATS' ? 'Verified ATS' :
-                                job.sourceType === 'OFFICIAL' ? 'Official Site' :
-                                  job.sourceType === 'STARTUP' ? 'Verified Startup' :
-                                    'Search Result (Unverified)'}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex flex-col items-end space-y-2">
-                          <div className="flex items-center space-x-2 bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full text-xs font-bold border border-emerald-500/20 whitespace-nowrap">
-                            <Target className="w-3 h-3 mr-1" />
-                            <span>{job.matchScore || 0}% Match</span>
-                          </div>
-                          {/* Readiness Status Badge */}
-                          {job.readinessStatus && (
-                            <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider border ${job.readinessStatus.includes("Locked") ? 'bg-red-500/10 text-red-400 border-red-500/20' :
-                              job.readinessStatus.includes("learning") ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
-                                'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                              }`}>
-                              {job.readinessStatus}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap gap-4 text-sm text-slate-400 mb-5">
-                        {job.location && (
-                          <div className="flex items-center"><MapPin className="w-4 h-4 mr-1.5 text-indigo-400" /> {job.location}</div>
-                        )}
-                        {job.salary && (
-                          <div className="flex items-center"><DollarSign className="w-4 h-4 mr-1.5 text-emerald-400" /> {job.salary}</div>
-                        )}
-                        {job.postedAt && (
-                          <div className="flex items-center"><Clock className="w-4 h-4 mr-1.5 text-slate-500" /> {job.postedAt}</div>
-                        )}
-                      </div>
-
-                      <p className="text-slate-300 text-sm mb-5 leading-relaxed">{job.description}</p>
-
-                      <div className="flex flex-wrap gap-2">
-                        {job.skillsMatched?.slice(0, 5).map(skill => (
-                          <span key={skill} className="text-xs bg-slate-800 text-slate-300 px-2.5 py-1 rounded border border-white/5">
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex md:flex-col justify-end items-end gap-3 min-w-[140px]">
-                      <a
-                        href={job.applyLink || `https://www.google.com/search?q=${encodeURIComponent(`${job.title} ${job.company} jobs`)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={`w-full font-bold py-3 px-6 rounded-xl transition-all flex items-center justify-center shadow-lg ${job.readinessStatus?.includes("Locked")
-                          ? 'bg-slate-700 text-slate-400 cursor-not-allowed hover:bg-slate-700'
-                          : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-500/20'
-                          }`}
-                      >
-                        {job.readinessStatus?.includes("Locked") ? <Lock className="w-4 h-4 mr-2" /> : <ExternalLink className="w-4 h-4 mr-2" />}
-                        {job.readinessStatus?.includes("Locked") ? "Unlock Link" : "Apply Now"}
-                      </a>
-                      <button className="w-full text-xs text-slate-500 hover:text-slate-300 py-2">
-                        {job.readinessStatus?.includes("Locked") ? "Learn Requirements" : "Save for later"}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                {!isScanningJobs && jobs?.length === 0 && (
-                  <div className="text-center py-20 bg-white/5 rounded-3xl border border-white/10">
-                    <Briefcase className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                    <h3 className="text-xl font-bold text-white mb-2">Job Market Scanner</h3>
-                    <p className="text-slate-400 mb-6 max-w-md mx-auto">
-                      Find active job listings that match your skills.
-                    </p>
-                    <button onClick={handleScanJobs} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-bold">
-                      Scan Now
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
 
         </div>
       </main >
