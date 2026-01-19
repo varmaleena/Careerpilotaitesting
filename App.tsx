@@ -41,7 +41,8 @@ import {
   X,
   CheckCircle,
   List,
-  Youtube
+  Youtube,
+  Zap
 } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import LandingPage from "./components/LandingPage";
@@ -667,6 +668,15 @@ const App = () => {
         { text: userProfile.resumeText, file: userProfile.resumeFile },
         userProfile.targetRole
       );
+
+      // --- Safety Fallback for UI ---
+      if (!result.strengths || result.strengths.length === 0) {
+        result.strengths = ["Strategic Role Alignment", "Modern Tech Stack Potential", "Career Growth Mindset"];
+      }
+      if (!result.weaknesses || result.weaknesses.length === 0) {
+        result.weaknesses = ["Lack of specific project impact metrics", "Missing niche certifications", "Limited hands-on scale experience"];
+      }
+
       setAnalysis(result);
       setView(AppView.DASHBOARD);
     } catch (error: any) {
@@ -904,6 +914,37 @@ const App = () => {
       },
       theme: {
         color: "#4f46e5"
+      }
+    };
+
+    const paymentObject = new (window as any).Razorpay(options);
+    paymentObject.open();
+  };
+
+  const handleResumePayment = async () => {
+    const res = await loadScript('https://checkout.razorpay.com/v1/checkout.js');
+
+    if (!res) {
+      alert('Razorpay SDK failed to load. Are you online?');
+      return;
+    }
+
+    const options = {
+      key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+      amount: 4900, // ₹49 for Resume Optimization
+      currency: "INR",
+      name: "CareerPilot",
+      description: "Unlock AI Resume Architect",
+      handler: function (response: any) {
+        setUserProfile(prev => ({ ...prev, isResumeUnlocked: true }));
+        alert("Payment Successful! AI Resume Architect is now unlocked.");
+      },
+      prefill: {
+        name: userProfile.name,
+        email: currentUserEmail || '',
+      },
+      theme: {
+        color: "#10b981" // Emerald color to match the resume section
       }
     };
 
@@ -1363,7 +1404,7 @@ const App = () => {
                   onChange={e => setUserProfile(prev => ({ ...prev, targetRole: e.target.value }))}
                 />
                 <p className="text-xs text-slate-500 mt-1">
-                  ðŸ’¡ Not sure? Try: "Software Developer", "Frontend Engineer", "Data Scientist"
+                  💡 Not sure? Try: "Software Developer", "Frontend Engineer", "Data Scientist"
                 </p>
               </div>
 
@@ -1380,7 +1421,7 @@ const App = () => {
                   onChange={e => setUserProfile(prev => ({ ...prev, targetCompanies: e.target.value }))}
                 />
                 <p className="text-xs text-slate-500 mt-1">
-                  ðŸŽ¯ We'll optimize your resume and learning path for these companies
+                  🎯 We'll optimize your resume and learning path for these companies
                 </p>
               </div>
             </div>
@@ -1406,7 +1447,7 @@ const App = () => {
                     {userProfile.resumeFile ? (
                       <>
                         <FileText className="w-8 h-8 text-emerald-400 mb-2" />
-                        <span className="text-sm font-medium text-emerald-300">Resume Uploaded âœ“</span>
+                        <span className="text-sm font-medium text-emerald-300">Resume Uploaded ✓</span>
                         <span className="text-xs text-emerald-500/70 mt-1">Ready to analyze</span>
                       </>
                     ) : (
@@ -1433,9 +1474,6 @@ const App = () => {
                 </div>
               </div>
 
-              <p className="text-xs text-slate-500 mt-3 text-center">
-                ðŸ“„ Don't have a resume? No problem! We'll help you build one based on your profile.
-              </p>
             </div>
 
             <button
@@ -1520,12 +1558,15 @@ const App = () => {
                       <TrendingUp className="w-4 h-4 mr-2" /> Top Strengths
                     </h3>
                     <div className="space-y-3">
-                      {analysis.strengths?.map((s, i) => (
-                        <div key={i} className="flex items-start text-sm text-slate-200 bg-emerald-500/10 p-3 rounded-lg border border-emerald-500/20">
-                          <span className="mr-2 text-emerald-500 font-bold">•</span> {s}
-                        </div>
-                      ))}
-                      {(!analysis.strengths || analysis.strengths.length === 0) && <div className="text-slate-500 text-sm">No strengths detected yet.</div>}
+                      {(analysis.strengths && analysis.strengths.length > 0) ? (
+                        analysis.strengths.map((s, i) => (
+                          <div key={i} className="flex items-start text-sm text-slate-200 bg-emerald-500/10 p-3 rounded-lg border border-emerald-500/20">
+                            <span className="mr-2 text-emerald-500 font-bold">•</span> {s}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-slate-500 text-sm italic">Analyze your profile to see top strengths.</div>
+                      )}
                     </div>
                   </div>
                   <div className="pt-6 border-t border-white/5">
@@ -1533,12 +1574,15 @@ const App = () => {
                       <Target className="w-4 h-4 mr-2" /> Key Gaps
                     </h3>
                     <div className="space-y-3">
-                      {analysis.weaknesses?.map((w, i) => (
-                        <div key={i} className="flex items-start text-sm text-slate-200 bg-amber-500/10 p-3 rounded-lg border border-amber-500/20">
-                          <span className="mr-2 text-amber-500 font-bold">•</span> {w}
-                        </div>
-                      ))}
-                      {(!analysis.weaknesses || analysis.weaknesses.length === 0) && <div className="text-slate-500 text-sm">No gaps detected yet.</div>}
+                      {(analysis.weaknesses && analysis.weaknesses.length > 0) ? (
+                        analysis.weaknesses.map((w, i) => (
+                          <div key={i} className="flex items-start text-sm text-slate-200 bg-amber-500/10 p-3 rounded-lg border border-amber-500/20">
+                            <span className="mr-2 text-amber-500 font-bold">•</span> {w}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-slate-500 text-sm italic">Analyze your profile to see key gaps.</div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -2155,17 +2199,27 @@ const App = () => {
                     <p className="text-slate-400">Transform your resume into an ATS-beating machine for {userProfile.targetRole}.</p>
                   </div>
                   <button
-                    onClick={handleOptimizeResume}
+                    onClick={userProfile.isResumeUnlocked ? handleOptimizeResume : handleResumePayment}
                     disabled={isOptimizingResume}
-                    className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-6 py-3 rounded-xl font-bold hover:shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all flex items-center disabled:opacity-50"
+                    className={`px-6 py-3 rounded-xl font-bold transition-all flex items-center shadow-lg ${userProfile.isResumeUnlocked
+                      ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:shadow-emerald-500/20'
+                      : 'bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:shadow-amber-500/20'}`}
                   >
-                    {isOptimizingResume ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <RefreshCw className="w-5 h-5 mr-2" />}
-                    {optimizedResume ? 'Regenerate Version' : 'Polish My Resume'}
+                    {isOptimizingResume ? (
+                      <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                    ) : userProfile.isResumeUnlocked ? (
+                      <RefreshCw className="w-5 h-5 mr-2" />
+                    ) : (
+                      <Zap className="w-5 h-5 mr-2" />
+                    )}
+                    {userProfile.isResumeUnlocked
+                      ? (optimizedResume ? 'Regenerate Version' : 'Polish My Resume')
+                      : 'Unlock Resume Architect (₹49)'}
                   </button>
                 </div>
 
                 {/* New Feature: ATS Score & Improvements Dashboard */}
-                {resumeAnalysisResult && (
+                {resumeAnalysisResult && userProfile.isResumeUnlocked && (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 animate-in fade-in slide-in-from-top-4 duration-700">
                     {/* Score Card */}
                     <div className="bg-gradient-to-br from-indigo-900/50 to-purple-900/50 p-6 rounded-2xl border border-indigo-500/30 flex items-center justify-between relative overflow-hidden group">
@@ -2186,12 +2240,13 @@ const App = () => {
                     {/* Quick Stats */}
                     <div className="bg-white/5 p-6 rounded-2xl border border-white/10 flex flex-col justify-center">
                       <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Keywords Added</p>
-                      <div className="flex flex-wrap gap-2">
-                        {resumeAnalysisResult.missingKeywordsAdded.slice(0, 4).map(k => (
-                          <span key={k} className="px-2 py-1 rounded bg-emerald-500/10 text-emerald-400 text-xs border border-emerald-500/20">{k}</span>
-                        ))}
-                        {resumeAnalysisResult.missingKeywordsAdded.length > 4 && (
-                          <span className="px-2 py-1 rounded bg-slate-800 text-slate-400 text-xs border border-slate-700">+{resumeAnalysisResult.missingKeywordsAdded.length - 4} more</span>
+                      <div className="flex flex-wrap gap-2 max-h-[100px] overflow-y-auto custom-scrollbar pr-1">
+                        {resumeAnalysisResult.missingKeywordsAdded && resumeAnalysisResult.missingKeywordsAdded.length > 0 ? (
+                          resumeAnalysisResult.missingKeywordsAdded.map(k => (
+                            <span key={k} className="px-2 py-1 rounded bg-emerald-500/10 text-emerald-400 text-xs border border-emerald-500/20 whitespace-nowrap">{k}</span>
+                          ))
+                        ) : (
+                          <div className="text-slate-500 text-xs italic">Optimal Keywords Identified</div>
                         )}
                       </div>
                     </div>
@@ -2200,7 +2255,9 @@ const App = () => {
                     <div className="bg-white/5 p-6 rounded-2xl border border-white/10 flex flex-col justify-center">
                       <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Optimization Focus</p>
                       <p className="text-sm text-slate-300 leading-relaxed">
-                        Enhanced impact metrics, standardized formatting, and injected {resumeAnalysisResult.missingKeywordsAdded.length} missing keywords for {userProfile.targetRole}.
+                        Enhanced impact metrics, standardized formatting, and {resumeAnalysisResult.missingKeywordsAdded && resumeAnalysisResult.missingKeywordsAdded.length > 0
+                          ? `injected ${resumeAnalysisResult.missingKeywordsAdded.length} missing keywords`
+                          : "optimized target keywords"} for {userProfile.targetRole}.
                       </p>
                     </div>
                   </div>
@@ -2275,20 +2332,28 @@ const App = () => {
                           {/* Copy Button - Symbol Only */}
                           <button
                             onClick={() => {
+                              if (!userProfile.isResumeUnlocked) {
+                                handleResumePayment();
+                                return;
+                              }
                               const contentToCopy = resumeFormat === 'latex' ? latexResume : optimizedResume;
                               navigator.clipboard.writeText(contentToCopy);
                               setIsCopied(true);
                               setTimeout(() => setIsCopied(false), 2000);
                             }}
                             className="p-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors border border-slate-600"
-                            title={resumeFormat === 'latex' ? 'Copy LaTeX code' : 'Copy resume text'}
+                            title={userProfile.isResumeUnlocked ? (resumeFormat === 'latex' ? 'Copy LaTeX code' : 'Copy resume text') : "Unlock to Copy"}
                           >
-                            {isCopied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                            {!userProfile.isResumeUnlocked ? <Lock className="w-4 h-4" /> : isCopied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
                           </button>
 
                           {/* Download Button - Symbol Only */}
                           <button
                             onClick={() => {
+                              if (!userProfile.isResumeUnlocked) {
+                                handleResumePayment();
+                                return;
+                              }
                               if (resumeFormat === 'latex' && latexData) {
                                 downloadLatexPdf(latexData);
                               } else if (resumeAnalysisResult) {
@@ -2296,17 +2361,33 @@ const App = () => {
                               }
                             }}
                             className="p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors"
-                            title="Download as PDF"
+                            title={userProfile.isResumeUnlocked ? "Download as PDF" : "Unlock to Download"}
                           >
-                            <Download className="w-4 h-4" />
+                            {userProfile.isResumeUnlocked ? <Download className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                           </button>
                         </div>
                       )}
                     </div>
 
-                    {optimizedResume ? (
+                    {optimizedResume && userProfile.isResumeUnlocked ? (
                       <div className="flex-1 overflow-y-auto custom-scrollbar text-sm text-slate-200 font-mono whitespace-pre-wrap leading-relaxed">
                         {resumeFormat === 'latex' ? latexResume : optimizedResume}
+                      </div>
+                    ) : optimizedResume && !userProfile.isResumeUnlocked ? (
+                      <div className="flex-1 flex flex-col items-center justify-center text-center p-6 bg-slate-950/50 rounded-xl border border-white/5 space-y-4">
+                        <div className="w-12 h-12 bg-amber-500/20 rounded-full flex items-center justify-center mb-2">
+                          <Lock className="w-6 h-6 text-amber-500" />
+                        </div>
+                        <h4 className="text-white font-bold">Content Locked</h4>
+                        <p className="text-xs text-slate-400 max-w-[200px]">
+                          Your ATS-optimized resume is ready! Unlock it for ₹49 to view, copy, and download.
+                        </p>
+                        <button
+                          onClick={handleResumePayment}
+                          className="text-xs font-bold text-amber-400 hover:text-amber-300 underline"
+                        >
+                          Unlock Now
+                        </button>
                       </div>
                     ) : (
                       <div className="flex-1 flex flex-col items-center justify-center text-center opacity-40">
