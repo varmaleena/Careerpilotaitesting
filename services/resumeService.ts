@@ -17,6 +17,10 @@ export const analyzeProfile = async (
     Role: Senior Career Coach.
     Task: Analyze the candidate's profile against the target role: "${targetRole}".
     
+    CRITICAL: YOU MUST PROVIDE EXACTLY 3 STRENGTHS and 3 WEAKNESSES. 
+    If the resume is sparse, infer strengths from their background or potential (e.g., "Strong Academic Foundation", "Self-Driven Learning", "Technical Curiosity").
+    Do NOT return empty arrays.
+    
     Output strictly in JSON format matching the schema.
     - readinessScore: number 0-100 based on fit.
     - summary: A 2-3 sentence executive summary.
@@ -64,9 +68,20 @@ export const analyzeProfile = async (
                                     }
                                 }
                             },
-                            strengths: { type: Type.ARRAY, items: { type: Type.STRING } },
-                            weaknesses: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        }
+                            strengths: {
+                                type: Type.ARRAY,
+                                items: { type: Type.STRING },
+                                minItems: 3,
+                                maxItems: 3
+                            },
+                            weaknesses: {
+                                type: Type.ARRAY,
+                                items: { type: Type.STRING },
+                                minItems: 3,
+                                maxItems: 3
+                            },
+                        },
+                        required: ["readinessScore", "summary", "skills", "strengths", "weaknesses"]
                     }
                 }
             }
@@ -121,10 +136,10 @@ RULES:
 3. Power verbs
    Managed→Led | Worked→Built | Helped→Optimized
 
-4. NO hallucination
-   - Don't add missing skills
-   - Don't fabricate experience
-   - CAN rephrase + add soft skills (Agile, Scrum)
+4. Keyword Optimization (MANDATORY)
+   - Identify 5-10 technical keywords/tools/methodologies essential for ${targetRole}.
+   - Inject these keywords naturally into bullets or skills.
+   - You MUST populate 'missingKeywordsAdded' array with these identified keywords.
 
 5. Order by impact
    Business $ → Scale → Technical → Leadership
