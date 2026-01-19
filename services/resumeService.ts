@@ -138,10 +138,10 @@ RULES:
 3. Power verbs
    Managed→Led | Worked→Built | Helped→Optimized
 
-4. NO hallucination
-   - Don't add missing skills
-   - Don't fabricate experience
-   - CAN rephrase + add soft skills (Agile, Scrum)
+4. Keyword Optimization (MANDATORY)
+   - Identify 5-10 technical keywords/tools/methodologies essential for ${targetRole}.
+   - Inject these keywords naturally into bullets or skills.
+   - You MUST populate 'missingKeywordsAdded' array with these identified keywords.
 
 5. Order by impact
    Business $ → Scale → Technical → Leadership
