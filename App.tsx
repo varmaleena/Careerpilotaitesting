@@ -1,73 +1,72 @@
-import { Chat } from '@google/genai';
+﻿import { Chat } from '@google/genai';
 import {
+  AlertCircle,
   ArrowRight,
   Award,
   BookOpen,
   Bot,
   Briefcase,
+  Check,
   ChevronRight,
   Clock,
   Code,
+  Compass,
+  Copy,
   DollarSign,
+  Download,
+  ExternalLink,
   FileText,
-  Globe,
   Layers,
   Loader2,
+  Lock,
+  LogIn,
+  Mail,
   MapPin,
   MessageSquare,
   Mic,
-  Newspaper,
   Play,
   PlayCircle,
   Plus,
+  RefreshCw,
+  Search,
   Send,
   Target,
   Trash2,
   TrendingUp,
   UploadCloud,
   User,
+  UserPlus,
   Volume2,
   VolumeX,
   X,
-  Youtube,
-  Search,
-  Lock,
-  Mail,
-  LogIn,
-  UserPlus,
-  AlertCircle,
-  RefreshCw,
-  ExternalLink,
-  Download,
-  Copy,
-  Check
+  CheckCircle,
+  List,
+  Youtube
 } from 'lucide-react';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import LandingPage from './components/LandingPage';
-import { ScoreGauge } from './components/ScoreGauge';
-import Sidebar from './components/Sidebar';
-import { SkillCard } from './components/SkillCard';
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import LandingPage from "./components/LandingPage";
+import { ScoreGauge } from "./components/ScoreGauge";
+import Sidebar from "./components/Sidebar";
+import { SkillCard } from "./components/SkillCard";
 import { AuthService } from './services/authService';
-import { createInterviewSession, generateInterviewFeedback } from './services/interviewService';
+import { canStartNewInterview } from './services/interviewSessionManager';
 import { generateLearningPlan, generateProjectIdeas } from './services/learningService';
-import { fetchMarketTrends, findMatchingJobs } from './services/marketService';
-import { analyzeProfile, optimizeResume, generateLatexData } from './services/resumeService';
-import { generateResearchBackedProjects } from './services/researchService';
-import { downloadResumeAsPdf, downloadLatexPdf } from './services/pdfExportService';
+import { findMatchingJobs } from './services/marketService';
+import { downloadLatexPdf, downloadResumeAsPdf } from './services/pdfExportService';
 import { extractTextFromPdf } from './services/pdfService';
+import { evaluatePremiumInterview, generatePremiumInterviewResponse } from './services/premiumInterviewService';
+import { analyzeProfile, generateLatexData, optimizeResume } from './services/resumeService';
 import {
   AppView,
   CareerAnalysis,
   ChatMessage,
   InterviewFeedback,
   JobListing,
-  MarketTrend,
+  LatexResumeData,
   ProjectIdea,
-  ResumeImprovement,
   ResumeOptimizationResult,
   UserProfile,
-  WeeklyPlan,
-  LatexResumeData
+  WeeklyPlan
 } from './types';
 
 // LaTeX Character Escaping Function
@@ -348,6 +347,7 @@ const App = () => {
   const [optimizedResume, setOptimizedResume] = useState<string>('');
   const [resumeAnalysisResult, setResumeAnalysisResult] = useState<ResumeOptimizationResult | null>(null);
   const [isOptimizingResume, setIsOptimizingResume] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<ProjectIdea | null>(null);
   const [resumeFormat, setResumeFormat] = useState<'text' | 'latex'>('text');
   const [latexResume, setLatexResume] = useState<string>('');
   const [latexData, setLatexData] = useState<LatexResumeData | null>(null);
@@ -355,11 +355,18 @@ const App = () => {
 
   // Projects
   const [projects, setProjects] = useState<ProjectIdea[]>([]);
+  const [seenProjectTitles, setSeenProjectTitles] = useState<string[]>([]);
   const [isGeneratingProjects, setIsGeneratingProjects] = useState(false);
 
+  // Premium Interview System
+  const [interviewStartTime, setInterviewStartTime] = useState<number | null>(null);
+  const [interviewElapsedSeconds, setInterviewElapsedSeconds] = useState(0);
+  const [interviewMessages, setInterviewMessages] = useState<any[]>([]);
+  const [showCommitmentModal, setShowCommitmentModal] = useState(false);
+  const [interviewCommitment, setInterviewCommitment] = useState<any>(null);
+
   // Trends
-  const [trends, setTrends] = useState<MarketTrend | null>(null);
-  const [isFetchingTrends, setIsFetchingTrends] = useState(false);
+
 
   // Interview
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -387,10 +394,11 @@ const App = () => {
         plan,
         jobs,
         projects,
-        trends,
+
         chatMessages,
         interviewFeedback,
-        resumeAnalysisResult
+        resumeAnalysisResult,
+        seenProjectTitles
       });
     }
   }, [
@@ -401,10 +409,11 @@ const App = () => {
     plan,
     jobs,
     projects,
-    trends,
+
     chatMessages,
     interviewFeedback,
-    resumeAnalysisResult
+    resumeAnalysisResult,
+    seenProjectTitles
   ]);
 
   // CRITICAL FIX: Cancel audio when switching views
@@ -425,6 +434,23 @@ const App = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
+  // Interview timer
+  useEffect(() => {
+    if (!isInterviewStarted || !interviewStartTime) return;
+
+    const interval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - interviewStartTime) / 1000);
+      setInterviewElapsedSeconds(elapsed);
+
+      // Auto-end interview after 35 minutes (2100 seconds)
+      if (elapsed >= 2100) {
+        handleEndInterview();
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isInterviewStarted, interviewStartTime]);
+
   // Initial scan when entering views
   useEffect(() => {
     if (view === AppView.JOBS && jobs?.length === 0) {
@@ -433,9 +459,7 @@ const App = () => {
     if (view === AppView.PROJECTS && projects?.length === 0) {
       handleGenerateProjects();
     }
-    if (view === AppView.TRENDS && !trends) {
-      handleFetchTrends();
-    }
+
   }, [view]);
 
   // --- Helpers ---
@@ -500,7 +524,8 @@ const App = () => {
       setPlan(userData.plan);
       setJobs(userData.jobs || []);
       setProjects(userData.projects || []);
-      setTrends(userData.trends);
+      setSeenProjectTitles(userData.seenProjectTitles || []);
+
       setChatMessages(userData.chatMessages || []);
       setInterviewFeedback(userData.interviewFeedback);
       setResumeAnalysisResult(userData.resumeAnalysisResult || null);
@@ -526,7 +551,8 @@ const App = () => {
     setPlan(null);
     setJobs([]);
     setProjects([]);
-    setTrends(null);
+    setSeenProjectTitles([]);
+
     setChatMessages([]);
     setInterviewFeedback(null);
 
@@ -543,7 +569,8 @@ const App = () => {
         plan: null,
         jobs: [],
         projects: [],
-        trends: null,
+        seenProjectTitles: [],
+
         chatMessages: [],
         interviewFeedback: null,
         resumeAnalysisResult: null
@@ -556,7 +583,8 @@ const App = () => {
       setPlan(null);
       setJobs([]);
       setProjects([]);
-      setTrends(null);
+      setSeenProjectTitles([]);
+
       setChatMessages([]);
       setInterviewFeedback(null);
       setView(AppView.ONBOARDING);
@@ -570,7 +598,8 @@ const App = () => {
       setPlan(null);
       setJobs([]);
       setProjects([]);
-      setTrends(null);
+      setSeenProjectTitles([]);
+
       setChatMessages([]);
       setInterviewFeedback(null);
       setView(AppView.ONBOARDING);
@@ -712,10 +741,20 @@ const App = () => {
     }, 1500);
 
     try {
-      const allSkills = analysis.skills?.map(s => s.name) || [];
-      const foundJobs = await findMatchingJobs(userProfile.targetRole, allSkills);
+      const acquiredSkills = analysis.skills?.filter(s => s.status === 'acquired').map(s => s.name) || [];
+      const missingSkills = analysis.skills?.filter(s => s.status === 'missing').map(s => s.name) || [];
+      const foundJobs = await findMatchingJobs(
+        userProfile.targetRole,
+        acquiredSkills,
+        analysis.readinessScore,
+        missingSkills,
+        userProfile.experienceLevel || 'fresher',
+        userProfile.targetCompanies || ''
+      );
       setJobs(foundJobs);
+      console.log("Scanner Results Debug:", { acquiredSkills, missingSkills, foundJobs });
     } catch (error: any) {
+      console.error("Scanner Error:", error);
       handleApiError(error, "Failed to scan jobs");
     } finally {
       clearInterval(interval);
@@ -729,22 +768,33 @@ const App = () => {
     setProjects([]); // Clear previous
 
     try {
-      // 1. Try to get Research-Backed Projects first (High Value)
-      let researchProjects: ProjectIdea[] = [];
-      try {
-        researchProjects = await generateResearchBackedProjects(userProfile.targetRole);
-      } catch (e) {
-        console.warn("Research fetch failed, falling back to standard.", e);
+      // Extract Focus Topics from Learning Plan or Analysis
+      let focusTopics: string[] = [];
+      if (plan) {
+        // Prioritize themes from the learning plan
+        focusTopics = plan.map(w => w.theme).slice(0, 3);
+      } else if (analysis?.skills) {
+        // Fallback to missing skills
+        focusTopics = analysis.skills
+          .filter(s => s.status === 'missing')
+          .map(s => s.name)
+          .slice(0, 3);
       }
 
-      // 2. If we have enough, great. If not (or if failed), fill with standard AI ideas.
-      if (researchProjects.length < 3) {
-        const standardProjects = await generateProjectIdeas(userProfile.targetRole);
-        // Combine: Research ones first, then fill rest
-        setProjects([...researchProjects, ...standardProjects].slice(0, 3));
-      } else {
-        setProjects(researchProjects);
-      }
+      // Generate highly tailored projects based on User's Dream Role & Company
+      const standardProjects = await generateProjectIdeas(
+        userProfile.targetRole,
+        focusTopics,
+        userProfile.targetCompanies || "Tech Company",
+        userProfile.experienceLevel || "Intermediate",
+        seenProjectTitles // Pass the history of seen titles
+      );
+
+      setProjects(standardProjects.slice(0, 3));
+
+      // Update history
+      const newTitles = standardProjects.map(p => p.title);
+      setSeenProjectTitles(prev => [...prev, ...newTitles]);
 
     } catch (error) {
       handleApiError(error, "Failed to generate projects");
@@ -752,6 +802,8 @@ const App = () => {
       setIsGeneratingProjects(false);
     }
   };
+
+
 
   const handleOptimizeResume = async () => {
     if ((!userProfile?.resumeText && !userProfile?.resumeFile) || !userProfile?.targetRole) {
@@ -791,18 +843,7 @@ const App = () => {
     }
   };
 
-  const handleFetchTrends = async () => {
-    if (!userProfile?.targetRole) return;
-    setIsFetchingTrends(true);
-    try {
-      const data = await fetchMarketTrends(userProfile.targetRole);
-      setTrends(data);
-    } catch (error) {
-      handleApiError(error, "Failed to fetch trends");
-    } finally {
-      setIsFetchingTrends(false);
-    }
-  };
+
 
   const handlePayment = async () => {
     const res = await loadScript('https://checkout.razorpay.com/v1/checkout.js');
@@ -855,46 +896,77 @@ const App = () => {
     setIsChatLoading(true);
 
     try {
-      // Prepare context: Use raw resume text if available, otherwise use the analysis summary/skills
-      let context = userProfile.resumeText || "";
+      // Check eligibility
+      const eligibility = canStartNewInterview(userProfile.email || 'guest', []);
 
-      if (!context && analysis) {
-        context = `
-           Candidate Summary: ${analysis.summary}
-           Identified Skills: ${analysis.skills?.map(s => s.name).join(', ')}
-           Strengths: ${analysis.strengths?.join(', ')}
-           Weaknesses: ${analysis.weaknesses?.join(', ')}
-         `;
+      if (!eligibility.canStart) {
+        alert(eligibility.reason || 'You have reached your interview limit. Upgrade to Pro for unlimited interviews!');
+        setIsInterviewStarted(false);
+        setIsChatLoading(false);
+        return;
       }
 
-      const chat = createInterviewSession(userProfile.targetRole, context);
-      setChatInstance(chat);
+      // Start interview immediately
+      const now = Date.now();
+      setInterviewStartTime(now);
+      setInterviewElapsedSeconds(0);
+      setInterviewMessages([]);
 
-      // Send a hidden system-like prompt to kickstart the model
-      const response = await chat.sendMessage({ message: "Start the interview now. Introduce yourself." });
-      const text = response.text || "Hello. I'm the hiring manager for this role. Let's begin.";
+      // Prepare candidate profile for interview
+      const candidateProfile = {
+        resume: userProfile.resumeText || analysis?.summary || 'Entry-level candidate',
+        skills: analysis?.skills?.filter(s => s.status === 'acquired').map(s => s.name) || [],
+        projects: userProfile.resumeText?.match(/project/gi)?.length ? ['Resume projects'] : [],
+        readinessScore: analysis?.readinessScore || 50
+      };
 
-      setChatMessages([{
+      // Generate first interviewer message
+      const firstResponse = await generatePremiumInterviewResponse(
+        {
+          targetRole: userProfile.targetRole,
+          companyName: userProfile.targetCompanies?.split(',')[0]?.trim() || 'Tech Company',
+          companyType: 'FAANG',
+          experienceLevel: userProfile.experienceLevel || 'fresher',
+          totalDuration: 35,
+          candidateProfile
+        },
+        [],
+        0,
+        true // First message
+      );
+
+      const firstMessage = {
         id: Date.now().toString(),
-        role: 'model',
-        text: text,
-        timestamp: Date.now()
+        role: 'model' as const,
+        text: firstResponse,
+        timestamp: now
+      };
+
+      setChatMessages([firstMessage]);
+      setInterviewMessages([{
+        role: 'interviewer',
+        content: firstResponse,
+        timestamp: now,
+        elapsedTime: 0,
+        phase: 1
       }]);
 
-      if (isSpeakingEnabled) speakText(text);
+      if (isSpeakingEnabled) speakText(firstResponse);
+
     } catch (err: any) {
       setIsInterviewStarted(false);
-      setChatInstance(null);
       handleApiError(err, "Failed to start interview");
     } finally {
       setIsChatLoading(false);
     }
-  }, [userProfile, isSpeakingEnabled]);
+  }, [userProfile, isSpeakingEnabled, analysis]);
 
   const handleEndInterview = async () => {
     if (chatMessages.length < 2) {
       setIsInterviewStarted(false);
       setChatMessages([]);
+      setInterviewStartTime(null);
+      setInterviewElapsedSeconds(0);
       return;
     }
 
@@ -903,8 +975,37 @@ const App = () => {
     setIsGeneratingFeedback(true);
 
     try {
-      const feedback = await generateInterviewFeedback(chatMessages, userProfile.targetRole);
+      // Generate premium evaluation
+      const evaluation = await evaluatePremiumInterview(
+        {
+          targetRole: userProfile.targetRole,
+          companyName: userProfile.targetCompanies?.split(',')[0]?.trim() || 'Tech Company',
+          companyType: 'FAANG',
+          experienceLevel: userProfile.experienceLevel || 'fresher',
+          totalDuration: 35,
+          candidateProfile: {
+            resume: userProfile.resumeText || analysis?.summary || 'Entry-level candidate',
+            skills: analysis?.skills?.filter(s => s.status === 'acquired').map(s => s.name) || [],
+            projects: [],
+            readinessScore: analysis?.readinessScore || 50
+          }
+        },
+        interviewMessages,
+        Math.floor(interviewElapsedSeconds / 60)
+      );
+
+      // Convert to InterviewFeedback format
+      const feedback: InterviewFeedback = {
+        score: evaluation.overallScore / 10, // Convert 0-100 to 0-10
+        feedbackSummary: evaluation.detailedFeedback,
+        strengths: evaluation.strengths,
+        improvements: evaluation.blockingGaps,
+        recommendedFocus: evaluation.nextSteps[0] || 'Continue practicing'
+      };
+
       setInterviewFeedback(feedback);
+      setInterviewStartTime(null);
+      setInterviewElapsedSeconds(0);
     } catch (error) {
       handleApiError(error, "Failed to generate feedback");
       setChatMessages([]);
@@ -916,7 +1017,7 @@ const App = () => {
 
   const handleSendMessage = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!chatInput.trim() || !chatInstance) return;
+    if (!chatInput.trim()) return;
 
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
@@ -930,17 +1031,65 @@ const App = () => {
     setIsChatLoading(true);
 
     try {
-      const result = await chatInstance.sendMessage({ message: userMsg.text });
-      const text = result.text || "I didn't catch that. Could you please repeat?";
+      // Calculate elapsed time
+      const elapsed = interviewStartTime ? Math.floor((Date.now() - interviewStartTime) / 1000) : 0;
+
+      // Add user message to interview history
+      const updatedMessages = [
+        ...interviewMessages,
+        {
+          role: 'candidate' as const,
+          content: userMsg.text,
+          timestamp: Date.now(),
+          elapsedTime: elapsed,
+          phase: Math.ceil(elapsed / 300) as 1 | 2 | 3 | 4 // Rough phase calculation
+        }
+      ];
+
+      setInterviewMessages(updatedMessages);
+
+      // Generate interviewer response
+      const response = await generatePremiumInterviewResponse(
+        {
+          targetRole: userProfile.targetRole,
+          companyName: userProfile.targetCompanies?.split(',')[0]?.trim() || 'Tech Company',
+          companyType: 'FAANG',
+          experienceLevel: userProfile.experienceLevel || 'fresher',
+          totalDuration: 35,
+          candidateProfile: {
+            resume: userProfile.resumeText || analysis?.summary || 'Entry-level candidate',
+            skills: analysis?.skills?.filter(s => s.status === 'acquired').map(s => s.name) || [],
+            projects: [],
+            readinessScore: analysis?.readinessScore || 50
+          }
+        },
+        updatedMessages,
+        elapsed,
+        false
+      );
 
       const botMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'model',
-        text: text,
+        text: response,
         timestamp: Date.now()
       };
+
       setChatMessages(prev => [...prev, botMsg]);
-      if (isSpeakingEnabled) speakText(text);
+
+      // Add to interview history
+      setInterviewMessages([
+        ...updatedMessages,
+        {
+          role: 'interviewer',
+          content: response,
+          timestamp: Date.now(),
+          elapsedTime: elapsed + 2,
+          phase: Math.ceil(elapsed / 300) as 1 | 2 | 3 | 4
+        }
+      ]);
+
+      if (isSpeakingEnabled) speakText(response);
     } catch (error) {
       // Add error message to chat
       setChatMessages(prev => [...prev, {
@@ -1122,55 +1271,144 @@ const App = () => {
             <h1 className="text-3xl font-bold text-slate-100">Setup your Pilot</h1>
           </div>
 
-          <form onSubmit={handleOnboardingSubmit} className="space-y-8">
-            <div>
-              <label className="block text-sm font-semibold text-slate-300 mb-2">Target Role</label>
-              <input
-                type="text"
-                required
-                className="w-full p-4 bg-slate-950 border border-slate-800 text-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none placeholder-slate-600"
-                placeholder="e.g. Senior Frontend Engineer, Product Manager..."
-                value={userProfile.targetRole}
-                onChange={e => setUserProfile(prev => ({ ...prev, targetRole: e.target.value }))}
-              />
+          <form onSubmit={handleOnboardingSubmit} className="space-y-6">
+            {/* Career Stage Section */}
+            <div className="bg-slate-800/30 p-6 rounded-xl border border-slate-700/50">
+              <h3 className="text-lg font-bold text-white mb-4 flex items-center">
+                <Compass className="w-5 h-5 mr-2 text-indigo-400" />
+                Where are you in your journey?
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Experience Level */}
+                <div>
+                  <label className="block text-sm font-semibold text-slate-300 mb-2">Experience Level</label>
+                  <select
+                    required
+                    className="w-full p-3 bg-slate-950 border border-slate-800 text-slate-100 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none"
+                    value={userProfile.experienceLevel || ''}
+                    onChange={e => setUserProfile(prev => ({ ...prev, experienceLevel: e.target.value }))}
+                  >
+                    <option value="">Select...</option>
+                    <option value="student">Student (Still Studying)</option>
+                    <option value="fresher">Fresher (0-1 year)</option>
+                    <option value="junior">Junior (1-3 years)</option>
+                    <option value="mid">Mid-Level (3-5 years)</option>
+                    <option value="senior">Senior (5+ years)</option>
+                  </select>
+                </div>
+
+                {/* Graduation Year */}
+                <div>
+                  <label className="block text-sm font-semibold text-slate-300 mb-2">Graduation Year</label>
+                  <input
+                    type="number"
+                    required
+                    min="2020"
+                    max="2030"
+                    className="w-full p-3 bg-slate-950 border border-slate-800 text-slate-100 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none placeholder-slate-600"
+                    placeholder="e.g. 2024, 2025..."
+                    value={userProfile.graduationYear || ''}
+                    onChange={e => setUserProfile(prev => ({ ...prev, graduationYear: e.target.value }))}
+                  />
+                </div>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* File Upload Option */}
-              <div className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all ${userProfile.resumeFile ? 'border-emerald-500 bg-emerald-500/10' : 'border-slate-700 hover:border-indigo-500 hover:bg-slate-800'}`}>
-                <input
-                  type="file"
-                  accept=".pdf,.txt,.md"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                  id="resume-upload"
-                />
-                <label htmlFor="resume-upload" className="cursor-pointer w-full h-full flex flex-col items-center justify-center">
-                  {userProfile.resumeFile ? (
-                    <>
-                      <FileText className="w-8 h-8 text-emerald-400 mb-2" />
-                      <span className="text-sm font-medium text-emerald-300">Resume Stored</span>
-                      <span className="text-xs text-emerald-500/70 mt-1">Ready to analyze</span>
-                    </>
-                  ) : (
-                    <>
-                      <UploadCloud className="w-8 h-8 text-indigo-400 mb-2" />
-                      <span className="text-sm font-medium text-slate-300">Upload PDF / TXT</span>
-                      <span className="text-xs text-slate-500 mt-1">Drag & drop or click</span>
-                    </>
-                  )}
+            {/* Career Goals Section */}
+            <div className="bg-slate-800/30 p-6 rounded-xl border border-slate-700/50">
+              <h3 className="text-lg font-bold text-white mb-4 flex items-center">
+                <Target className="w-5 h-5 mr-2 text-emerald-400" />
+                What's your career goal?
+              </h3>
+
+              {/* Target Role */}
+              <div className="mb-4">
+                <label className="block text-sm font-semibold text-slate-300 mb-2">
+                  Target Role <span className="text-slate-500 font-normal">(What job do you want?)</span>
                 </label>
+                <input
+                  type="text"
+                  required
+                  className="w-full p-3 bg-slate-950 border border-slate-800 text-slate-100 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none placeholder-slate-600"
+                  placeholder="e.g. Software Engineer, Data Analyst, Product Manager..."
+                  value={userProfile.targetRole}
+                  onChange={e => setUserProfile(prev => ({ ...prev, targetRole: e.target.value }))}
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  ðŸ’¡ Not sure? Try: "Software Developer", "Frontend Engineer", "Data Scientist"
+                </p>
               </div>
 
-              {/* Or Text Paste Option */}
-              <div className="relative">
-                <textarea
-                  className="w-full h-full min-h-[140px] p-4 bg-slate-950 border border-slate-800 text-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none resize-none font-mono text-xs placeholder-slate-600"
-                  placeholder="Or paste text directly here..."
-                  value={userProfile.resumeText || ''}
-                  onChange={e => setUserProfile(prev => ({ ...prev, resumeText: e.target.value }))}
+              {/* Target Companies */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-300 mb-2">
+                  Dream Companies <span className="text-slate-500 font-normal">(Optional - helps us tailor advice)</span>
+                </label>
+                <input
+                  type="text"
+                  className="w-full p-3 bg-slate-950 border border-slate-800 text-slate-100 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none placeholder-slate-600"
+                  placeholder="e.g. Google, Microsoft, Amazon, Startup..."
+                  value={userProfile.targetCompanies || ''}
+                  onChange={e => setUserProfile(prev => ({ ...prev, targetCompanies: e.target.value }))}
                 />
+                <p className="text-xs text-slate-500 mt-1">
+                  ðŸŽ¯ We'll optimize your resume and learning path for these companies
+                </p>
               </div>
+            </div>
+
+            {/* Resume Upload Section */}
+            <div className="bg-slate-800/30 p-6 rounded-xl border border-slate-700/50">
+              <h3 className="text-lg font-bold text-white mb-4 flex items-center">
+                <FileText className="w-5 h-5 mr-2 text-amber-400" />
+                Upload Your Resume
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* File Upload Option */}
+                <div className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all ${userProfile.resumeFile ? 'border-emerald-500 bg-emerald-500/10' : 'border-slate-700 hover:border-indigo-500 hover:bg-slate-800'}`}>
+                  <input
+                    type="file"
+                    accept=".pdf,.txt,.md"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    id="resume-upload"
+                  />
+                  <label htmlFor="resume-upload" className="cursor-pointer w-full h-full flex flex-col items-center justify-center">
+                    {userProfile.resumeFile ? (
+                      <>
+                        <FileText className="w-8 h-8 text-emerald-400 mb-2" />
+                        <span className="text-sm font-medium text-emerald-300">Resume Uploaded âœ“</span>
+                        <span className="text-xs text-emerald-500/70 mt-1">Ready to analyze</span>
+                      </>
+                    ) : (
+                      <>
+                        <UploadCloud className="w-8 h-8 text-indigo-400 mb-2" />
+                        <span className="text-sm font-medium text-slate-300">Upload PDF / TXT</span>
+                        <span className="text-xs text-slate-500 mt-1">Drag & drop or click</span>
+                      </>
+                    )}
+                  </label>
+                </div>
+
+                {/* Or Text Paste Option */}
+                <div className="relative">
+                  <textarea
+                    className="w-full h-full min-h-[140px] p-4 bg-slate-950 border border-slate-800 text-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none resize-none font-mono text-xs placeholder-slate-600"
+                    placeholder="Or paste resume text here..."
+                    value={userProfile.resumeText || ''}
+                    onChange={e => setUserProfile(prev => ({ ...prev, resumeText: e.target.value }))}
+                  />
+                  <div className="absolute bottom-2 right-2 text-[10px] text-slate-600">
+                    {userProfile.resumeText?.length || 0} chars
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-500 mt-3 text-center">
+                ðŸ“„ Don't have a resume? No problem! We'll help you build one based on your profile.
+              </p>
             </div>
 
             <button
@@ -1222,7 +1460,7 @@ const App = () => {
                 {view === AppView.DASHBOARD && 'Dashboard'}
                 {view === AppView.PLAN && 'Learning Plan'}
                 {view === AppView.PROJECTS && 'Build Portfolio'}
-                {view === AppView.TRENDS && 'Market Insights'}
+
                 {view === AppView.INTERVIEW && 'Interview Simulator'}
                 {view === AppView.JOBS && 'Market Scanner'}
               </h2>
@@ -1489,20 +1727,10 @@ const App = () => {
                 </div>
               )}
 
-
-
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {projects?.map((project, idx) => (
-                  <div key={idx} className="bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 p-6 flex flex-col hover:border-indigo-500/50 transition-all group relative overflow-hidden">
-
-                    {/* Research Badge */}
-                    {project.sourcePaper && (
-                      <div className="absolute top-0 right-0 bg-blue-600/90 text-white text-[10px] uppercase font-bold px-3 py-1 rounded-bl-xl shadow-lg z-10">
-                        Research Backed
-                      </div>
-                    )}
-
-                    <div className="flex justify-between items-start mb-4 mt-2">
+                  <div key={idx} className="bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 p-6 flex flex-col hover:border-indigo-500/50 transition-all group">
+                    <div className="flex justify-between items-start mb-4">
                       <div className={`px-3 py-1 rounded-lg text-xs font-bold border ${project.difficulty === 'Beginner' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
                         project.difficulty === 'Intermediate' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
                           'bg-purple-500/10 text-purple-400 border-purple-500/20'
@@ -1513,15 +1741,8 @@ const App = () => {
                         <Layers className="w-4 h-4 text-slate-400 group-hover:text-white" />
                       </div>
                     </div>
-
-                    <h4
-                      className="text-lg font-bold text-white mb-3 group-hover:text-indigo-400 transition-colors leading-tight line-clamp-2"
-                      title={project.title}
-                    >
-                      {project.title}
-                    </h4>
-
-                    <p className="text-slate-400 text-sm mb-4 flex-1 line-clamp-4">{project.description}</p>
+                    <h4 className="text-lg font-bold text-white mb-3 group-hover:text-indigo-400 transition-colors">{project.title}</h4>
+                    <p className="text-slate-400 text-sm mb-4 flex-1">{project.description}</p>
 
                     <div className="space-y-4">
                       <div>
@@ -1535,40 +1756,12 @@ const App = () => {
                         </div>
                       </div>
 
-                      {/* Implementation Resources */}
-                      {project.implementationResources && project.implementationResources.length > 0 && (
-                        <div>
-                          <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Build Resources</h5>
-                          <div className="space-y-1">
-                            {project.implementationResources.map((res, i) => (
-                              <a key={i} href={res.url} target="_blank" rel="noreferrer" className="flex items-center text-xs text-indigo-400 hover:text-indigo-300 transition-colors group/link">
-                                <ExternalLink className="w-3 h-3 mr-1.5 opacity-70 group-hover/link:opacity-100" />
-                                <span className="truncate">{res.name}</span>
-                              </a>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
                       <div className="bg-indigo-900/20 p-3 rounded-lg border border-indigo-500/20">
                         <div className="flex items-start space-x-2">
                           <TrendingUp className="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" />
                           <p className="text-xs text-indigo-200 italic">"{project.resumeValue}"</p>
                         </div>
                       </div>
-
-                      {/* Source Paper Verification */}
-                      {project.sourcePaper && (
-                        <div className="pt-3 border-t border-white/5">
-                          <h5 className="text-[10px] font-bold text-slate-500 uppercase mb-1 flex items-center">
-                            <BookOpen className="w-3 h-3 mr-1" /> Based on Research
-                          </h5>
-                          <a href={project.sourcePaper.url} target="_blank" rel="noreferrer" className="block group/link">
-                            <p className="text-xs text-blue-300 truncate font-medium group-hover/link:underline">{project.sourcePaper.title}</p>
-                            <p className="text-[10px] text-slate-500">{project.sourcePaper.authors.join(', ')} • {project.sourcePaper.publishedDate}</p>
-                          </a>
-                        </div>
-                      )}
                     </div>
                   </div>
                 ))}
@@ -1793,89 +1986,6 @@ const App = () => {
                   </div>
                 )}
               </div>
-            </div>
-          )}
-
-          {/* Market Trends View (Added Missing View) */}
-          {view === AppView.TRENDS && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="flex justify-between items-center">
-                <h3 className="text-xl font-bold text-white">Market Intelligence</h3>
-                <button
-                  onClick={handleFetchTrends}
-                  disabled={isFetchingTrends}
-                  className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center transition-all"
-                >
-                  {isFetchingTrends ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-                  Refresh Data
-                </button>
-              </div>
-
-              {isFetchingTrends && !trends && (
-                <div className="flex flex-col items-center justify-center py-32 bg-white/5 rounded-3xl border border-white/10">
-                  <Loader2 className="w-12 h-12 text-indigo-500 animate-spin mb-4" />
-                  <p className="text-slate-300">Analyzing live market data...</p>
-                </div>
-              )}
-
-              {trends && (
-                <div className="space-y-6">
-                  {/* Key Stats */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-emerald-500/10 border border-emerald-500/20 p-6 rounded-2xl">
-                      <div className="flex items-center mb-2 text-emerald-400">
-                        <DollarSign className="w-5 h-5 mr-2" />
-                        <span className="font-bold text-sm uppercase tracking-wider">Salary Range</span>
-                      </div>
-                      <div className="text-3xl font-bold text-white">{trends.salaryRange}</div>
-                      <div className="text-emerald-500/60 text-sm mt-1">Based on current listings</div>
-                    </div>
-                    <div className="bg-amber-500/10 border border-amber-500/20 p-6 rounded-2xl">
-                      <div className="flex items-center mb-2 text-amber-400">
-                        <TrendingUp className="w-5 h-5 mr-2" />
-                        <span className="font-bold text-sm uppercase tracking-wider">Demand Level</span>
-                      </div>
-                      <div className="text-3xl font-bold text-white">{trends.demandLevel}</div>
-                      <div className="text-amber-500/60 text-sm mt-1">Market competitiveness</div>
-                    </div>
-                  </div>
-
-                  {/* Hot Tech */}
-                  <div className="bg-white/5 p-8 rounded-3xl border border-white/10">
-                    <h3 className="text-lg font-bold text-white mb-6 flex items-center">
-                      <Target className="w-5 h-5 mr-2 text-indigo-400" />
-                      Top Technologies in Demand
-                    </h3>
-                    <div className="grid md:grid-cols-2 gap-4">
-                      {trends.hotTechnologies.map((tech, idx) => (
-                        <div key={idx} className="bg-slate-900 p-4 rounded-xl border border-slate-700 flex flex-col">
-                          <span className="font-bold text-indigo-300 mb-1">{tech.name}</span>
-                          <span className="text-xs text-slate-500">{tech.growthReason}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Industry News */}
-                  <div className="bg-white/5 p-8 rounded-3xl border border-white/10">
-                    <h3 className="text-lg font-bold text-white mb-6 flex items-center">
-                      <Newspaper className="w-5 h-5 mr-2 text-indigo-400" />
-                      Industry News & Impact
-                    </h3>
-                    <div className="space-y-4">
-                      {trends.industryNews.map((news, idx) => (
-                        <div key={idx} className="border-b border-white/5 pb-4 last:border-0 last:pb-0">
-                          <h4 className="font-bold text-slate-200 mb-2">{news.headline}</h4>
-                          <p className="text-sm text-slate-400 mb-2">{news.summary}</p>
-                          <div className="text-xs text-indigo-400 font-medium flex items-start">
-                            <span className="mr-1">👉</span> Impact: {news.impact}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
@@ -2165,17 +2275,43 @@ const App = () => {
 
               <div className="grid gap-6">
                 {jobs?.map((job, idx) => (
-                  <div key={idx} className="bg-white/5 backdrop-blur-xl p-6 rounded-2xl border border-white/10 hover:border-indigo-500/50 hover:bg-white/10 transition-all group shadow-lg flex flex-col md:flex-row gap-6">
+                  <div key={idx} className={`bg-white/5 backdrop-blur-xl p-6 rounded-2xl border transition-all group shadow-lg flex flex-col md:flex-row gap-6 ${job.readinessStatus?.includes("Locked") ? 'border-red-500/30 bg-red-900/5' : 'border-white/10 hover:border-indigo-500/50 hover:bg-white/10'
+                    }`}>
 
                     <div className="flex-1">
                       <div className="flex justify-between items-start mb-3">
                         <div>
                           <h4 className="text-xl font-bold text-white group-hover:text-indigo-400 transition-colors">{job.title}</h4>
                           <p className="text-slate-400 font-medium text-lg">{job.company}</p>
+                          {/* Source Type Trust Badge */}
+                          {job.sourceType && (
+                            <span className={`inline-flex items-center mt-2 text-[10px] uppercase font-bold px-2 py-0.5 rounded tracking-wider border ${job.sourceType === 'ATS' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                              job.sourceType === 'OFFICIAL' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                                job.sourceType === 'STARTUP' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                                  'bg-slate-700/50 text-slate-400 border-slate-600/50'
+                              }`}>
+                              {job.sourceType === 'ATS' && <span className="mr-1">✓</span>}
+                              {job.sourceType === 'ATS' ? 'Verified ATS' :
+                                job.sourceType === 'OFFICIAL' ? 'Official Site' :
+                                  job.sourceType === 'STARTUP' ? 'Verified Startup' :
+                                    'Search Result (Unverified)'}
+                            </span>
+                          )}
                         </div>
-                        <div className="flex items-center space-x-2 bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full text-xs font-bold border border-emerald-500/20 whitespace-nowrap">
-                          <Target className="w-3 h-3 mr-1" />
-                          <span>{job.matchScore}% Match</span>
+                        <div className="flex flex-col items-end space-y-2">
+                          <div className="flex items-center space-x-2 bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full text-xs font-bold border border-emerald-500/20 whitespace-nowrap">
+                            <Target className="w-3 h-3 mr-1" />
+                            <span>{job.matchScore || 0}% Match</span>
+                          </div>
+                          {/* Readiness Status Badge */}
+                          {job.readinessStatus && (
+                            <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider border ${job.readinessStatus.includes("Locked") ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                              job.readinessStatus.includes("learning") ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                                'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                              }`}>
+                              {job.readinessStatus}
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -2207,12 +2343,16 @@ const App = () => {
                         href={job.applyLink || `https://www.google.com/search?q=${encodeURIComponent(`${job.title} ${job.company} jobs`)}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-6 rounded-xl transition-all flex items-center justify-center shadow-lg shadow-indigo-500/20"
+                        className={`w-full font-bold py-3 px-6 rounded-xl transition-all flex items-center justify-center shadow-lg ${job.readinessStatus?.includes("Locked")
+                          ? 'bg-slate-700 text-slate-400 cursor-not-allowed hover:bg-slate-700'
+                          : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-500/20'
+                          }`}
                       >
-                        Apply Now <ExternalLink className="w-4 h-4 ml-2" />
+                        {job.readinessStatus?.includes("Locked") ? <Lock className="w-4 h-4 mr-2" /> : <ExternalLink className="w-4 h-4 mr-2" />}
+                        {job.readinessStatus?.includes("Locked") ? "Unlock Link" : "Apply Now"}
                       </a>
                       <button className="w-full text-xs text-slate-500 hover:text-slate-300 py-2">
-                        Save for later
+                        {job.readinessStatus?.includes("Locked") ? "Learn Requirements" : "Save for later"}
                       </button>
                     </div>
                   </div>

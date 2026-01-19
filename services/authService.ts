@@ -10,7 +10,7 @@ import {
   collection
 } from 'firebase/firestore';
 import { auth, db } from './firebaseConfig';
-import { UserProfile, CareerAnalysis, WeeklyPlan, JobListing, ProjectIdea, MarketTrend, ChatMessage, InterviewFeedback, ResumeOptimizationResult } from '../types';
+import { UserProfile, CareerAnalysis, WeeklyPlan, JobListing, ProjectIdea, ChatMessage, InterviewFeedback, ResumeOptimizationResult } from '../types';
 
 // Fallback for dev without keys
 const USERS_DB_KEY = 'cp_users_v2';
@@ -22,10 +22,10 @@ interface UserData {
   plan: WeeklyPlan[] | null;
   jobs: JobListing[];
   projects: ProjectIdea[];
-  trends: MarketTrend | null;
   chatMessages: ChatMessage[];
   interviewFeedback: InterviewFeedback | null;
   resumeAnalysisResult: ResumeOptimizationResult | null;
+  seenProjectTitles?: string[];
 }
 
 // In-memory cache to speed up repeated reads
@@ -57,10 +57,10 @@ export const AuthService = {
           plan: null,
           jobs: [],
           projects: [],
-          trends: null,
           chatMessages: [],
           interviewFeedback: null,
-          resumeAnalysisResult: null
+          resumeAnalysisResult: null,
+          seenProjectTitles: []
         };
         await AuthService.saveUserData(email, initialData);
         return { success: true };
@@ -80,8 +80,8 @@ export const AuthService = {
 
     const initialData = {
       userProfile: { name: email.split('@')[0], targetRole: '' },
-      analysis: null, plan: null, jobs: [], projects: [], trends: null, chatMessages: [], interviewFeedback: null,
-      resumeAnalysisResult: null
+      analysis: null, plan: null, jobs: [], projects: [], chatMessages: [], interviewFeedback: null,
+      resumeAnalysisResult: null, seenProjectTitles: []
     };
     AuthService.saveUserData(email, initialData);
     return { success: true };
