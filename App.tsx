@@ -43,6 +43,7 @@ import {
 } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import LandingPage from "./components/LandingPage";
+import FeedbackFloating from './components/FeedbackFloating';
 import { ScoreGauge } from "./components/ScoreGauge";
 import Sidebar from "./components/Sidebar";
 import { SkillCard } from "./components/SkillCard";
@@ -2611,6 +2612,7 @@ const App = () => {
 
         </div>
       </main >
+      {isLoggedIn && currentUserEmail && <FeedbackFloating userEmail={currentUserEmail} />}
     </div >
   );
 };
