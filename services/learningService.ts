@@ -17,15 +17,18 @@ export const generateLearningPlan = async (targetRole: string, missingSkills: st
     
     Philosophy for Students:
     - "Guidance over Content": Don't just say "Learn React". Say "Master React Hooks to manage state effectively."
-    - "Pacing": 
-       * Week 1: Core Foundations (The Theory & "Why").
-       * Week 2: Applied Skills (Small exercises).
-       * Week 3: The Build (One major portfolio project).
-       * Week 4: Market Readiness (Interview prep & Polish).
+    - "Pacing & Progression": 
+       * Week 1: Core Foundations & Setup (Mental Models & Why).
+       * Week 2: Applied Skills (Implementation patterns & Mini-projects).
+       * Week 3: The Build (One complex portfolio-ready module/project).
+       * Week 4: Market Readiness (Interview prep, Performance optimization, and Polish).
+    - "Variety & Specificity": EACH week MUST HAVE A UNIQUE THEME AND UNIQUE TASKS. 
+    - "No Placeholder Names": Do NOT use themes like "Week 1", "Foundations", "Learning", or "Untitled". Use descriptive titles like "Advanced State Management" or "Scalable Backend Architecture".
+    - "Strict Deliverables": EVERY week MUST contain EXACTLY 3 high-impact tasks. DO NOT leave any week empty.
     - "Outcome-Based": Every task must have a clear "Definition of Done".
     
     Requirements:
-    - Generate exactly 4 Weeks.
+    - Generate EXACTLY 4 Weeks (Indices 1, 2, 3, 4).
     - Each week must have **EXACTLY 3** high-impact tasks (no more, no less).
     - **Description**: MAX 15 WORDS. Concise and actionable.
     - Resources: strictly free and high-quality (YouTube/Docs).
@@ -43,6 +46,7 @@ export const generateLearningPlan = async (targetRole: string, missingSkills: st
                         type: Type.ARRAY,
                         items: {
                             type: Type.OBJECT,
+                            required: ["weekNumber", "theme", "tasks"],
                             properties: {
                                 weekNumber: { type: Type.INTEGER },
                                 theme: { type: Type.STRING },
@@ -50,6 +54,7 @@ export const generateLearningPlan = async (targetRole: string, missingSkills: st
                                     type: Type.ARRAY,
                                     items: {
                                         type: Type.OBJECT,
+                                        required: ["id", "title", "description", "type", "estimatedHours", "completed", "videoQuery"],
                                         properties: {
                                             id: { type: Type.STRING },
                                             title: { type: Type.STRING },
@@ -68,7 +73,32 @@ export const generateLearningPlan = async (targetRole: string, missingSkills: st
             }
         );
 
-        return JSON.parse(cleanJson(response.text || "[]")) as WeeklyPlan[];
+        const rawPlan = JSON.parse(cleanJson(response.text || "[]")) as WeeklyPlan[];
+
+        // Post-processing: 
+        // 1. Filter out weeks that have no tasks or generic titles
+        // 2. Ensure 4 weeks
+        // 3. Force correct numbering and ID safety
+        const filteredPlan = rawPlan.filter(week =>
+            week.tasks &&
+            week.tasks.length > 0 &&
+            week.theme &&
+            week.theme.trim().length > 3 &&
+            !week.theme.toLowerCase().includes('week')
+        );
+
+        if (filteredPlan.length === 0) {
+            throw new Error("The AI returned a low-quality plan with missing content. Please try regenerating.");
+        }
+
+        return filteredPlan.slice(0, 4).map((week, idx) => ({
+            ...week,
+            weekNumber: idx + 1,
+            tasks: week.tasks.map(task => ({
+                ...task,
+                id: task.id || `task-${idx}-${Math.random().toString(36).substr(2, 9)}`
+            }))
+        }));
     } catch (error) {
         console.error("Plan Generation Failed:", error);
         throw error;
