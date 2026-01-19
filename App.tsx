@@ -683,7 +683,24 @@ const App = () => {
       // Safe access: analysis.skills might be missing if AI failed partially
       const missingSkills = analysis.skills?.filter(s => s.status === 'missing').map(s => s.name) || [];
       const generatedPlan = await generateLearningPlan(userProfile.targetRole, missingSkills);
-      setPlan(generatedPlan);
+
+      // Final filtering & deduplication to ensure content quality
+      const uniquePlan = generatedPlan.reduce((acc, current) => {
+        const isDuplicate = acc.find(w => w.theme.toLowerCase() === current.theme.toLowerCase());
+        const hasContent = current.tasks && current.tasks.length > 0;
+        const hasTheme = current.theme && current.theme.trim().length > 2;
+
+        if (!isDuplicate && hasContent && hasTheme) {
+          acc.push(current);
+        }
+        return acc;
+      }, [] as WeeklyPlan[]);
+
+      if (uniquePlan.length === 0) {
+        throw new Error("The AI failed to generate a high-quality roadmap. Please try again.");
+      }
+
+      setPlan(uniquePlan);
       setView(AppView.PLAN);
     } catch (error: any) {
       handleApiError(error, "Failed to generate plan");
@@ -730,21 +747,46 @@ const App = () => {
 
   const handleDeleteTask = (weekIndex: number, taskId: string) => {
     if (!plan) return;
-    const newPlan = [...plan];
-    newPlan[weekIndex].tasks = newPlan[weekIndex].tasks.filter(t => t.id !== taskId);
+    const newPlan = plan.map((week, idx) => {
+      if (idx === weekIndex) {
+        return { ...week, tasks: week.tasks.filter(t => t.id !== taskId) };
+      }
+      return week;
+    });
+    setPlan(newPlan);
+  };
+
+  const handleToggleTask = (weekIndex: number, taskId: string) => {
+    if (!plan) return;
+    const newPlan = plan.map((week, idx) => {
+      if (idx === weekIndex) {
+        return {
+          ...week,
+          tasks: week.tasks.map(t => t.id === taskId ? { ...t, completed: !t.completed } : t)
+        };
+      }
+      return week;
+    });
     setPlan(newPlan);
   };
 
   const handleAddTask = (weekIndex: number) => {
     if (!plan || !newTaskTitle.trim()) return;
-    const newPlan = [...plan];
-    newPlan[weekIndex].tasks.push({
-      id: Date.now().toString(),
-      title: newTaskTitle,
-      description: 'Manually added task',
-      type: newTaskType,
-      estimatedHours: newTaskHours,
-      completed: false
+    const newPlan = plan.map((week, idx) => {
+      if (idx === weekIndex) {
+        return {
+          ...week,
+          tasks: [...week.tasks, {
+            id: Date.now().toString(),
+            title: newTaskTitle,
+            description: 'Manually added task',
+            type: newTaskType,
+            estimatedHours: newTaskHours,
+            completed: false
+          }]
+        };
+      }
+      return week;
     });
     setPlan(newPlan);
     setAddingTaskWeek(null);
@@ -1615,7 +1657,7 @@ const App = () => {
                     <div key={idx} className="bg-white/5 backdrop-blur-md rounded-3xl border border-white/10 overflow-hidden">
                       <div className="bg-white/5 px-8 py-5 border-b border-white/5 flex justify-between items-center">
                         <div>
-                          <h3 className="text-xl font-bold text-white">Week {week.weekNumber}</h3>
+                          <h3 className="text-xl font-bold text-white">Week {idx + 1}</h3>
                           <p className="text-sm text-indigo-300 mt-1 font-medium">{week.theme}</p>
                         </div>
                       </div>
@@ -1632,30 +1674,44 @@ const App = () => {
                                     <BookOpen className="w-6 h-6" />}
                               </div>
                               <div className="flex-1">
-                                <div className="flex justify-between items-start">
-                                  <h4 className="text-lg font-bold text-white mb-2">{task.title}</h4>
-                                  <span className="text-xs font-bold px-2 py-1 bg-white/10 rounded text-slate-400 flex items-center">
+                                <div className="flex justify-between items-start pr-8">
+                                  <h4 className={`text-lg font-bold mb-2 transition-all ${task.completed ? 'text-slate-500 line-through' : 'text-white'}`}>
+                                    {task.title}
+                                  </h4>
+                                  <span className="text-xs font-bold px-2 py-1 bg-white/10 rounded text-slate-400 flex items-center shrink-0">
                                     <Clock className="w-3 h-3 mr-1.5" />
                                     {task.estimatedHours}h
                                   </span>
                                 </div>
                                 <p className="text-sm text-slate-400 mb-4 leading-relaxed">{task.description}</p>
 
-                                {/* Video Resource Link */}
-                                {task.videoQuery && (
-                                  <a
-                                    href={`https://www.youtube.com/results?search_query=${encodeURIComponent(task.videoQuery)}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="inline-flex items-center text-xs font-bold text-red-400 hover:text-red-300 bg-red-500/10 px-3 py-1.5 rounded-lg border border-red-500/20 transition-colors"
-                                  >
-                                    <Youtube className="w-3 h-3 mr-2" /> Watch Tutorial
-                                  </a>
-                                )}
+                                <div className="flex items-center space-x-4 mt-2">
+                                  {/* Video Resource Link */}
+                                  {task.videoQuery && (
+                                    <a
+                                      href={`https://www.youtube.com/results?search_query=${encodeURIComponent(task.videoQuery)}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center text-xs font-bold text-red-400 hover:text-red-300 bg-red-500/10 px-3 py-1.5 rounded-lg border border-red-500/20 transition-colors"
+                                    >
+                                      <Youtube className="w-3 h-3 mr-2" /> Watch Tutorial
+                                    </a>
+                                  )}
 
-                                <button className="ml-4 text-xs font-bold text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center hover:text-indigo-300">
-                                  Mark Done <ChevronRight className="w-3 h-3 ml-1" />
-                                </button>
+                                  <button
+                                    onClick={() => handleToggleTask(idx, task.id)}
+                                    className={`text-xs font-bold transition-all inline-flex items-center ${task.completed
+                                      ? 'text-emerald-400'
+                                      : 'text-indigo-400 opacity-0 group-hover:opacity-100'
+                                      } hover:text-indigo-300`}
+                                  >
+                                    {task.completed ? (
+                                      <><Check className="w-3 h-3 mr-1" /> Done</>
+                                    ) : (
+                                      <>Mark Done <ChevronRight className="w-3 h-3 ml-1" /></>
+                                    )}
+                                  </button>
+                                </div>
                               </div>
                               <button
                                 onClick={() => handleDeleteTask(idx, task.id)}
