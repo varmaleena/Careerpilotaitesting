@@ -21,6 +21,7 @@ export interface UserProfile {
     mimeType: string;
   };
   isPremium?: boolean;
+  isResumeUnlocked?: boolean;
 }
 
 export interface Skill {
