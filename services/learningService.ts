@@ -38,7 +38,6 @@ export const generateLearningPlan = async (targetRole: string, missingSkills: st
             {
                 contents: prompt,
                 config: {
-                    thinkingConfig: { thinkingBudget: 0 },
                     responseMimeType: "application/json",
                     responseSchema: {
                         type: Type.ARRAY,
@@ -76,26 +75,50 @@ export const generateLearningPlan = async (targetRole: string, missingSkills: st
     }
 };
 
-export const generateProjectIdeas = async (targetRole: string, focusTopics: string[] = []): Promise<ProjectIdea[]> => {
+export const generateProjectIdeas = async (
+    targetRole: string,
+    focusTopics: string[] = [],
+    targetCompany: string = "Tech Company",
+    experienceLevel: string = "Intermediate",
+    previousTitles: string[] = []
+): Promise<ProjectIdea[]> => {
     const context = focusTopics.length > 0
-        ? `Focus primarily on these concepts derived from the user's Learning Plan: ${focusTopics.join(', ')}.`
+        ? `Focus: ${focusTopics.slice(0, 3).join(", ")}`
         : "";
 
+    const avoidInstruction = previousTitles.length > 0
+        ? `CRITICAL: ALREADY GENERATED: ${previousTitles.join(", ")}. DO NOT REPEAT THESE themes or titles. Generate completely NEW ideas.`
+        : "";
+
+    // 1. STRICT Prompt to prevent runaway text
     const prompt = `
-    Role: CTO of a Y-Combinator Startup.
-    Task: Suggest 3 Portfolio Projects that would actually get a candidate hired for "${targetRole}".
-    
+    Role: Hiring Manager at ${targetCompany}.
+    Task: Suggest 3 "Hiring-Signal" Portfolio Projects for a "${experienceLevel}" "${targetRole}" candidate.
     ${context}
     
-    Criteria:
-    - NO "To-Do Lists" or "Weather Apps" (Too generic).
-    - Projects must solve a real problem or demonstrate a complex skill (e.g. Real-time data, Auth, AI integration).
-    - **Relevance**: Ensure the projects allow the user to apply the "Focus" concepts mentioned above (if any).
-    - Levels: 
-      1. **The "Proof of Concept"** (Beginner but unique).
-      2. **The "Full Stack"** (Intermediate, real users).
-      3. **The "Moonshot"** (Advanced, complex architecture).
-  `;
+    GOAL: These projects must GUARANTEE an interview call by solving a REAL problem relevant to ${targetCompany}.
+    - Relevance: If the company is distinct (e.g. FinTech), the project MUST be domain-specific (e.g. Ledger/Fraud Detection).
+    - Complexity: NO To-Do Lists. NO simple CRUD. Must deal with Scale, Security, or Optimization.
+    ${avoidInstruction}
+    
+    OUTPUT RULES:
+    - Return ONLY a valid JSON Array.
+    - NO Markdown, NO Explanations.
+    - Total character count must be under 2000.
+    
+    JSON Structure:
+    [
+      {
+        "title": "Project Name (Max 5 words)",
+        "difficulty": "Beginner/Intermediate/Advanced",
+        "description": "2 sentences max. Highlight technical complexity.",
+        "techStack": ["Tool1", "Tool2", "Tool3"],
+        "resumeValue": "1 punchy sentence explaining why this impresses a recruiter.",
+        "implementationFlow": ["Step 1", "Step 2", "Step 3"],
+        "learningOutcomes": ["Skill 1", "Skill 2"]
+      }
+    ]
+    `;
 
     try {
         const response = await generateWithRetry(
@@ -103,36 +126,88 @@ export const generateProjectIdeas = async (targetRole: string, focusTopics: stri
             {
                 contents: prompt,
                 config: {
-                    thinkingConfig: { thinkingBudget: 0 },
                     responseMimeType: "application/json",
-                    responseSchema: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                id: { type: Type.STRING },
-                                title: { type: Type.STRING },
-                                difficulty: { type: Type.STRING, enum: ['Beginner', 'Intermediate', 'Advanced'] },
-                                description: { type: Type.STRING },
-                                techStack: { type: Type.ARRAY, items: { type: Type.STRING } },
-                                keyFeatures: { type: Type.ARRAY, items: { type: Type.STRING } },
-                                resumeValue: { type: Type.STRING },
-                                implementationResources: {
-                                    type: Type.ARRAY,
-                                    items: {
-                                        type: Type.OBJECT,
-                                        properties: { name: { type: Type.STRING }, url: { type: Type.STRING } }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    maxOutputTokens: 1024, // FORCE stop before 36k chars
+                    temperature: 0.8 // Slightly higher creativity to avoid repetition
                 }
             }
         );
-        return JSON.parse(cleanJson(response.text || "[]"));
+
+        let text = response.text || "[]";
+
+        // 2. REPAIR Truncated JSON
+        // If the AI stops in the middle, we cut it off at the last closing brace '}' and add ']'
+        if (!text.trim().endsWith(']')) {
+            const lastBrace = text.lastIndexOf('}');
+            if (lastBrace !== -1) {
+                text = text.substring(0, lastBrace + 1) + ']';
+                console.warn("⚠️ Repaired truncated JSON response");
+            }
+        }
+
+        const cleaned = cleanJson(text);
+        const parsed = JSON.parse(cleaned);
+
+        // Validate array
+        if (!Array.isArray(parsed)) throw new Error("Output is not an array");
+
+        return parsed.slice(0, 3).map((p: any) => ({
+            ...p,
+            id: p.id || Math.random().toString(36).substr(2, 9),
+            // Ensure fields exist for UI safety
+            title: p.title || "Project Idea",
+            description: p.description || "A technical project relevant to the role.",
+            techStack: p.techStack || ["React", "Node.js"],
+            difficulty: p.difficulty || "Intermediate",
+            resumeValue: p.resumeValue || "Demonstrates core competencies.",
+            implementationFlow: p.implementationFlow || ["Design", "Build", "Test"],
+            learningOutcomes: p.learningOutcomes || ["Full Stack Dev"],
+            keyFeatures: p.keyFeatures || []
+        }));
+
     } catch (error) {
-        console.error("Project Generation Failed:", error);
-        throw error;
+        console.error("❌ Project Generation Failed, using Fallback:", error);
+
+        // 3. EMERGENCY FALLBACK WITH VARIATIONS
+        // Use random offset to cycle through fallbacks if API fails repeatedly
+        const fallbackOffset = previousTitles.length % 2;
+
+        const fallbackSetA = [
+            {
+                id: "fb-1",
+                title: `${targetRole || 'Full Stack'} Analytics Engine`,
+                difficulty: "Intermediate" as const,
+                description: `High-performance analytics engine for ${targetRole}s processing large data streams in real-time.`,
+                techStack: ["Node.js", "Redis", "Kafka", "React"],
+                resumeValue: "Proves ability to handle high-throughput data processing.",
+                implementationFlow: ["Ingest Stream", "Process Buffer", "Visualize"],
+                learningOutcomes: ["Stream Processing", "Caching", "System Design"],
+                keyFeatures: ["Real-time ingestion", "Data aggregation"]
+            },
+            {
+                id: "fb-2",
+                title: "Distributed Task Scheduler",
+                difficulty: "Advanced" as const,
+                description: "A fault-tolerant distributed system that schedules and executes jobs across multiple nodes.",
+                techStack: ["Go", "gRPC", "PostgreSQL", "Docker"],
+                resumeValue: "Demonstrates understanding of distributed systems and fault tolerance.",
+                implementationFlow: ["Leader Election", "Job Queue", "Worker Nodes"],
+                learningOutcomes: ["Distributed Consensus", "RPC", "Container Orchestration"],
+                keyFeatures: ["Fault tolerance", "Load distribution"]
+            },
+            {
+                id: "fb-3",
+                title: "Secure API Gateway",
+                difficulty: "Beginner" as const,
+                description: "Custom API Gateway implementing rate limiting, authentication, and request routing.",
+                techStack: ["Node.js", "Redis", "JWT", "Express"],
+                resumeValue: "Shows grasp of backend security and infrastructure patterns.",
+                implementationFlow: ["Auth Middleware", "Rate Limiter", "Proxy Logic"],
+                learningOutcomes: ["Security Patterns", "Reverse Proxy", "Middleware"],
+                keyFeatures: ["Rate limiting", "JWT Auth"]
+            }
+        ];
+
+        return fallbackSetA; // Simply return Set A for now to ensure type safety, could expand logic later
     }
 };

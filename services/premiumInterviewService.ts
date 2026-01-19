@@ -1,5 +1,5 @@
 import { Type } from "@google/genai";
-import { generateWithRetry } from "./geminiClient";
+import { generateWithRetry, cleanJson, GEMINI_MODEL } from "./geminiClient";
 import { UserProfile, CareerAnalysis } from "../types";
 
 /**
@@ -219,12 +219,11 @@ Generate your next response (1-2 sentences, natural, conversational):`;
 
     try {
         const response = await generateWithRetry(
-            'gemini-3-flash-preview',
+            GEMINI_MODEL,
             {
                 contents: systemPrompt,
                 config: {
                     temperature: 0.7, // Professional but natural
-                    thinkingConfig: { thinkingBudget: 0 }
                 }
             }
         );
@@ -312,17 +311,16 @@ Be brutally honest. This is a PREMIUM evaluation - provide maximum value.`;
 
     try {
         const response = await generateWithRetry(
-            'gemini-3-flash-preview',
+            GEMINI_MODEL,
             {
                 contents: prompt,
                 config: {
                     responseMimeType: "application/json",
-                    thinkingConfig: { thinkingBudget: 0 }
                 }
             }
         );
 
-        return JSON.parse(response.text || '{}');
+        return JSON.parse(cleanJson(response.text || '{}'));
     } catch (error) {
         console.error("Premium Interview Evaluation Failed:", error);
         throw error;
