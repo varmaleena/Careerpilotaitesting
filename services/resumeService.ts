@@ -14,21 +14,19 @@ export const analyzeProfile = async (
 ): Promise<CareerAnalysis> => {
 
     const promptText = `
-    Role: Elite Technical Career Coach (Ex-FAANG Recruiter & Engineering Lead).
-    Task: Conduct a deep-dive analysis of the candidate's profile for the target role: "${targetRole}".
-    
-    Philosophy: Be brutally honest but highly constructive. Use current 2025 market standards.
+    Role: Senior Career Coach.
+    Task: Analyze the candidate's profile against the target role: "${targetRole}".
     
     CRITICAL: YOU MUST PROVIDE EXACTLY 3 STRENGTHS and 3 WEAKNESSES. 
     If the resume is sparse, infer strengths from their background or potential (e.g., "Strong Academic Foundation", "Self-Driven Learning", "Technical Curiosity").
     Do NOT return empty arrays.
     
     Output strictly in JSON format matching the schema.
-    - readinessScore: number 0-100. (Rules: <40=Junior/Student, 40-70=Mid-Level/Capable, >80=Job Ready/Senior. Be strict.)
-    - summary: A 3-sentence strategic summary. 1) Current Status. 2) The Critical Gap. 3) The "Winning Move" to get hired.
-    - skills: Extract and categorize. Mark 'missing' if essential for ${targetRole} but not found.
-    - strengths: 3 distinct "Selling Points" that make them stand out. (MANDATORY: 3 items)
-    - weaknesses: 3 specific "Deal Breakers" or gaps they MUST fix. (MANDATORY: 3 items)
+    - readinessScore: number 0-100 based on fit.
+    - summary: A 2-3 sentence executive summary.
+    - skills: List of skills extracted, categorized, and marked as 'acquired' (found in resume) or 'missing' (required for target role).
+    - strengths: Top 3 selling points.
+    - weaknesses: Top 3 gaps to fill.
   `;
 
     const contents = [];
@@ -49,7 +47,7 @@ export const analyzeProfile = async (
 
     try {
         const response = await generateWithRetry(
-            GEMINI_MODEL,
+            'gemini-2.0-flash-exp',
             {
                 contents: contents,
                 config: {
