@@ -56,6 +56,7 @@ import { downloadLatexPdf, downloadResumeAsPdf } from './services/pdfExportServi
 import { extractTextFromPdf } from './services/pdfService';
 import { evaluatePremiumInterview, generatePremiumInterviewResponse } from './services/premiumInterviewService';
 import { analyzeProfile, generateLatexData, optimizeResume } from './services/resumeService';
+import { analytics, EVENTS, USER_PROPS } from './services/analytics';
 import {
   AppView,
   CareerAnalysis,
@@ -415,6 +416,32 @@ const App = () => {
     resumeAnalysisResult,
     seenProjectTitles
   ]);
+
+  // Analytics: Identify user and track properties
+  useEffect(() => {
+    if (isLoggedIn && currentUserEmail) {
+      analytics.identify(currentUserEmail, {
+        [USER_PROPS.NAME]: userProfile.name,
+        [USER_PROPS.EMAIL]: currentUserEmail,
+        [USER_PROPS.TARGET_ROLE]: userProfile.targetRole,
+        [USER_PROPS.EXPERIENCE_LEVEL]: userProfile.experienceLevel,
+        [USER_PROPS.GRADUATION_YEAR]: userProfile.graduationYear,
+        [USER_PROPS.TARGET_COMPANIES]: userProfile.targetCompanies,
+        [USER_PROPS.LAST_ACTIVE]: new Date().toISOString(),
+        [USER_PROPS.READINESS_SCORE]: analysis?.readinessScore,
+        [USER_PROPS.SKILLS_ACQUIRED]: analysis?.skills?.filter(s => s.status === 'acquired').length || 0,
+        [USER_PROPS.SKILLS_MISSING]: analysis?.skills?.filter(s => s.status === 'missing').length || 0
+      });
+    }
+  }, [isLoggedIn, currentUserEmail, userProfile, analysis]);
+
+  // Analytics: Track page views
+  useEffect(() => {
+    analytics.page(view, {
+      targetRole: userProfile.targetRole,
+      isLoggedIn
+    });
+  }, [view]);
 
   // CRITICAL FIX: Cancel audio when switching views
   useEffect(() => {
