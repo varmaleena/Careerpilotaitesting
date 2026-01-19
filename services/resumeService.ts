@@ -43,7 +43,7 @@ export const analyzeProfile = async (
 
     try {
         const response = await generateWithRetry(
-            'gemini-2.0-flash-exp',
+            GEMINI_MODEL,
             {
                 contents: contents,
                 config: {
@@ -66,7 +66,8 @@ export const analyzeProfile = async (
                             },
                             strengths: { type: Type.ARRAY, items: { type: Type.STRING } },
                             weaknesses: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        }
+                        },
+                        required: ["readinessScore", "summary", "skills", "strengths", "weaknesses"]
                     }
                 }
             }
@@ -76,7 +77,13 @@ export const analyzeProfile = async (
         if (!text) throw new Error("No response from AI");
 
         try {
-            return JSON.parse(cleanJson(text)) as CareerAnalysis;
+            const data = JSON.parse(cleanJson(text));
+            // Ensure strengths and weaknesses are always arrays to avoid UI issues
+            return {
+                ...data,
+                strengths: Array.isArray(data.strengths) ? data.strengths : [],
+                weaknesses: Array.isArray(data.weaknesses) ? data.weaknesses : []
+            } as CareerAnalysis;
         } catch (parseError) {
             console.error("JSON Parse Error:", parseError, "Raw Text:", text);
             throw new Error("Failed to parse AI response. Please try again.");

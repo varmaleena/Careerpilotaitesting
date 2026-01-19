@@ -535,7 +535,11 @@ const App = () => {
       setShowAuthModal(false);
 
       setUserProfile(userData.userProfile);
-      setAnalysis(userData.analysis);
+      setAnalysis(userData.analysis ? {
+        ...userData.analysis,
+        strengths: userData.analysis.strengths || [],
+        weaknesses: userData.analysis.weaknesses || []
+      } : null);
       setPlan(userData.plan);
       setProjects(userData.projects || []);
       setSeenProjectTitles(userData.seenProjectTitles || []);
@@ -1352,7 +1356,7 @@ const App = () => {
                   onChange={e => setUserProfile(prev => ({ ...prev, targetRole: e.target.value }))}
                 />
                 <p className="text-xs text-slate-500 mt-1">
-                  ðŸ’¡ Not sure? Try: "Software Developer", "Frontend Engineer", "Data Scientist"
+                  Not sure? Try: "Software Developer", "Frontend Engineer", "Data Scientist"
                 </p>
               </div>
 
@@ -1369,7 +1373,7 @@ const App = () => {
                   onChange={e => setUserProfile(prev => ({ ...prev, targetCompanies: e.target.value }))}
                 />
                 <p className="text-xs text-slate-500 mt-1">
-                  ðŸŽ¯ We'll optimize your resume and learning path for these companies
+                  We'll optimize your resume and learning path for these companies
                 </p>
               </div>
             </div>
@@ -1395,7 +1399,7 @@ const App = () => {
                     {userProfile.resumeFile ? (
                       <>
                         <FileText className="w-8 h-8 text-emerald-400 mb-2" />
-                        <span className="text-sm font-medium text-emerald-300">Resume Uploaded âœ“</span>
+                        <span className="text-sm font-medium text-emerald-300">Resume Uploaded ✓</span>
                         <span className="text-xs text-emerald-500/70 mt-1">Ready to analyze</span>
                       </>
                     ) : (
@@ -1422,9 +1426,7 @@ const App = () => {
                 </div>
               </div>
 
-              <p className="text-xs text-slate-500 mt-3 text-center">
-                ðŸ“„ Don't have a resume? No problem! We'll help you build one based on your profile.
-              </p>
+
             </div>
 
             <button
