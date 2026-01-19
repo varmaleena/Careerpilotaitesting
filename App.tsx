@@ -1459,8 +1459,6 @@ const App = () => {
               <h2 className="text-3xl font-bold text-white tracking-tight">
                 {view === AppView.DASHBOARD && 'Dashboard'}
                 {view === AppView.PLAN && 'Learning Plan'}
-                {view === AppView.PROJECTS && 'Build Portfolio'}
-
                 {view === AppView.INTERVIEW && 'Interview Simulator'}
                 {view === AppView.JOBS && 'Market Scanner'}
               </h2>
@@ -1476,9 +1474,9 @@ const App = () => {
           {/* Dashboard View */}
           {view === AppView.DASHBOARD && analysis && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* Score Card */}
-                <div className="bg-white/5 backdrop-blur-xl p-5 rounded-3xl border border-white/10 col-span-1 shadow-xl">
+                <div className="bg-white/5 backdrop-blur-xl p-8 rounded-3xl border border-white/10 col-span-1 shadow-xl">
                   <h3 className="text-xs font-bold text-slate-400 mb-6 uppercase tracking-widest">Match Potential</h3>
                   <ScoreGauge score={analysis.readinessScore} />
                   <p className="text-center text-sm text-slate-300 mt-4 leading-relaxed">
@@ -1489,7 +1487,7 @@ const App = () => {
                 </div>
 
                 {/* Strengths & Weaknesses */}
-                <div className="bg-white/5 backdrop-blur-xl p-5 rounded-3xl border border-white/10 col-span-2 flex flex-col justify-between shadow-xl">
+                <div className="bg-white/5 backdrop-blur-xl p-8 rounded-3xl border border-white/10 col-span-2 flex flex-col justify-between shadow-xl">
                   <div className="mb-6">
                     <h3 className="text-xs font-bold text-emerald-400 mb-4 uppercase tracking-widest flex items-center">
                       <TrendingUp className="w-4 h-4 mr-2" /> Top Strengths
@@ -1520,7 +1518,7 @@ const App = () => {
               </div>
 
               {/* Skills Matrix */}
-              <div className="bg-white/5 backdrop-blur-xl p-5 rounded-3xl border border-white/10 shadow-xl">
+              <div className="bg-white/5 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-xl">
                 <div className="flex justify-between items-center mb-8">
                   <h3 className="text-xl font-bold text-white">Skills Breakdown</h3>
                   <span className="text-xs font-bold px-3 py-1 bg-white/10 border border-white/10 rounded-full text-slate-300">
@@ -1708,77 +1706,415 @@ const App = () => {
           {/* Projects Hub View */}
           {view === AppView.PROJECTS && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="flex justify-between items-center">
-                <h3 className="text-xl font-bold text-white">Portfolio Builder</h3>
-                <button
-                  onClick={handleGenerateProjects}
-                  disabled={isGeneratingProjects}
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center transition-all shadow-lg shadow-indigo-500/20"
-                >
-                  {isGeneratingProjects ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Code className="w-4 h-4 mr-2" />}
-                  Generate Ideas
-                </button>
-              </div>
-
-              {isGeneratingProjects && projects?.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-32 bg-white/5 rounded-3xl border border-white/10">
-                  <Loader2 className="w-12 h-12 text-indigo-500 animate-spin mb-4" />
-                  <p className="text-slate-300">Crafting project ideas based on your skills...</p>
-                </div>
-              )}
-
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {projects?.map((project, idx) => (
-                  <div key={idx} className="bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 p-6 flex flex-col hover:border-indigo-500/50 transition-all group">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className={`px-3 py-1 rounded-lg text-xs font-bold border ${project.difficulty === 'Beginner' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                        project.difficulty === 'Intermediate' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                          'bg-purple-500/10 text-purple-400 border-purple-500/20'
-                        }`}>
-                        {project.difficulty}
-                      </div>
-                      <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center">
-                        <Layers className="w-4 h-4 text-slate-400 group-hover:text-white" />
-                      </div>
-                    </div>
-                    <h4 className="text-lg font-bold text-white mb-3 group-hover:text-indigo-400 transition-colors">{project.title}</h4>
-                    <p className="text-slate-400 text-sm mb-4 flex-1">{project.description}</p>
-
-                    <div className="space-y-4">
-                      <div>
-                        <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Tech Stack</h5>
-                        <div className="flex flex-wrap gap-2">
-                          {project.techStack?.map(t => (
-                            <span key={t} className="text-xs bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-700">
-                              {t}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="bg-indigo-900/20 p-3 rounded-lg border border-indigo-500/20">
-                        <div className="flex items-start space-x-2">
-                          <TrendingUp className="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" />
-                          <p className="text-xs text-indigo-200 italic">"{project.resumeValue}"</p>
-                        </div>
-                      </div>
-                    </div>
+              {/* Header Section with Gradient */}
+              <div className="relative overflow-hidden bg-gradient-to-br from-indigo-900/40 via-purple-900/30 to-slate-900/40 rounded-3xl border border-indigo-500/20 p-8 backdrop-blur-xl">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.1),transparent_50%)]" />
+                <div className="relative flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div>
+                    <h3 className="text-3xl font-bold text-white mb-2 flex items-center">
+                      <Code className="w-8 h-8 mr-3 text-indigo-400" />
+                      Portfolio Builder
+                    </h3>
+                    <p className="text-slate-300 text-sm max-w-2xl">
+                      AI-powered project ideas tailored to <span className="text-indigo-400 font-semibold">{userProfile.targetRole}</span> at your target companies
+                    </p>
                   </div>
-                ))}
-              </div>
-
-              {!isGeneratingProjects && projects?.length === 0 && (
-                <div className="text-center py-20 bg-white/5 rounded-3xl border border-white/10">
-                  <Code className="w-12 h-12 text-slate-500 mx-auto mb-4" />
-                  <h3 className="text-xl font-bold text-white mb-2">Build Your Portfolio</h3>
-                  <p className="text-slate-400 mb-6 max-w-md mx-auto">
-                    Stuck on what to build? Get 3 tailored project ideas (Beginner to Advanced) to demonstrate your skills to recruiters.
-                  </p>
-                  <button onClick={handleGenerateProjects} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-bold">
-                    Generate Projects
+                  <button
+                    onClick={handleGenerateProjects}
+                    disabled={isGeneratingProjects}
+                    className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center transition-all shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isGeneratingProjects ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="w-5 h-5 mr-2" />
+                        Generate New Ideas
+                      </>
+                    )}
                   </button>
                 </div>
+              </div>
+
+              {/* Loading State with Skeleton */}
+              {isGeneratingProjects && projects?.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-32 bg-gradient-to-br from-white/5 to-indigo-500/5 rounded-3xl border border-white/10 relative overflow-hidden">
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(99,102,241,0.1),transparent_70%)] animate-pulse" />
+                  <div className="relative">
+                    <Loader2 className="w-16 h-16 text-indigo-500 animate-spin mb-6" />
+                    <p className="text-slate-300 text-lg font-medium mb-2">Crafting Your Perfect Projects...</p>
+                    <p className="text-slate-500 text-sm">Analyzing your skills and target role</p>
+                  </div>
+                </div>
               )}
+
+              {/* Projects Grid */}
+              {projects?.length > 0 && (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {projects?.map((project, idx) => (
+                    <div
+                      key={idx}
+                      className="group relative bg-gradient-to-br from-white/5 to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden hover:border-indigo-500/50 transition-all duration-300 hover:shadow-2xl hover:shadow-indigo-500/20 hover:-translate-y-1"
+                    >
+                      {/* Gradient Overlay on Hover */}
+                      <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/0 to-purple-500/0 group-hover:from-indigo-500/10 group-hover:to-purple-500/10 transition-all duration-300" />
+
+                      {/* Card Content */}
+                      <div className="relative p-6 flex flex-col h-full">
+                        {/* Header with Difficulty Badge */}
+                        <div className="flex justify-between items-start mb-4">
+                          <div className={`px-3 py-1.5 rounded-lg text-xs font-bold border shadow-lg ${project.difficulty === 'Beginner'
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30 shadow-emerald-500/20'
+                            : project.difficulty === 'Intermediate'
+                              ? 'bg-blue-500/20 text-blue-300 border-blue-500/30 shadow-blue-500/20'
+                              : 'bg-purple-500/20 text-purple-300 border-purple-500/30 shadow-purple-500/20'
+                            }`}>
+                            {project.difficulty}
+                          </div>
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center border border-slate-700 group-hover:border-indigo-500/50 transition-all">
+                            <Layers className="w-5 h-5 text-slate-400 group-hover:text-indigo-400 transition-colors" />
+                          </div>
+                        </div>
+
+                        {/* Project Title */}
+                        <h4 className="text-xl font-bold text-white mb-3 group-hover:text-indigo-400 transition-colors leading-tight">
+                          {project.title}
+                        </h4>
+
+                        {/* Description */}
+                        <p className="text-slate-400 text-sm mb-4 flex-1 leading-relaxed line-clamp-3">
+                          {project.description}
+                        </p>
+
+                        {/* Tech Stack */}
+                        <div className="mb-4">
+                          <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center">
+                            <Code className="w-3 h-3 mr-1.5" />
+                            Tech Stack
+                          </h5>
+                          <div className="flex flex-wrap gap-2">
+                            {project.techStack?.slice(0, 4).map(t => (
+                              <span
+                                key={t}
+                                className="text-xs bg-slate-800/80 text-slate-300 px-2.5 py-1 rounded-lg border border-slate-700 hover:border-indigo-500/50 transition-colors"
+                              >
+                                {t}
+                              </span>
+                            ))}
+                            {project.techStack?.length > 4 && (
+                              <span className="text-xs bg-slate-800/80 text-slate-400 px-2.5 py-1 rounded-lg border border-slate-700">
+                                +{project.techStack.length - 4} more
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Key Features - Collapsible */}
+                        {project.keyFeatures && project.keyFeatures.length > 0 && (
+                          <div className="mb-4">
+                            <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center">
+                              <CheckCircle className="w-3 h-3 mr-1.5" />
+                              Key Features
+                            </h5>
+                            <ul className="space-y-1.5">
+                              {project.keyFeatures.slice(0, 3).map((feature, fIdx) => (
+                                <li key={fIdx} className="text-xs text-slate-400 flex items-start">
+                                  <ChevronRight className="w-3 h-3 mr-1 mt-0.5 text-indigo-400 shrink-0" />
+                                  <span className="line-clamp-1">{feature}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Resume Value Highlight */}
+                        <div className="bg-gradient-to-br from-indigo-900/30 to-purple-900/20 p-4 rounded-xl border border-indigo-500/30 mb-4 relative overflow-hidden">
+                          <div className="absolute top-0 right-0 w-20 h-20 bg-indigo-500/10 rounded-full blur-2xl" />
+                          <div className="relative flex items-start space-x-2">
+                            <TrendingUp className="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" />
+                            <div>
+                              <p className="text-xs font-bold text-indigo-300 mb-1">Resume Impact</p>
+                              <p className="text-xs text-indigo-200/90 italic leading-relaxed">"{project.resumeValue}"</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Learning Outcomes */}
+                        {project.learningOutcomes && project.learningOutcomes.length > 0 && (
+                          <div className="mb-4 pb-4 border-b border-slate-700/50">
+                            <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center">
+                              <Award className="w-3 h-3 mr-1.5" />
+                              You'll Learn
+                            </h5>
+                            <div className="flex flex-wrap gap-1.5">
+                              {project.learningOutcomes.slice(0, 3).map((outcome, oIdx) => (
+                                <span
+                                  key={oIdx}
+                                  className="text-xs bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded border border-emerald-500/20"
+                                >
+                                  {outcome}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Implementation Steps Preview */}
+                        {project.implementationFlow && project.implementationFlow.length > 0 && (
+                          <div className="mb-4">
+                            <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center">
+                              <List className="w-3 h-3 mr-1.5" />
+                              Implementation Steps
+                            </h5>
+                            <div className="space-y-1.5">
+                              {project.implementationFlow.slice(0, 2).map((step, sIdx) => (
+                                <div key={sIdx} className="flex items-start text-xs text-slate-400">
+                                  <span className="text-indigo-400 font-bold mr-2 shrink-0">{sIdx + 1}.</span>
+                                  <span className="line-clamp-1">{step}</span>
+                                </div>
+                              ))}
+                              {project.implementationFlow.length > 2 && (
+                                <p className="text-xs text-slate-500 italic ml-5">+{project.implementationFlow.length - 2} more steps...</p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Action Button */}
+                        <button
+                          onClick={() => setSelectedProject(project)}
+                          className="w-full mt-auto bg-gradient-to-r from-indigo-600/80 to-purple-600/80 hover:from-indigo-600 hover:to-purple-600 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center transition-all shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40 group-hover:scale-[1.02]"
+                        >
+                          <ExternalLink className="w-4 h-4 mr-2" />
+                          View Full Details
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Empty State */}
+              {!isGeneratingProjects && projects?.length === 0 && (
+                <div className="text-center py-24 bg-gradient-to-br from-white/5 to-indigo-500/5 rounded-3xl border border-white/10 relative overflow-hidden">
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(99,102,241,0.1),transparent_70%)]" />
+                  <div className="relative">
+                    <div className="w-20 h-20 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-indigo-500/30">
+                      <Code className="w-10 h-10 text-indigo-400" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-white mb-3">Build Your Portfolio</h3>
+                    <p className="text-slate-400 mb-8 max-w-md mx-auto leading-relaxed">
+                      Stuck on what to build? Get 3 tailored project ideas (Beginner to Advanced) designed to impress recruiters at <span className="text-indigo-400 font-semibold">{userProfile.targetCompanies || 'top companies'}</span>.
+                    </p>
+                    <button
+                      onClick={handleGenerateProjects}
+                      className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-8 py-4 rounded-xl font-bold text-base flex items-center mx-auto transition-all shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:scale-105"
+                    >
+                      <Code className="w-5 h-5 mr-2" />
+                      Generate Projects Now
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Project Details Modal */}
+          {selectedProject && (
+            <div
+              className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300"
+              onClick={() => setSelectedProject(null)}
+            >
+              <div
+                className="bg-gradient-to-br from-slate-900 to-slate-950 rounded-3xl border border-indigo-500/30 max-w-4xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl shadow-indigo-500/20"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Modal Header */}
+                <div className="sticky top-0 bg-gradient-to-br from-indigo-900/40 via-purple-900/30 to-slate-900/40 backdrop-blur-xl border-b border-indigo-500/20 p-6 z-10">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className={`px-3 py-1.5 rounded-lg text-xs font-bold border shadow-lg ${selectedProject.difficulty === 'Beginner'
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                          : selectedProject.difficulty === 'Intermediate'
+                            ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
+                            : 'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                          }`}>
+                          {selectedProject.difficulty}
+                        </div>
+                      </div>
+                      <h2 className="text-3xl font-bold text-white mb-2">{selectedProject.title}</h2>
+                      <p className="text-slate-400 text-sm leading-relaxed">{selectedProject.description}</p>
+                    </div>
+                    <button
+                      onClick={() => setSelectedProject(null)}
+                      className="ml-4 w-10 h-10 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-indigo-500/50 flex items-center justify-center transition-all"
+                    >
+                      <X className="w-5 h-5 text-slate-400 hover:text-white" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Modal Content */}
+                <div className="p-6 space-y-6">
+                  {/* Tech Stack */}
+                  <div>
+                    <h3 className="text-lg font-bold text-white mb-3 flex items-center">
+                      <Code className="w-5 h-5 mr-2 text-indigo-400" />
+                      Tech Stack
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedProject.techStack?.map(t => (
+                        <span
+                          key={t}
+                          className="text-sm bg-slate-800/80 text-slate-300 px-3 py-1.5 rounded-lg border border-slate-700 hover:border-indigo-500/50 transition-colors"
+                        >
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Key Features */}
+                  {selectedProject.keyFeatures && selectedProject.keyFeatures.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-bold text-white mb-3 flex items-center">
+                        <CheckCircle className="w-5 h-5 mr-2 text-emerald-400" />
+                        Key Features
+                      </h3>
+                      <ul className="space-y-2">
+                        {selectedProject.keyFeatures.map((feature, idx) => (
+                          <li key={idx} className="flex items-start text-slate-300">
+                            <ChevronRight className="w-4 h-4 mr-2 mt-1 text-indigo-400 shrink-0" />
+                            <span>{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Implementation Flow */}
+                  {selectedProject.implementationFlow && selectedProject.implementationFlow.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-bold text-white mb-3 flex items-center">
+                        <List className="w-5 h-5 mr-2 text-purple-400" />
+                        Implementation Steps
+                      </h3>
+                      <div className="space-y-3">
+                        {selectedProject.implementationFlow.map((step, idx) => (
+                          <div key={idx} className="flex items-start bg-white/5 p-4 rounded-xl border border-white/10">
+                            <span className="text-indigo-400 font-bold text-lg mr-3 shrink-0">{idx + 1}.</span>
+                            <span className="text-slate-300">{step}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Learning Outcomes */}
+                  {selectedProject.learningOutcomes && selectedProject.learningOutcomes.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-bold text-white mb-3 flex items-center">
+                        <Award className="w-5 h-5 mr-2 text-amber-400" />
+                        What You'll Learn
+                      </h3>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedProject.learningOutcomes.map((outcome, idx) => (
+                          <span
+                            key={idx}
+                            className="text-sm bg-emerald-500/10 text-emerald-400 px-3 py-1.5 rounded-lg border border-emerald-500/20"
+                          >
+                            {outcome}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Resume Value */}
+                  <div className="bg-gradient-to-br from-indigo-900/30 to-purple-900/20 p-6 rounded-2xl border border-indigo-500/30 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl" />
+                    <div className="relative">
+                      <h3 className="text-lg font-bold text-indigo-300 mb-2 flex items-center">
+                        <TrendingUp className="w-5 h-5 mr-2" />
+                        Resume Impact
+                      </h3>
+                      <p className="text-indigo-200 italic leading-relaxed">"{selectedProject.resumeValue}"</p>
+                    </div>
+                  </div>
+
+                  {/* Implementation Resources */}
+                  {selectedProject.implementationResources && selectedProject.implementationResources.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-bold text-white mb-3 flex items-center">
+                        <ExternalLink className="w-5 h-5 mr-2 text-blue-400" />
+                        Helpful Resources
+                      </h3>
+                      <div className="space-y-2">
+                        {selectedProject.implementationResources.map((resource, idx) => (
+                          <a
+                            key={idx}
+                            href={resource.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 hover:border-indigo-500/50 transition-all group"
+                          >
+                            <span className="text-slate-300 group-hover:text-white transition-colors">{resource.name}</span>
+                            <ExternalLink className="w-4 h-4 text-slate-500 group-hover:text-indigo-400 transition-colors" />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Source Paper (if available) */}
+                  {selectedProject.sourcePaper && (
+                    <div className="bg-amber-900/20 p-6 rounded-2xl border border-amber-500/20">
+                      <h3 className="text-lg font-bold text-amber-300 mb-3 flex items-center">
+                        <FileText className="w-5 h-5 mr-2" />
+                        Research Paper Source
+                      </h3>
+                      <div className="space-y-2">
+                        <p className="text-white font-semibold">{selectedProject.sourcePaper.title}</p>
+                        <p className="text-slate-400 text-sm">{selectedProject.sourcePaper.authors.join(', ')}</p>
+                        <p className="text-slate-500 text-xs mb-3">{selectedProject.sourcePaper.publishedDate}</p>
+                        <p className="text-slate-300 text-sm mb-4">{selectedProject.sourcePaper.abstractSummary}</p>
+                        <a
+                          href={selectedProject.sourcePaper.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center text-amber-400 hover:text-amber-300 text-sm font-medium"
+                        >
+                          Read Full Paper <ExternalLink className="w-3 h-3 ml-1" />
+                        </a>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${selectedProject.title}\n\n${selectedProject.description}\n\nTech Stack: ${selectedProject.techStack?.join(', ')}`);
+                        alert('Project details copied to clipboard!');
+                      }}
+                      className="flex-1 bg-slate-800 hover:bg-slate-700 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center transition-all border border-slate-700 hover:border-indigo-500/50"
+                    >
+                      <Copy className="w-4 h-4 mr-2" />
+                      Copy Details
+                    </button>
+                    <button
+                      onClick={() => setSelectedProject(null)}
+                      className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center transition-all shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50"
+                    >
+                      Got It!
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
