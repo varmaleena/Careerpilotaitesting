@@ -215,6 +215,9 @@ ${currentPhase === 2 ? '- Ask technical questions based on their skills' : ''}
 ${currentPhase === 3 ? '- Give them a coding problem to solve' : ''}
 ${currentPhase === 4 ? '- Wrap up, ask if they have questions' : ''}
 
+CONVERSATION HISTORY:
+${conversationHistory.map(msg => `${msg.role === 'interviewer' ? 'Interviewer' : 'Candidate'}: ${msg.content}`).join('\n')}
+
 Generate your next response (1-2 sentences, natural, conversational):`;
 
     try {
