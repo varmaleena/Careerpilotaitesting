@@ -1,13 +1,13 @@
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  signOut
+  signOut,
+  sendPasswordResetEmail
 } from 'firebase/auth';
 import {
   doc,
   getDoc,
   setDoc,
-  collection
 } from 'firebase/firestore';
 import { auth, db } from './firebaseConfig';
 import { UserProfile, CareerAnalysis, WeeklyPlan, ProjectIdea, ChatMessage, InterviewFeedback, ResumeOptimizationResult } from '../types';
@@ -42,6 +42,32 @@ export const AuthService = {
   },
 
   // --- Auth Actions ---
+
+  resetPassword: async (email: string): Promise<{ success: boolean; message: string }> => {
+    // 1. Try Firebase (Real Backend)
+    try {
+      if (auth) {
+        await sendPasswordResetEmail(auth, email);
+        return { success: true, message: "Password reset link sent to your email." };
+      }
+    } catch (error: any) {
+      console.warn("Firebase reset failed, checking local storage fallback...", error.code);
+      // Continue to fallback if it's a configuration/dev credential issue or user-not-found (might be local user)
+    }
+
+    // 2. Fallback to LocalStorage (Dev Mode / Localhost)
+    // Check if user exists in local storage to give a meaningful "simulated" response
+    const users = JSON.parse(localStorage.getItem(USERS_DB_KEY) || '{}');
+    if (users[email]) {
+      console.log(`[DEV MODE] Password Reset Requested for ${email}`);
+      return {
+        success: true,
+        message: "Dev Mode: Password reset email simulated. (Check Console)"
+      };
+    }
+
+    return { success: false, message: "User not found." };
+  },
 
   signup: async (email: string, password: string): Promise<{ success: boolean; message?: string }> => {
     // 1. Try Firebase (Real Backend)
@@ -114,7 +140,9 @@ export const AuthService = {
 
     if (db) {
       try {
-        await setDoc(doc(db, "users", email), data);
+        // Firestore doesn't accept 'undefined', so we strip those fields
+        const sanitizedData = JSON.parse(JSON.stringify(data));
+        await setDoc(doc(db, "users", email), sanitizedData);
         return;
       } catch (e) {
         console.error("Firestore save failed:", e);

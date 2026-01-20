@@ -1307,6 +1307,24 @@ const App = () => {
                       placeholder="••••••••"
                     />
                   </div>
+                  {authMode === 'login' && (
+                    <div className="flex justify-end mt-2">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!emailInput) {
+                            setAuthError("Please enter your email address to reset password.");
+                            return;
+                          }
+                          const result = await AuthService.resetPassword(emailInput);
+                          alert(result.message);
+                        }}
+                        className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                      >
+                        Forgot Password?
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {authError && (
