@@ -39,7 +39,15 @@ import {
   X,
   CheckCircle,
   List,
-  Youtube
+  Youtube,
+  Github,
+  Smartphone,
+  Globe,
+  CreditCard,
+  Receipt,
+  Linkedin,
+  Edit2,
+  Save
 } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import LandingPage from "./components/LandingPage";
@@ -315,6 +323,7 @@ const App = () => {
   // Auth State
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [currentUserEmail, setCurrentUserEmail] = useState('');
 
@@ -322,6 +331,10 @@ const App = () => {
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [authError, setAuthError] = useState('');
+
+  // Profile Modal State
+  const [profileTab, setProfileTab] = useState<'profile' | 'payments'>('profile');
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
 
   // User Data State
   const [userProfile, setUserProfile] = useState<UserProfile>({ name: 'User', targetRole: '' });
@@ -654,7 +667,11 @@ const App = () => {
         { text: userProfile.resumeText, file: userProfile.resumeFile },
         userProfile.targetRole
       );
-      setAnalysis(result);
+      setAnalysis(result.analysis);
+      setUserProfile(prev => ({
+        ...prev,
+        ...result.extractedProfile
+      }));
       setView(AppView.DASHBOARD);
     } catch (error: any) {
       handleApiError(error, "Analysis failed");
@@ -881,10 +898,20 @@ const App = () => {
       description: "Mock Interview Access",
       // image: "https://example.com/your_logo",
       handler: function (response: any) {
-        // alert(response.razorpay_payment_id);
-        // alert(response.razorpay_order_id);
-        // alert(response.razorpay_signature)
-        setUserProfile(prev => ({ ...prev, isPremium: true }));
+        setUserProfile(prev => ({
+          ...prev,
+          isPremium: true,
+          paymentHistory: [
+            ...(prev.paymentHistory || []),
+            {
+              id: response.razorpay_payment_id || Date.now().toString(),
+              date: new Date().toISOString(),
+              amount: 1, // Store actual rupees (not paise)
+              item: 'Mock Interview',
+              status: 'success'
+            }
+          ]
+        }));
         alert("Payment Successful! Mock Interview Unlocked.");
       },
       prefill: {
@@ -919,7 +946,20 @@ const App = () => {
       name: "CareerPilot",
       description: "Resume Architect Access",
       handler: function (response: any) {
-        setUserProfile(prev => ({ ...prev, isResumePremium: true }));
+        setUserProfile(prev => ({
+          ...prev,
+          isResumePremium: true,
+          paymentHistory: [
+            ...(prev.paymentHistory || []),
+            {
+              id: response.razorpay_payment_id || Date.now().toString(),
+              date: new Date().toISOString(),
+              amount: 1, // Store actual rupees (not paise)
+              item: 'Resume Architect',
+              status: 'success'
+            }
+          ]
+        }));
         alert("Payment Successful! Resume Architect Unlocked.");
       },
       prefill: {
@@ -1514,9 +1554,12 @@ const App = () => {
               <p className="text-slate-400 text-sm mt-1">Target Role: <span className="text-indigo-400 font-medium">{userProfile.targetRole}</span></p>
             </div>
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-500/20">
+              <button
+                onClick={() => setShowProfileModal(true)}
+                className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-500/20 hover:scale-110 transition-transform cursor-pointer"
+              >
                 {userProfile.name?.[0]?.toUpperCase() || 'U'}
-              </div>
+              </button>
             </div>
           </header>
 
@@ -2699,7 +2742,321 @@ const App = () => {
         </div>
       </main >
       {isLoggedIn && currentUserEmail && <FeedbackFloating userEmail={currentUserEmail} />}
-    </div >
+
+      {showProfileModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300" onClick={() => setShowProfileModal(false)}>
+          <div
+            className="bg-slate-900 border border-white/10 rounded-[2.5rem] max-w-2xl w-full shadow-2xl relative overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Glass Background Decor */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/10 blur-[80px] rounded-full -mr-20 -mt-20 pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-600/10 blur-[80px] rounded-full -ml-20 -mb-20 pointer-events-none" />
+
+            <button
+              onClick={() => setShowProfileModal(false)}
+              className="absolute top-6 right-6 text-slate-500 hover:text-white bg-white/5 p-2 rounded-full transition-all z-10"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="p-10 custom-scrollbar max-h-[85vh] overflow-y-auto">
+              <div className="flex flex-col md:flex-row items-center md:items-start gap-8 mb-10">
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-indigo-500 blur-xl opacity-20 group-hover:opacity-40 transition-opacity" />
+                  <div className="w-32 h-32 rounded-3xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center text-white text-5xl font-bold shadow-2xl relative border border-white/20">
+                    {userProfile.name?.[0]?.toUpperCase() || 'U'}
+                  </div>
+                </div>
+
+                <div className="flex-1 text-center md:text-left">
+                  <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-2">
+                    {isEditingProfile ? (
+                      <input
+                        type="text"
+                        value={userProfile.name}
+                        onChange={(e) => setUserProfile(prev => ({ ...prev, name: e.target.value }))}
+                        className="bg-white/10 border border-white/20 rounded-lg px-3 py-1 text-2xl font-black text-white w-full md:w-auto"
+                        placeholder="Your Name"
+                      />
+                    ) : (
+                      <h2 className="text-4xl font-black text-white">{userProfile.name}</h2>
+                    )}
+
+                    {userProfile.isPremium && (
+                      <span className="px-3 py-1 bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 text-[10px] font-black uppercase tracking-widest rounded-full flex items-center">
+                        <Award className="w-3 h-3 mr-1" /> Premium Pilot
+                      </span>
+                    )}
+
+                    <button
+                      onClick={() => setIsEditingProfile(!isEditingProfile)}
+                      className="ml-2 text-slate-500 hover:text-white transition-colors p-2 rounded-full hover:bg-white/5"
+                    >
+                      {isEditingProfile ? <Save className="w-5 h-5 text-emerald-400" /> : <Edit2 className="w-5 h-5" />}
+                    </button>
+                  </div>
+                  <p className="text-xl text-indigo-400 font-medium mb-4">{userProfile.targetRole}</p>
+
+                  <div className="space-y-4">
+                    {/* Row 1: Read-Only Info */}
+                    <div className="flex flex-wrap justify-center md:justify-start gap-4">
+                      <div className="flex items-center text-slate-400 text-sm bg-white/5 px-4 py-2 rounded-xl border border-white/5">
+                        <Mail className="w-4 h-4 mr-2 text-indigo-400" /> {currentUserEmail}
+                      </div>
+                      <div className="flex items-center text-slate-400 text-sm bg-white/5 px-4 py-2 rounded-xl border border-white/5">
+                        <Target className="w-4 h-4 mr-2 text-emerald-400" /> {userProfile.experienceLevel}
+                      </div>
+                    </div>
+
+                    {/* Row 2: Editable Socials & Contact */}
+                    <div className="flex flex-wrap justify-center md:justify-start gap-4">
+                      {isEditingProfile ? (
+                        <>
+                          <div className="flex items-center bg-white/5 px-4 py-2 rounded-xl border border-white/5">
+                            <Smartphone className="w-4 h-4 mr-2 text-blue-400" />
+                            <input
+                              className="bg-transparent border-none outline-none text-slate-300 text-sm w-32 placeholder:text-slate-600"
+                              placeholder="Mobile Number"
+                              value={userProfile.mobileNumber || ''}
+                              onChange={(e) => setUserProfile(prev => ({ ...prev, mobileNumber: e.target.value }))}
+                            />
+                          </div>
+                          <div className="flex items-center bg-white/5 px-4 py-2 rounded-xl border border-white/5">
+                            <MapPin className="w-4 h-4 mr-2 text-rose-400" />
+                            <input
+                              className="bg-transparent border-none outline-none text-slate-300 text-sm w-32 placeholder:text-slate-600"
+                              placeholder="Location"
+                              value={userProfile.location || ''}
+                              onChange={(e) => setUserProfile(prev => ({ ...prev, location: e.target.value }))}
+                            />
+                          </div>
+                          <div className="flex items-center bg-white/5 px-4 py-2 rounded-xl border border-white/5">
+                            <Github className="w-4 h-4 mr-2 text-white" />
+                            <input
+                              className="bg-transparent border-none outline-none text-slate-300 text-sm w-48 placeholder:text-slate-600"
+                              placeholder="github.com/username"
+                              value={userProfile.githubProfile || ''}
+                              onChange={(e) => setUserProfile(prev => ({ ...prev, githubProfile: e.target.value }))}
+                            />
+                          </div>
+                          <div className="flex items-center bg-white/5 px-4 py-2 rounded-xl border border-white/5">
+                            <Linkedin className="w-4 h-4 mr-2 text-blue-500" />
+                            <input
+                              className="bg-transparent border-none outline-none text-slate-300 text-sm w-48 placeholder:text-slate-600"
+                              placeholder="linkedin.com/in/user"
+                              value={(!userProfile.linkedinProfile || userProfile.linkedinProfile === 'https://www.linkedin.com' || userProfile.linkedinProfile === 'www.linkedin.com' || userProfile.linkedinProfile === 'linkedin.com') ? '' : userProfile.linkedinProfile}
+                              onChange={(e) => setUserProfile(prev => ({ ...prev, linkedinProfile: e.target.value }))}
+                            />
+                          </div>
+                          <div className="flex items-center bg-white/5 px-4 py-2 rounded-xl border border-white/5">
+                            <Code className="w-4 h-4 mr-2 text-amber-500" />
+                            <input
+                              className="bg-transparent border-none outline-none text-slate-300 text-sm w-48 placeholder:text-slate-600"
+                              placeholder="leetcode.com/username"
+                              value={(!userProfile.leetcodeProfile || userProfile.leetcodeProfile === 'https://leetcode.com' || userProfile.leetcodeProfile === 'leetcode.com') ? '' : userProfile.leetcodeProfile}
+                              onChange={(e) => setUserProfile(prev => ({ ...prev, leetcodeProfile: e.target.value }))}
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          {userProfile.mobileNumber && (
+                            <div className="flex items-center text-slate-400 text-sm bg-white/5 px-4 py-2 rounded-xl border border-white/5">
+                              <Smartphone className="w-4 h-4 mr-2 text-blue-400" /> {userProfile.mobileNumber}
+                            </div>
+                          )}
+                          {userProfile.location && (
+                            <div className="flex items-center text-slate-400 text-sm bg-white/5 px-4 py-2 rounded-xl border border-white/5">
+                              <MapPin className="w-4 h-4 mr-2 text-rose-400" /> {userProfile.location}
+                            </div>
+                          )}
+                          {userProfile.githubProfile && (
+                            <a href={userProfile.githubProfile.startsWith('http') ? userProfile.githubProfile : `https://${userProfile.githubProfile}`} target="_blank" rel="noreferrer" className="flex items-center text-slate-400 text-sm bg-white/5 px-4 py-2 rounded-xl border border-white/5 hover:bg-white/10 hover:text-white transition-colors cursor-pointer">
+                              <Github className="w-4 h-4 mr-2 text-white" /> GitHub
+                            </a>
+                          )}
+                          {userProfile.linkedinProfile && (
+                            <a href={userProfile.linkedinProfile.startsWith('http') ? userProfile.linkedinProfile : `https://${userProfile.linkedinProfile}`} target="_blank" rel="noreferrer" className="flex items-center text-slate-400 text-sm bg-white/5 px-4 py-2 rounded-xl border border-white/5 hover:bg-white/10 hover:text-white transition-colors cursor-pointer">
+                              <Linkedin className="w-4 h-4 mr-2 text-blue-500" /> LinkedIn
+                            </a>
+                          )}
+                          {userProfile.leetcodeProfile && (
+                            <a href={userProfile.leetcodeProfile.startsWith('http') ? userProfile.leetcodeProfile : `https://${userProfile.leetcodeProfile}`} target="_blank" rel="noreferrer" className="flex items-center text-slate-400 text-sm bg-white/5 px-4 py-2 rounded-xl border border-white/5 hover:bg-white/10 hover:text-white transition-colors cursor-pointer">
+                              <Code className="w-4 h-4 mr-2 text-amber-500" /> LeetCode
+                            </a>
+                          )}
+                        </>
+                      )}
+
+                      {/* Add Details Prompt if fields missing and not editing */}
+                      {!isEditingProfile && (!userProfile.githubProfile || !userProfile.linkedinProfile || !userProfile.mobileNumber) && (
+                        <button
+                          onClick={() => setIsEditingProfile(true)}
+                          className="flex items-center text-indigo-400 text-sm bg-indigo-500/10 px-4 py-2 rounded-xl border border-indigo-500/20 hover:bg-indigo-500/20 transition-all cursor-pointer"
+                        >
+                          <Plus className="w-4 h-4 mr-2" /> Add Missing Details
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tab Navigation */}
+              <div className="flex space-x-4 mb-8 border-b border-white/10 padding-b-4">
+                <button
+                  onClick={() => setProfileTab('profile')}
+                  className={`pb-4 text-sm font-bold uppercase tracking-wider transition-all relative ${profileTab === 'profile' ? 'text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                >
+                  Profile Overview
+                  {profileTab === 'profile' && <div className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-indigo-500 shadow-[0_0_10px_#6366f1]" />}
+                </button>
+                <button
+                  onClick={() => setProfileTab('payments')}
+                  className={`pb-4 text-sm font-bold uppercase tracking-wider transition-all relative ${profileTab === 'payments' ? 'text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                >
+                  Payment History
+                  {profileTab === 'payments' && <div className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-indigo-500 shadow-[0_0_10px_#6366f1]" />}
+                </button>
+              </div>
+
+              {profileTab === 'profile' ? (
+                /* Profile Tab Content */
+                <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    {/* Impact / Validation Section */}
+                    <div className="bg-gradient-to-br from-indigo-900/20 via-slate-900/50 to-purple-900/20 p-8 rounded-3xl border border-white/10 md:col-span-2 relative overflow-hidden">
+                      {/* Background Glow */}
+                      <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 blur-3xl rounded-full translate-x-1/3 -translate-y-1/3" />
+
+                      <h3 className="text-sm font-black text-white uppercase tracking-widest mb-6 flex items-center relative z-10">
+                        <TrendingUp className="w-4 h-4 mr-2 text-indigo-400" /> CareerPilot Impact Report
+                      </h3>
+
+                      {resumeAnalysisResult?.atsScore ? (
+                        <div className="relative z-10">
+                          <p className="text-slate-400 text-sm mb-6">Measuring your validation progress from initial resume upload.</p>
+
+                          <div className="grid grid-cols-2 gap-8 items-center">
+                            {/* Before */}
+                            <div className="relative p-6 bg-slate-950/50 rounded-2xl border border-white/5 group transition-all hover:border-red-500/30">
+                              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Initial Standing</p>
+                              <div className="text-4xl font-black text-slate-300 group-hover:text-red-400 transition-colors">
+                                {resumeAnalysisResult.atsScore.before}
+                                <span className="text-lg text-slate-600 ml-1">/100</span>
+                              </div>
+                              <p className="text-xs text-slate-500 mt-2">Baseline Score</p>
+                            </div>
+
+                            {/* Arrow */}
+                            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 hidden md:flex items-center justify-center w-12 h-12 bg-indigo-500/20 rounded-full border border-indigo-500/30 shadow-lg shadow-indigo-500/20 z-20">
+                              <ArrowRight className="w-5 h-5 text-indigo-400" />
+                            </div>
+
+                            {/* After */}
+                            <div className="relative p-6 bg-indigo-500/10 rounded-2xl border border-indigo-500/30 group transition-all hover:bg-indigo-500/20 ring-1 ring-transparent hover:ring-indigo-400/50">
+                              <div className="absolute -top-3 -right-3 bg-emerald-500 text-slate-950 text-[10px] font-black uppercase py-1 px-3 rounded-full shadow-lg">
+                                +{resumeAnalysisResult.atsScore.after - resumeAnalysisResult.atsScore.before} Points
+                              </div>
+                              <p className="text-xs font-bold text-indigo-300 uppercase tracking-wider mb-2">Current Potential</p>
+                              <div className="text-4xl font-black text-white text-shadow-glow">
+                                {resumeAnalysisResult.atsScore.after}
+                                <span className="text-lg text-indigo-300/60 ml-1">/100</span>
+                              </div>
+                              <p className="text-xs text-indigo-300/80 mt-2">Optimized by AI</p>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 relative z-10">
+                          <div className="w-16 h-16 mx-auto bg-slate-800 rounded-2xl flex items-center justify-center mb-4 border border-slate-700">
+                            <TrendingUp className="w-8 h-8 text-slate-500" />
+                          </div>
+                          <p className="text-slate-300 font-medium mb-2">No Impact Data Yet</p>
+                          <p className="text-slate-500 text-sm max-w-sm mx-auto mb-6">
+                            Run the "Resume Architect" to measure your profile's improvement score.
+                          </p>
+                          <button
+                            onClick={() => {
+                              setShowProfileModal(false);
+                              setView(AppView.RESUME);
+                            }}
+                            className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-xl transition-all"
+                          >
+                            Start Optimization
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4">
+                    <button
+                      onClick={() => {
+                        setShowProfileModal(false);
+                        setView(AppView.ONBOARDING);
+                      }}
+                      className="flex-1 bg-white text-black py-4 rounded-2xl font-black text-sm transition-all hover:bg-slate-200 shadow-xl"
+                    >
+                      Edit Profile
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowProfileModal(false);
+                        handleLogout();
+                      }}
+                      className="flex-1 bg-red-500/10 hover:bg-500/20 text-red-500 py-4 rounded-2xl font-black text-sm transition-all border border-red-500/20"
+                    >
+                      Logout Session
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* Payments Tab Content */
+                <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300 min-h-[400px]">
+                  <h3 className="text-sm font-black text-white uppercase tracking-widest mb-4 flex items-center">
+                    <Receipt className="w-4 h-4 mr-2 text-indigo-400" /> Transaction History
+                  </h3>
+
+                  {userProfile.paymentHistory && userProfile.paymentHistory.length > 0 ? (
+                    <div className="space-y-3">
+                      {userProfile.paymentHistory.map((tx) => (
+                        <div key={tx.id} className="bg-slate-950/50 p-4 rounded-2xl border border-white/5 flex items-center justify-between hover:border-indigo-500/30 transition-all">
+                          <div className="flex items-center space-x-4">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tx.status === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                              <CreditCard className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <p className="text-white font-bold text-sm bg-transparent">{tx.item}</p>
+                              <p className="text-slate-500 text-xs">{new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString()}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-white font-bold">₹{tx.amount}</p>
+                            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${tx.status === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                              {tx.status}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-slate-800 rounded-3xl bg-slate-900/30">
+                      <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mb-4 text-slate-600">
+                        <Receipt className="w-8 h-8" />
+                      </div>
+                      <p className="text-slate-300 font-bold mb-1">No Transactions Found</p>
+                      <p className="text-slate-500 text-sm">You haven't made any purchases yet.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 

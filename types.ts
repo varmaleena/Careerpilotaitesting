@@ -21,6 +21,21 @@ export interface UserProfile {
   };
   isPremium?: boolean;
   isResumePremium?: boolean;
+  // Extracted from Resume
+  mobileNumber?: string;
+  location?: string;
+  githubProfile?: string;
+  linkedinProfile?: string;
+  leetcodeProfile?: string;
+  paymentHistory?: PaymentTransaction[];
+}
+
+export interface PaymentTransaction {
+  id: string;
+  date: string;
+  amount: number;
+  item: 'Mock Interview' | 'Resume Architect';
+  status: 'success' | 'failed';
 }
 
 export interface Skill {

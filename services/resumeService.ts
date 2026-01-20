@@ -1,6 +1,6 @@
 import { Type } from "@google/genai";
 import axios from "axios";
-import { CareerAnalysis, LatexResumeData, ResumeOptimizationResult } from "../types";
+import { CareerAnalysis, LatexResumeData, ResumeOptimizationResult, UserProfile } from "../types";
 import { cleanJson, GEMINI_MODEL, generateWithRetry } from "./geminiClient";
 
 const API_URL = "https://api.example.com/resume";
@@ -8,14 +8,16 @@ const API_URL = "https://api.example.com/resume";
 /**
  * Analyzes the user's resume (Text or PDF) against a target role.
  */
+// Define return type locally or import if added to types
 export const analyzeProfile = async (
     resumeInput: { text?: string; file?: { data: string; mimeType: string } },
     targetRole: string
-): Promise<CareerAnalysis> => {
+): Promise<{ analysis: CareerAnalysis; extractedProfile: Partial<UserProfile> }> => { // Changed return type
 
     const promptText = `
     Role: Senior Career Coach.
     Task: Analyze the candidate's profile against the target role: "${targetRole}".
+    Also, extract the candidate's contact and social profile links from the resume effectively.
     
     Output strictly in JSON format matching the schema.
     - readinessScore: number 0-100 based on fit.
@@ -23,6 +25,15 @@ export const analyzeProfile = async (
     - skills: List of skills extracted, categorized, and marked as 'acquired' (found in resume) or 'missing' (required for target role).
     - strengths: Top 3 selling points.
     - weaknesses: Top 3 gaps to fill.
+    - mobileNumber: Candidate's phone number if found.
+    - location: Candidate's city/country if found.
+    - githubProfile: GitHub profile URL if found.
+    - linkedinProfile: LinkedIn profile URL if found.
+    - leetcodeProfile: LeetCode profile URL if found.
+
+    Ensure:
+    - githubProfile must include "github.com".
+    - linkedinProfile must include "linkedin.com".
   `;
 
     const contents = [];
@@ -66,6 +77,11 @@ export const analyzeProfile = async (
                             },
                             strengths: { type: Type.ARRAY, items: { type: Type.STRING } },
                             weaknesses: { type: Type.ARRAY, items: { type: Type.STRING } },
+                            mobileNumber: { type: Type.STRING },
+                            location: { type: Type.STRING },
+                            githubProfile: { type: Type.STRING },
+                            linkedinProfile: { type: Type.STRING },
+                            leetcodeProfile: { type: Type.STRING },
                         },
                         required: ["readinessScore", "summary", "skills", "strengths", "weaknesses"]
                     }
@@ -78,12 +94,25 @@ export const analyzeProfile = async (
 
         try {
             const data = JSON.parse(cleanJson(text));
-            // Ensure strengths and weaknesses are always arrays to avoid UI issues
-            return {
-                ...data,
+
+            const analysis: CareerAnalysis = {
+                readinessScore: data.readinessScore,
+                summary: data.summary,
+                skills: data.skills,
                 strengths: Array.isArray(data.strengths) ? data.strengths : [],
                 weaknesses: Array.isArray(data.weaknesses) ? data.weaknesses : []
-            } as CareerAnalysis;
+            };
+
+            const extractedProfile = {
+                mobileNumber: data.mobileNumber,
+                location: data.location,
+                githubProfile: data.githubProfile,
+                linkedinProfile: data.linkedinProfile,
+                leetcodeProfile: data.leetcodeProfile
+            };
+
+            return { analysis, extractedProfile };
+
         } catch (parseError) {
             console.error("JSON Parse Error:", parseError, "Raw Text:", text);
             throw new Error("Failed to parse AI response. Please try again.");
