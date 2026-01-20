@@ -1,5 +1,5 @@
 import { Type } from "@google/genai";
-import { generateWithRetry } from "./geminiClient";
+import { generateWithRetry, GEMINI_MODEL } from "./geminiClient";
 import { UserProfile, CareerAnalysis } from "../types";
 
 /**
@@ -138,7 +138,7 @@ Generate your next response as the interviewer:`;
 
     try {
         const response = await generateWithRetry(
-            'gemini-3-flash-preview',
+            GEMINI_MODEL,
             {
                 contents: systemPrompt,
                 config: {
@@ -222,7 +222,7 @@ Be brutally honest. This is their career growth.`;
 
     try {
         const response = await generateWithRetry(
-            'gemini-3-flash-preview',
+            GEMINI_MODEL,
             {
                 contents: prompt,
                 config: {

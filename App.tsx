@@ -12,7 +12,6 @@ import {
   Code,
   Compass,
   Copy,
-  DollarSign,
   Download,
   ExternalLink,
   FileText,
@@ -28,7 +27,6 @@ import {
   PlayCircle,
   Plus,
   RefreshCw,
-  Search,
   Send,
   Target,
   Trash2,
@@ -45,13 +43,13 @@ import {
 } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import LandingPage from "./components/LandingPage";
+import FeedbackFloating from './components/FeedbackFloating';
 import { ScoreGauge } from "./components/ScoreGauge";
 import Sidebar from "./components/Sidebar";
 import { SkillCard } from "./components/SkillCard";
 import { AuthService } from './services/authService';
 import { canStartNewInterview } from './services/interviewSessionManager';
 import { generateLearningPlan, generateProjectIdeas } from './services/learningService';
-import { findMatchingJobs } from './services/marketService';
 import { downloadLatexPdf, downloadResumeAsPdf } from './services/pdfExportService';
 import { extractTextFromPdf } from './services/pdfService';
 import { evaluatePremiumInterview, generatePremiumInterviewResponse } from './services/premiumInterviewService';
@@ -62,7 +60,6 @@ import {
   CareerAnalysis,
   ChatMessage,
   InterviewFeedback,
-  JobListing,
   LatexResumeData,
   ProjectIdea,
   ResumeOptimizationResult,
@@ -339,10 +336,6 @@ const App = () => {
   const [newTaskType, setNewTaskType] = useState<'course' | 'project' | 'reading'>('reading');
   const [newTaskHours, setNewTaskHours] = useState(1);
 
-  // Jobs
-  const [jobs, setJobs] = useState<JobListing[]>([]);
-  const [isScanningJobs, setIsScanningJobs] = useState(false);
-  const [scannerStep, setScannerStep] = useState<string>('');
 
   // Resume Optimizer
   const [optimizedResume, setOptimizedResume] = useState<string>('');
@@ -393,7 +386,6 @@ const App = () => {
         userProfile,
         analysis,
         plan,
-        jobs,
         projects,
 
         chatMessages,
@@ -408,7 +400,6 @@ const App = () => {
     userProfile,
     analysis,
     plan,
-    jobs,
     projects,
 
     chatMessages,
@@ -480,9 +471,6 @@ const App = () => {
 
   // Initial scan when entering views
   useEffect(() => {
-    if (view === AppView.JOBS && jobs?.length === 0) {
-      handleScanJobs();
-    }
     if (view === AppView.PROJECTS && projects?.length === 0) {
       handleGenerateProjects();
     }
@@ -547,9 +535,12 @@ const App = () => {
       setShowAuthModal(false);
 
       setUserProfile(userData.userProfile);
-      setAnalysis(userData.analysis);
+      setAnalysis(userData.analysis ? {
+        ...userData.analysis,
+        strengths: userData.analysis.strengths || [],
+        weaknesses: userData.analysis.weaknesses || []
+      } : null);
       setPlan(userData.plan);
-      setJobs(userData.jobs || []);
       setProjects(userData.projects || []);
       setSeenProjectTitles(userData.seenProjectTitles || []);
 
@@ -576,7 +567,6 @@ const App = () => {
     setUserProfile({ name: 'User', targetRole: '' });
     setAnalysis(null);
     setPlan(null);
-    setJobs([]);
     setProjects([]);
     setSeenProjectTitles([]);
 
@@ -594,7 +584,6 @@ const App = () => {
         userProfile: { name: userProfile.name, targetRole: '' },
         analysis: null,
         plan: null,
-        jobs: [],
         projects: [],
         seenProjectTitles: [],
 
@@ -608,7 +597,6 @@ const App = () => {
       setUserProfile(emptyData.userProfile);
       setAnalysis(null);
       setPlan(null);
-      setJobs([]);
       setProjects([]);
       setSeenProjectTitles([]);
 
@@ -623,7 +611,6 @@ const App = () => {
       setUserProfile(prev => ({ ...prev, targetRole: '' }));
       setAnalysis(null);
       setPlan(null);
-      setJobs([]);
       setProjects([]);
       setSeenProjectTitles([]);
 
@@ -683,7 +670,24 @@ const App = () => {
       // Safe access: analysis.skills might be missing if AI failed partially
       const missingSkills = analysis.skills?.filter(s => s.status === 'missing').map(s => s.name) || [];
       const generatedPlan = await generateLearningPlan(userProfile.targetRole, missingSkills);
-      setPlan(generatedPlan);
+
+      // Final filtering & deduplication to ensure content quality
+      const uniquePlan = generatedPlan.reduce((acc, current) => {
+        const isDuplicate = acc.find(w => w.theme.toLowerCase() === current.theme.toLowerCase());
+        const hasContent = current.tasks && current.tasks.length > 0;
+        const hasTheme = current.theme && current.theme.trim().length > 2;
+
+        if (!isDuplicate && hasContent && hasTheme) {
+          acc.push(current);
+        }
+        return acc;
+      }, [] as WeeklyPlan[]);
+
+      if (uniquePlan.length === 0) {
+        throw new Error("The AI failed to generate a high-quality roadmap. Please try again.");
+      }
+
+      setPlan(uniquePlan);
       setView(AppView.PLAN);
     } catch (error: any) {
       handleApiError(error, "Failed to generate plan");
@@ -730,21 +734,46 @@ const App = () => {
 
   const handleDeleteTask = (weekIndex: number, taskId: string) => {
     if (!plan) return;
-    const newPlan = [...plan];
-    newPlan[weekIndex].tasks = newPlan[weekIndex].tasks.filter(t => t.id !== taskId);
+    const newPlan = plan.map((week, idx) => {
+      if (idx === weekIndex) {
+        return { ...week, tasks: week.tasks.filter(t => t.id !== taskId) };
+      }
+      return week;
+    });
+    setPlan(newPlan);
+  };
+
+  const handleToggleTask = (weekIndex: number, taskId: string) => {
+    if (!plan) return;
+    const newPlan = plan.map((week, idx) => {
+      if (idx === weekIndex) {
+        return {
+          ...week,
+          tasks: week.tasks.map(t => t.id === taskId ? { ...t, completed: !t.completed } : t)
+        };
+      }
+      return week;
+    });
     setPlan(newPlan);
   };
 
   const handleAddTask = (weekIndex: number) => {
     if (!plan || !newTaskTitle.trim()) return;
-    const newPlan = [...plan];
-    newPlan[weekIndex].tasks.push({
-      id: Date.now().toString(),
-      title: newTaskTitle,
-      description: 'Manually added task',
-      type: newTaskType,
-      estimatedHours: newTaskHours,
-      completed: false
+    const newPlan = plan.map((week, idx) => {
+      if (idx === weekIndex) {
+        return {
+          ...week,
+          tasks: [...week.tasks, {
+            id: Date.now().toString(),
+            title: newTaskTitle,
+            description: 'Manually added task',
+            type: newTaskType,
+            estimatedHours: newTaskHours,
+            completed: false
+          }]
+        };
+      }
+      return week;
     });
     setPlan(newPlan);
     setAddingTaskWeek(null);
@@ -752,42 +781,6 @@ const App = () => {
     setNewTaskHours(1);
   };
 
-  const handleScanJobs = async () => {
-    if (!analysis || !userProfile) return;
-    setIsScanningJobs(true);
-    setScannerStep('Initializing scan...');
-
-    // Simulate loading steps to improve UX
-    const steps = ['Searching global job boards...', 'Filtering for your skills...', 'Analyzing salary data...', 'Finalizing matches...'];
-    let stepIdx = 0;
-    const interval = setInterval(() => {
-      if (stepIdx < steps.length) {
-        setScannerStep(steps[stepIdx]);
-        stepIdx++;
-      }
-    }, 1500);
-
-    try {
-      const acquiredSkills = analysis.skills?.filter(s => s.status === 'acquired').map(s => s.name) || [];
-      const missingSkills = analysis.skills?.filter(s => s.status === 'missing').map(s => s.name) || [];
-      const foundJobs = await findMatchingJobs(
-        userProfile.targetRole,
-        acquiredSkills,
-        analysis.readinessScore,
-        missingSkills,
-        userProfile.experienceLevel || 'fresher',
-        userProfile.targetCompanies || ''
-      );
-      setJobs(foundJobs);
-      console.log("Scanner Results Debug:", { acquiredSkills, missingSkills, foundJobs });
-    } catch (error: any) {
-      console.error("Scanner Error:", error);
-      handleApiError(error, "Failed to scan jobs");
-    } finally {
-      clearInterval(interval);
-      setIsScanningJobs(false);
-    }
-  };
 
   const handleGenerateProjects = async () => {
     if (!userProfile?.targetRole) return;
@@ -904,6 +897,38 @@ const App = () => {
       },
       theme: {
         color: "#4f46e5"
+      }
+    };
+
+    const paymentObject = new (window as any).Razorpay(options);
+    paymentObject.open();
+  };
+
+  const handleResumePayment = async () => {
+    const res = await loadScript('https://checkout.razorpay.com/v1/checkout.js');
+
+    if (!res) {
+      alert('Razorpay SDK failed to load. Are you online?');
+      return;
+    }
+
+    const options = {
+      key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+      amount: 100, // 100 paise = ₹1
+      currency: "INR",
+      name: "CareerPilot",
+      description: "Resume Architect Access",
+      handler: function (response: any) {
+        setUserProfile(prev => ({ ...prev, isResumePremium: true }));
+        alert("Payment Successful! Resume Architect Unlocked.");
+      },
+      prefill: {
+        name: userProfile.name,
+        email: currentUserEmail || '',
+        contact: ""
+      },
+      theme: {
+        color: "#10b981" // Emerald color for resume section
       }
     };
 
@@ -1363,7 +1388,7 @@ const App = () => {
                   onChange={e => setUserProfile(prev => ({ ...prev, targetRole: e.target.value }))}
                 />
                 <p className="text-xs text-slate-500 mt-1">
-                  ðŸ’¡ Not sure? Try: "Software Developer", "Frontend Engineer", "Data Scientist"
+                  Not sure? Try: "Software Developer", "Frontend Engineer", "Data Scientist"
                 </p>
               </div>
 
@@ -1380,7 +1405,7 @@ const App = () => {
                   onChange={e => setUserProfile(prev => ({ ...prev, targetCompanies: e.target.value }))}
                 />
                 <p className="text-xs text-slate-500 mt-1">
-                  ðŸŽ¯ We'll optimize your resume and learning path for these companies
+                  We'll optimize your resume and learning path for these companies
                 </p>
               </div>
             </div>
@@ -1406,7 +1431,7 @@ const App = () => {
                     {userProfile.resumeFile ? (
                       <>
                         <FileText className="w-8 h-8 text-emerald-400 mb-2" />
-                        <span className="text-sm font-medium text-emerald-300">Resume Uploaded âœ“</span>
+                        <span className="text-sm font-medium text-emerald-300">Resume Uploaded ✓</span>
                         <span className="text-xs text-emerald-500/70 mt-1">Ready to analyze</span>
                       </>
                     ) : (
@@ -1433,9 +1458,7 @@ const App = () => {
                 </div>
               </div>
 
-              <p className="text-xs text-slate-500 mt-3 text-center">
-                ðŸ“„ Don't have a resume? No problem! We'll help you build one based on your profile.
-              </p>
+
             </div>
 
             <button
@@ -1487,7 +1510,6 @@ const App = () => {
                 {view === AppView.DASHBOARD && 'Dashboard'}
                 {view === AppView.PLAN && 'Learning Plan'}
                 {view === AppView.INTERVIEW && 'Interview Simulator'}
-                {view === AppView.JOBS && 'Market Scanner'}
               </h2>
               <p className="text-slate-400 text-sm mt-1">Target Role: <span className="text-indigo-400 font-medium">{userProfile.targetRole}</span></p>
             </div>
@@ -1615,7 +1637,7 @@ const App = () => {
                     <div key={idx} className="bg-white/5 backdrop-blur-md rounded-3xl border border-white/10 overflow-hidden">
                       <div className="bg-white/5 px-8 py-5 border-b border-white/5 flex justify-between items-center">
                         <div>
-                          <h3 className="text-xl font-bold text-white">Week {week.weekNumber}</h3>
+                          <h3 className="text-xl font-bold text-white">Week {idx + 1}</h3>
                           <p className="text-sm text-indigo-300 mt-1 font-medium">{week.theme}</p>
                         </div>
                       </div>
@@ -1632,30 +1654,44 @@ const App = () => {
                                     <BookOpen className="w-6 h-6" />}
                               </div>
                               <div className="flex-1">
-                                <div className="flex justify-between items-start">
-                                  <h4 className="text-lg font-bold text-white mb-2">{task.title}</h4>
-                                  <span className="text-xs font-bold px-2 py-1 bg-white/10 rounded text-slate-400 flex items-center">
+                                <div className="flex justify-between items-start pr-8">
+                                  <h4 className={`text-lg font-bold mb-2 transition-all ${task.completed ? 'text-slate-500 line-through' : 'text-white'}`}>
+                                    {task.title}
+                                  </h4>
+                                  <span className="text-xs font-bold px-2 py-1 bg-white/10 rounded text-slate-400 flex items-center shrink-0">
                                     <Clock className="w-3 h-3 mr-1.5" />
                                     {task.estimatedHours}h
                                   </span>
                                 </div>
                                 <p className="text-sm text-slate-400 mb-4 leading-relaxed">{task.description}</p>
 
-                                {/* Video Resource Link */}
-                                {task.videoQuery && (
-                                  <a
-                                    href={`https://www.youtube.com/results?search_query=${encodeURIComponent(task.videoQuery)}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="inline-flex items-center text-xs font-bold text-red-400 hover:text-red-300 bg-red-500/10 px-3 py-1.5 rounded-lg border border-red-500/20 transition-colors"
-                                  >
-                                    <Youtube className="w-3 h-3 mr-2" /> Watch Tutorial
-                                  </a>
-                                )}
+                                <div className="flex items-center space-x-4 mt-2">
+                                  {/* Video Resource Link */}
+                                  {task.videoQuery && (
+                                    <a
+                                      href={`https://www.youtube.com/results?search_query=${encodeURIComponent(task.videoQuery)}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center text-xs font-bold text-red-400 hover:text-red-300 bg-red-500/10 px-3 py-1.5 rounded-lg border border-red-500/20 transition-colors"
+                                    >
+                                      <Youtube className="w-3 h-3 mr-2" /> Watch Tutorial
+                                    </a>
+                                  )}
 
-                                <button className="ml-4 text-xs font-bold text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center hover:text-indigo-300">
-                                  Mark Done <ChevronRight className="w-3 h-3 ml-1" />
-                                </button>
+                                  <button
+                                    onClick={() => handleToggleTask(idx, task.id)}
+                                    className={`text-xs font-bold transition-all inline-flex items-center ${task.completed
+                                      ? 'text-emerald-400'
+                                      : 'text-indigo-400 opacity-0 group-hover:opacity-100'
+                                      } hover:text-indigo-300`}
+                                  >
+                                    {task.completed ? (
+                                      <><Check className="w-3 h-3 mr-1" /> Done</>
+                                    ) : (
+                                      <>Mark Done <ChevronRight className="w-3 h-3 ml-1" /></>
+                                    )}
+                                  </button>
+                                </div>
                               </div>
                               <button
                                 onClick={() => handleDeleteTask(idx, task.id)}
@@ -2145,8 +2181,60 @@ const App = () => {
             </div>
           )}
 
+          {/* Resume View - Payment Gate */}
+          {view === AppView.RESUME && !userProfile.isResumePremium && (
+            <div className="h-[calc(100vh-140px)] min-h-[600px] flex flex-col items-center justify-center bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-300 relative text-center px-4">
+              <div className="w-24 h-24 bg-emerald-600/20 rounded-full flex items-center justify-center mb-6 ring-4 ring-emerald-600/10">
+                <FileText className="w-10 h-10 text-emerald-400" />
+              </div>
+              <h2 className="text-3xl font-bold text-white mb-3">Resume Architect Pro</h2>
+              <p className="text-slate-400 max-w-lg mb-8 text-lg">
+                Unlock professional resume optimization and LaTeX downloads. Land 3x more interviews with an ATS-optimized resume for just <span className="text-white font-bold">₹1</span>.
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 text-left max-w-lg w-full">
+                <div className="bg-white/5 p-4 rounded-xl border border-white/5 flex items-center">
+                  <div className="p-2 bg-emerald-500/20 rounded-lg mr-3">
+                    <TrendingUp className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-white text-sm">ATS Optimization</h4>
+                    <p className="text-xs text-slate-400">Keyword injection & metric focus</p>
+                  </div>
+                </div>
+                <div className="bg-white/5 p-4 rounded-xl border border-white/5 flex items-center">
+                  <div className="p-2 bg-blue-500/20 rounded-lg mr-3">
+                    <Code className="w-5 h-5 text-blue-400" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-white text-sm">LaTeX Export</h4>
+                    <p className="text-xs text-slate-400">Get professional PDF versions</p>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={handleResumePayment}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white px-10 py-4 rounded-xl font-bold text-lg shadow-[0_0_30px_rgba(16,185,129,0.3)] hover:shadow-[0_0_50px_rgba(16,185,129,0.5)] transition-all transform hover:-translate-y-1 flex items-center"
+              >
+                Unlock Architect for ₹1
+                <ChevronRight className="w-5 h-5 ml-2" />
+              </button>
+              <p className="mt-4 text-xs text-slate-500 flex items-center">
+                <Lock className="w-3 h-3 mr-1" /> Secure payment via Razorpay
+              </p>
+              <button
+                onClick={() => setUserProfile(p => ({ ...p, isResumePremium: true }))}
+                className="mt-8 text-[10px] text-slate-700 hover:text-emerald-400 transition-colors"
+                title="Dev Bypass"
+              >
+                [Dev Bypass]
+              </button>
+            </div>
+          )}
+
           {/* Resume View */}
-          {view === AppView.RESUME && (
+          {view === AppView.RESUME && userProfile.isResumePremium && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="bg-white/5 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-xl">
                 <div className="flex justify-between items-center mb-8">
@@ -2607,137 +2695,10 @@ const App = () => {
             </div>
           )}
 
-          {/* Jobs View */}
-          {view === AppView.JOBS && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="flex justify-between items-center">
-                <h3 className="text-xl font-bold text-white">Live Opportunities</h3>
-                <button
-                  onClick={handleScanJobs}
-                  disabled={isScanningJobs}
-                  className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center transition-all"
-                >
-                  <Briefcase className="w-4 h-4 mr-2" />
-                  Refresh Scanner
-                </button>
-              </div>
-
-              {isScanningJobs && jobs?.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-32 bg-white/5 rounded-3xl border border-white/10 animate-pulse">
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-indigo-500 blur-xl opacity-20 rounded-full"></div>
-                    <div className="relative bg-slate-900 p-4 rounded-full mb-6 border border-indigo-500/30 shadow-lg shadow-indigo-500/10">
-                      <Search className="w-8 h-8 text-indigo-400 animate-bounce" />
-                    </div>
-                  </div>
-                  <h4 className="text-xl font-bold text-white mb-2">Scanning Market</h4>
-                  <p className="text-indigo-300 font-medium">{scannerStep}</p>
-                  <p className="text-slate-500 text-sm mt-2">This usually takes about 10-15 seconds.</p>
-                </div>
-              )}
-
-              <div className="grid gap-6">
-                {jobs?.map((job, idx) => (
-                  <div key={idx} className={`bg-white/5 backdrop-blur-xl p-6 rounded-2xl border transition-all group shadow-lg flex flex-col md:flex-row gap-6 ${job.readinessStatus?.includes("Locked") ? 'border-red-500/30 bg-red-900/5' : 'border-white/10 hover:border-indigo-500/50 hover:bg-white/10'
-                    }`}>
-
-                    <div className="flex-1">
-                      <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <h4 className="text-xl font-bold text-white group-hover:text-indigo-400 transition-colors">{job.title}</h4>
-                          <p className="text-slate-400 font-medium text-lg">{job.company}</p>
-                          {/* Source Type Trust Badge */}
-                          {job.sourceType && (
-                            <span className={`inline-flex items-center mt-2 text-[10px] uppercase font-bold px-2 py-0.5 rounded tracking-wider border ${job.sourceType === 'ATS' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                              job.sourceType === 'OFFICIAL' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                                job.sourceType === 'STARTUP' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
-                                  'bg-slate-700/50 text-slate-400 border-slate-600/50'
-                              }`}>
-                              {job.sourceType === 'ATS' && <span className="mr-1">✓</span>}
-                              {job.sourceType === 'ATS' ? 'Verified ATS' :
-                                job.sourceType === 'OFFICIAL' ? 'Official Site' :
-                                  job.sourceType === 'STARTUP' ? 'Verified Startup' :
-                                    'Search Result (Unverified)'}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex flex-col items-end space-y-2">
-                          <div className="flex items-center space-x-2 bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full text-xs font-bold border border-emerald-500/20 whitespace-nowrap">
-                            <Target className="w-3 h-3 mr-1" />
-                            <span>{job.matchScore || 0}% Match</span>
-                          </div>
-                          {/* Readiness Status Badge */}
-                          {job.readinessStatus && (
-                            <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider border ${job.readinessStatus.includes("Locked") ? 'bg-red-500/10 text-red-400 border-red-500/20' :
-                              job.readinessStatus.includes("learning") ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
-                                'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                              }`}>
-                              {job.readinessStatus}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap gap-4 text-sm text-slate-400 mb-5">
-                        {job.location && (
-                          <div className="flex items-center"><MapPin className="w-4 h-4 mr-1.5 text-indigo-400" /> {job.location}</div>
-                        )}
-                        {job.salary && (
-                          <div className="flex items-center"><DollarSign className="w-4 h-4 mr-1.5 text-emerald-400" /> {job.salary}</div>
-                        )}
-                        {job.postedAt && (
-                          <div className="flex items-center"><Clock className="w-4 h-4 mr-1.5 text-slate-500" /> {job.postedAt}</div>
-                        )}
-                      </div>
-
-                      <p className="text-slate-300 text-sm mb-5 leading-relaxed">{job.description}</p>
-
-                      <div className="flex flex-wrap gap-2">
-                        {job.skillsMatched?.slice(0, 5).map(skill => (
-                          <span key={skill} className="text-xs bg-slate-800 text-slate-300 px-2.5 py-1 rounded border border-white/5">
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex md:flex-col justify-end items-end gap-3 min-w-[140px]">
-                      <a
-                        href={job.applyLink || `https://www.google.com/search?q=${encodeURIComponent(`${job.title} ${job.company} jobs`)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={`w-full font-bold py-3 px-6 rounded-xl transition-all flex items-center justify-center shadow-lg ${job.readinessStatus?.includes("Locked")
-                          ? 'bg-slate-700 text-slate-400 cursor-not-allowed hover:bg-slate-700'
-                          : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-500/20'
-                          }`}
-                      >
-                        {job.readinessStatus?.includes("Locked") ? <Lock className="w-4 h-4 mr-2" /> : <ExternalLink className="w-4 h-4 mr-2" />}
-                        {job.readinessStatus?.includes("Locked") ? "Unlock Link" : "Apply Now"}
-                      </a>
-                      <button className="w-full text-xs text-slate-500 hover:text-slate-300 py-2">
-                        {job.readinessStatus?.includes("Locked") ? "Learn Requirements" : "Save for later"}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                {!isScanningJobs && jobs?.length === 0 && (
-                  <div className="text-center py-20 bg-white/5 rounded-3xl border border-white/10">
-                    <Briefcase className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                    <h3 className="text-xl font-bold text-white mb-2">Job Market Scanner</h3>
-                    <p className="text-slate-400 mb-6 max-w-md mx-auto">
-                      Find active job listings that match your skills.
-                    </p>
-                    <button onClick={handleScanJobs} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-bold">
-                      Scan Now
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
 
         </div>
       </main >
+      {isLoggedIn && currentUserEmail && <FeedbackFloating userEmail={currentUserEmail} />}
     </div >
   );
 };

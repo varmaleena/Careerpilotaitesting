@@ -19,7 +19,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
     { id: AppView.RESUME, label: 'Resume Architect', icon: FileText },
 
     { id: AppView.INTERVIEW, label: 'Interview Prep', icon: MessageSquare },
-    { id: AppView.JOBS, label: 'Market Scanner', icon: Briefcase },
   ];
 
   return (

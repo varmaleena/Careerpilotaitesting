@@ -10,7 +10,7 @@ import {
   collection
 } from 'firebase/firestore';
 import { auth, db } from './firebaseConfig';
-import { UserProfile, CareerAnalysis, WeeklyPlan, JobListing, ProjectIdea, ChatMessage, InterviewFeedback, ResumeOptimizationResult } from '../types';
+import { UserProfile, CareerAnalysis, WeeklyPlan, ProjectIdea, ChatMessage, InterviewFeedback, ResumeOptimizationResult } from '../types';
 
 // Fallback for dev without keys
 const USERS_DB_KEY = 'cp_users_v2';
@@ -20,7 +20,6 @@ interface UserData {
   userProfile: UserProfile;
   analysis: CareerAnalysis | null;
   plan: WeeklyPlan[] | null;
-  jobs: JobListing[];
   projects: ProjectIdea[];
   chatMessages: ChatMessage[];
   interviewFeedback: InterviewFeedback | null;
@@ -55,7 +54,6 @@ export const AuthService = {
           userProfile: { name: email.split('@')[0], targetRole: '' },
           analysis: null,
           plan: null,
-          jobs: [],
           projects: [],
           chatMessages: [],
           interviewFeedback: null,
@@ -80,7 +78,7 @@ export const AuthService = {
 
     const initialData = {
       userProfile: { name: email.split('@')[0], targetRole: '' },
-      analysis: null, plan: null, jobs: [], projects: [], chatMessages: [], interviewFeedback: null,
+      analysis: null, plan: null, projects: [], chatMessages: [], interviewFeedback: null,
       resumeAnalysisResult: null, seenProjectTitles: []
     };
     AuthService.saveUserData(email, initialData);
