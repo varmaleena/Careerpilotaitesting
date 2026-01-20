@@ -23,6 +23,7 @@ export const analyzeProfile = async (
     - readinessScore: number 0-100 based on fit.
     - summary: A 2-3 sentence executive summary.
     - skills: List of skills extracted, categorized, and marked as 'acquired' (found in resume) or 'missing' (required for target role).
+      CRITICAL: You MUST identify at least 5 'missing' skills that are standard for the role of "${targetRole}" but absent in the user's profile. Do not return an empty list of missing skills.
     - strengths: Top 3 selling points.
     - weaknesses: Top 3 gaps to fill.
     - mobileNumber: Candidate's phone number if found.
