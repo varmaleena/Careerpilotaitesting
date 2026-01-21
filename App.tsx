@@ -16,6 +16,7 @@ import {
   ExternalLink,
   FileText,
   Layers,
+  Link,
   Loader2,
   Lock,
   LogIn,
@@ -80,26 +81,20 @@ const escapeLatex = (text: string): string => {
   if (!text) return '';
   return text
     .replace(/\\/g, '\\textbackslash{}')
-    .replace(/&/g, '\\&')
-    .replace(/%/g, '\\%')
-    .replace(/\$/g, '\\$')
-    .replace(/#/g, '\\#')
-    .replace(/_/g, '\\_')
-    .replace(/\{/g, '\\{')
-    .replace(/\}/g, '\\}')
+    .replace(/[&%$#_{}]/g, '\\$&')
     .replace(/~/g, '\\textasciitilde{}')
     .replace(/\^/g, '\\textasciicircum{}');
 };
 
 // Convert Structured Resume Data to LaTeX Format
 const generateLatexDocument = (data: LatexResumeData): string => {
-  const { personalInfo, summary, skills, experience, education, projects, certifications } = data;
+  const { personalInfo, summary, skills, experience, education, projects, certifications, achievements } = data;
 
   // Header
   const header = `
 \\begin{center}
     \\textbf{\\Huge \\scshape ${escapeLatex(personalInfo.fullName)}} \\\\ \\vspace{1pt}
-    \\small ${personalInfo.phone ? escapeLatex(personalInfo.phone) + " $|$ " : ""}${personalInfo.email ? `\\href{mailto:${personalInfo.email}}{\\underline{${escapeLatex(personalInfo.email)}}}` + " $|$ " : ""}${escapeLatex(personalInfo.location)}
+    \\small ${personalInfo.phone ? escapeLatex(personalInfo.phone) + " $|$ " : ""}${personalInfo.email ? `\\href{mailto:${personalInfo.email}}{\\underline{${escapeLatex(personalInfo.email)}}}` + " $|$ " : ""}${personalInfo.linkedin ? escapeLatex(personalInfo.linkedin) + " $|$ " : ""}${personalInfo.website ? escapeLatex(personalInfo.website) : ""}
 \\end{center}
 `;
 
@@ -137,7 +132,7 @@ const generateLatexDocument = (data: LatexResumeData): string => {
       const bullets = (exp.bullets || []).map(b => `        \\resumeItem{${escapeLatex(b)}}`).join("\n");
       return `    \\resumeSubheading
       {${escapeLatex(exp.title)}}{${escapeLatex(exp.dates)}}
-      {${escapeLatex(exp.company)}}{${escapeLatex(exp.location)}}
+      {${escapeLatex(exp.company)}}{${escapeLatex(exp.location || "")}}
       \\resumeItemListStart
 ${bullets}
       \\resumeItemListEnd`;
@@ -156,9 +151,11 @@ ${items}
   let educationSection = "";
   if (education?.length) {
     const items = education.map(edu => {
+      // Put CGPA on the same line as dates
+      const datesWithGPA = edu.gpa ? `${edu.dates} | CGPA: ${edu.gpa}` : edu.dates;
       return `    \\resumeSubheading
-      {${escapeLatex(edu.degree)}}{${escapeLatex(edu.dates)}}
-      {${escapeLatex(edu.university)}}{${escapeLatex(edu.location)}}`;
+      {${escapeLatex(edu.degree)}}{${escapeLatex(datesWithGPA)}}
+      {${escapeLatex(edu.university)}}{${escapeLatex(edu.location || "")}}`;
     }).join("\n");
 
     educationSection = `
@@ -195,13 +192,33 @@ ${items}
   let certificationsSection = "";
   if (certifications?.length) {
     const items = certifications.map(cert => {
+      const dateText = cert.date && cert.date.trim() ? ` -- ${escapeLatex(cert.date)}` : '';
       return `\\item
-          \\textbf{${escapeLatex(cert.name)}}{: ${escapeLatex(cert.issuer)} -- ${escapeLatex(cert.date)}}`;
+          \\textbf{${escapeLatex(cert.name)}}{: ${escapeLatex(cert.issuer)}${dateText}}`;
     }).join("\n");
 
     certificationsSection = `
 %-----------CERTIFICATIONS-----------
 \\section{Certifications}
+ \\begin{itemize}[leftmargin=0.15in, label={}]
+    \\small{
+${items}
+    }
+ \\end{itemize}
+`;
+  }
+
+  // Achievements (Optional)
+  let achievementsSection = "";
+  if (achievements?.length) {
+    const items = achievements.map(ach => {
+      return `\\item
+          \\textbf{${escapeLatex(ach.title)}}${ach.description ? `: ${escapeLatex(ach.description)}` : ""}`;
+    }).join("\n");
+
+    achievementsSection = `
+%-----------ACHIEVEMENTS-----------
+\\section{Achievements}
  \\begin{itemize}[leftmargin=0.15in, label={}]
     \\small{
 ${items}
@@ -298,6 +315,8 @@ ${projectsSection}
 ${educationSection}
 
 ${certificationsSection}
+
+${achievementsSection}
 
 \\end{document}`;
 };
@@ -862,8 +881,82 @@ const App = () => {
 
       // Generate LaTeX version
       const latexData = await generateLatexData(result.optimizedContent);
-      // Prefer AI-extracted name if available, otherwise fallback to profile name
-      latexData.personalInfo.fullName = latexData.personalInfo.fullName || userProfile.name;
+
+      // Debug: Check if achievements are being extracted
+      console.log('LaTeX Data (before override):', latexData);
+      console.log('User Profile:', userProfile);
+      console.log('Current User Email:', currentUserEmail);
+
+      // COMPREHENSIVE CLEANUP: Replace ALL placeholder values with real data
+
+      // Personal Info - Replace 'string', 'Unknown', empty values
+      const cleanPersonalInfo = (value: string | undefined, fallback: string) => {
+        if (!value || value === 'string' || value === 'Unknown' || value.trim() === '') {
+          return fallback;
+        }
+        return value;
+      };
+
+      latexData.personalInfo.fullName = cleanPersonalInfo(
+        latexData.personalInfo.fullName,
+        userProfile.name
+      );
+
+      latexData.personalInfo.email = cleanPersonalInfo(
+        latexData.personalInfo.email,
+        currentUserEmail || userProfile.email || ''
+      );
+
+      latexData.personalInfo.phone = cleanPersonalInfo(
+        latexData.personalInfo.phone,
+        userProfile.mobileNumber || ''
+      );
+
+      latexData.personalInfo.location = cleanPersonalInfo(
+        latexData.personalInfo.location,
+        userProfile.location || ''
+      );
+
+      // Always use user-entered URLs
+      latexData.personalInfo.linkedin = userProfile.linkedinProfile || '';
+      latexData.personalInfo.website = userProfile.githubProfile || '';
+
+      // Clean up experience locations - Leave empty if not found (don't use 'Remote')
+      if (latexData.experience) {
+        latexData.experience.forEach(exp => {
+          exp.location = cleanPersonalInfo(exp.location, '');
+        });
+      }
+
+      // Clean up education locations
+      if (latexData.education) {
+        latexData.education.forEach(edu => {
+          edu.location = cleanPersonalInfo(edu.location, 'Hyderabad');
+          // Fix duplicate CGPA text
+          if (edu.gpa && edu.gpa.includes('CGPA')) {
+            edu.gpa = edu.gpa.replace(/CGPA:?\s*/gi, '').trim();
+          }
+        });
+      }
+
+      // Clean up project dates
+      if (latexData.projects) {
+        latexData.projects.forEach(proj => {
+          proj.date = cleanPersonalInfo(proj.date, '');
+        });
+      }
+
+      // Clean up certification dates - Remove if empty to avoid "-- "
+      if (latexData.certifications) {
+        latexData.certifications.forEach(cert => {
+          if (!cert.date || cert.date === 'string' || cert.date === 'Unknown' || cert.date.trim() === '') {
+            cert.date = '';
+          }
+        });
+      }
+
+      console.log('LaTeX Data (after cleanup):', latexData);
+
       setLatexData(latexData);
       const latexContent = generateLatexDocument(latexData);
       setLatexResume(latexContent);
@@ -883,6 +976,7 @@ const App = () => {
 
 
   const handlePayment = async () => {
+    /*
     const res = await loadScript('https://checkout.razorpay.com/v1/checkout.js');
 
     if (!res) {
@@ -929,9 +1023,11 @@ const App = () => {
 
     const paymentObject = new (window as any).Razorpay(options);
     paymentObject.open();
+    */
   };
 
   const handleResumePayment = async () => {
+    /*
     const res = await loadScript('https://checkout.razorpay.com/v1/checkout.js');
 
     if (!res) {
@@ -974,6 +1070,7 @@ const App = () => {
 
     const paymentObject = new (window as any).Razorpay(options);
     paymentObject.open();
+    */
   };
 
   const startInterview = useCallback(async () => {
@@ -1553,7 +1650,7 @@ const App = () => {
         onResetData={handleResetData}
       />
 
-      <main className="flex-1 md:ml-64 p-6 md:p-10 overflow-y-auto max-h-screen bg-slate-950 relative">
+      <main className="flex-1 md:ml-64 p-6 md:p-10 pt-20 md:pt-10 overflow-y-auto max-h-screen bg-slate-950 relative">
         {/* Background Gradients */}
         <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
           <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-indigo-900/20 blur-[100px] rounded-full"></div>
@@ -2243,7 +2340,7 @@ const App = () => {
           )}
 
           {/* Resume View - Payment Gate */}
-          {view === AppView.RESUME && !userProfile.isResumePremium && (
+          {/* {view === AppView.RESUME && !userProfile.isResumePremium && (
             <div className="h-[calc(100vh-140px)] min-h-[600px] flex flex-col items-center justify-center bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-300 relative text-center px-4">
               <div className="w-24 h-24 bg-emerald-600/20 rounded-full flex items-center justify-center mb-6 ring-4 ring-emerald-600/10">
                 <FileText className="w-10 h-10 text-emerald-400" />
@@ -2292,10 +2389,10 @@ const App = () => {
                 [Dev Bypass]
               </button>
             </div>
-          )}
+          )} */}
 
           {/* Resume View */}
-          {view === AppView.RESUME && userProfile.isResumePremium && (
+          {view === AppView.RESUME && /*userProfile.isResumePremium &&*/ (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="bg-white/5 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-xl">
                 <div className="flex justify-between items-center mb-8">
@@ -2303,10 +2400,91 @@ const App = () => {
                     <h2 className="text-2xl font-bold text-white mb-2">Resume Architect</h2>
                     <p className="text-slate-400">Transform your resume into an ATS-beating machine for {userProfile.targetRole}.</p>
                   </div>
+                </div>
+
+                {/* Profile URLs Section - REQUIRED BEFORE OPTIMIZATION */}
+                <div className="bg-gradient-to-br from-indigo-900/20 to-purple-900/20 p-6 rounded-2xl border border-indigo-500/30 mb-8">
+                  <div className="flex items-start mb-4">
+                    <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center mr-4 shrink-0">
+                      <Link className="w-5 h-5 text-indigo-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-white mb-1">Profile Links (Required)</h3>
+                      <p className="text-slate-400 text-sm">Add your professional profile URLs to include them in your optimized resume.</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* GitHub - Syncs with Profile */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 mb-2 ml-1">
+                        <Github className="w-3 h-3 inline mr-1" />
+                        GitHub Profile
+                      </label>
+                      <input
+                        type="url"
+                        placeholder="https://github.com/yourname"
+                        value={userProfile.githubProfile || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setUserProfile(prev => ({ ...prev, githubProfile: val }));
+                        }}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder-slate-600"
+                      />
+                    </div>
+
+                    {/* LinkedIn - Syncs with Profile */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 mb-2 ml-1">
+                        <Linkedin className="w-3 h-3 inline mr-1" />
+                        LinkedIn Profile
+                      </label>
+                      <input
+                        type="url"
+                        placeholder="https://linkedin.com/in/yourname"
+                        value={userProfile.linkedinProfile || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setUserProfile(prev => ({ ...prev, linkedinProfile: val }));
+                        }}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder-slate-600"
+                      />
+                    </div>
+
+                    {/* LeetCode - Syncs with Profile */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 mb-2 ml-1">
+                        <Code className="w-3 h-3 inline mr-1" />
+                        LeetCode Profile (Optional)
+                      </label>
+                      <input
+                        type="url"
+                        placeholder="https://leetcode.com/yourname"
+                        value={userProfile.leetcodeProfile || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setUserProfile(prev => ({ ...prev, leetcodeProfile: val }));
+                        }}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder-slate-600"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Warning if URLs missing */}
+                  {(!userProfile.githubProfile || !userProfile.linkedinProfile) && (
+                    <div className="mt-4 flex items-start space-x-2 text-amber-400 text-sm bg-amber-500/10 p-3 rounded-lg border border-amber-500/20">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <p>Please add at least GitHub and LinkedIn URLs for a complete professional resume.</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Optimize Button */}
+                <div className="flex justify-end mb-8">
                   <button
                     onClick={handleOptimizeResume}
-                    disabled={isOptimizingResume}
-                    className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-6 py-3 rounded-xl font-bold hover:shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all flex items-center disabled:opacity-50"
+                    disabled={isOptimizingResume || !userProfile.githubProfile || !userProfile.linkedinProfile}
+                    className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-8 py-4 rounded-xl font-bold hover:shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isOptimizingResume ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <RefreshCw className="w-5 h-5 mr-2" />}
                     {optimizedResume ? 'Regenerate Version' : 'Polish My Resume'}
@@ -2438,7 +2616,8 @@ const App = () => {
                           {/* Download Button - Symbol Only */}
                           <button
                             onClick={() => {
-                              if (resumeFormat === 'latex' && latexData) {
+                              // Always prefer the professional LaTeX format if available
+                              if (latexData) {
                                 downloadLatexPdf(latexData);
                               } else if (resumeAnalysisResult) {
                                 downloadResumeAsPdf(resumeAnalysisResult, userProfile.name);
@@ -2502,7 +2681,7 @@ const App = () => {
           )}
 
           {/* Interview View - Payment Gate */}
-          {view === AppView.INTERVIEW && !userProfile.isPremium && (
+          {/* {view === AppView.INTERVIEW && !userProfile.isPremium && (
             <div className="h-[calc(100vh-140px)] min-h-[600px] flex flex-col items-center justify-center bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-300 relative text-center px-4">
               <div className="w-24 h-24 bg-indigo-600/20 rounded-full flex items-center justify-center mb-6 ring-4 ring-indigo-600/10">
                 <Lock className="w-10 h-10 text-indigo-400" />
@@ -2551,10 +2730,10 @@ const App = () => {
                 [Dev Bypass]
               </button>
             </div>
-          )}
+          )} */}
 
           {/* Interview View */}
-          {view === AppView.INTERVIEW && userProfile.isPremium && (
+          {view === AppView.INTERVIEW && /*userProfile.isPremium &&*/ (
             <div className="h-[calc(100vh-140px)] min-h-[600px] flex flex-col bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-300 relative">
 
               {isGeneratingFeedback ? (
@@ -2930,13 +3109,13 @@ const App = () => {
                   Profile Overview
                   {profileTab === 'profile' && <div className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-indigo-500 shadow-[0_0_10px_#6366f1]" />}
                 </button>
-                <button
+                {/* <button
                   onClick={() => setProfileTab('payments')}
                   className={`pb-4 text-sm font-bold uppercase tracking-wider transition-all relative ${profileTab === 'payments' ? 'text-white' : 'text-slate-500 hover:text-slate-300'}`}
                 >
                   Payment History
                   {profileTab === 'payments' && <div className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-indigo-500 shadow-[0_0_10px_#6366f1]" />}
-                </button>
+                </button> */}
               </div>
 
               {profileTab === 'profile' ? (
