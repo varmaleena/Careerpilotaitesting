@@ -61,7 +61,7 @@ const FeedbackFloating: React.FC<FeedbackFloatingProps> = ({ userEmail }) => {
     };
 
     return (
-        <div className="fixed bottom-6 right-6 z-[9999]">
+        <div className="fixed bottom-6 right-6 z-[9999] group">
             {/* Floating Toggle Button */}
             <button
                 onClick={() => setIsOpen(!isOpen)}
@@ -74,6 +74,13 @@ const FeedbackFloating: React.FC<FeedbackFloatingProps> = ({ userEmail }) => {
                     <MessageSquare className="w-5 h-5 text-white" />
                 )}
             </button>
+
+            {/* Label for better UX */}
+            {!isOpen && (
+                <span className="absolute right-14 top-1/2 -translate-y-1/2 bg-slate-900 border border-white/10 text-slate-300 text-xs font-bold px-3 py-1.5 rounded-lg shadow-xl pointer-events-none whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
+                    Feedback
+                </span>
+            )}
 
             {/* Feedback Modal */}
             {isOpen && (
