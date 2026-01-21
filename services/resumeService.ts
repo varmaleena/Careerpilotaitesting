@@ -26,15 +26,34 @@ export const analyzeProfile = async (
       CRITICAL: You MUST identify at least 5 'missing' skills that are standard for the role of "${targetRole}" but absent in the user's profile. Do not return an empty list of missing skills.
     - strengths: Top 3 selling points.
     - weaknesses: Top 3 gaps to fill.
-    - mobileNumber: Candidate's phone number if found.
+    - name: Candidate's full name if found.
+    - mobileNumber: Candidate's phone number if found (look for patterns like +91-XXX, (XXX) XXX-XXXX, etc.).
     - location: Candidate's city/country if found.
-    - githubProfile: GitHub profile URL if found.
-    - linkedinProfile: LinkedIn profile URL if found.
-    - leetcodeProfile: LeetCode profile URL if found.
+    - githubProfile: GitHub profile URL if found. Look for patterns like:
+      * github.com/username
+      * https://github.com/username
+      * www.github.com/username
+      Extract the FULL URL including https:// if present, or prepend it if missing.
+    - linkedinProfile: LinkedIn profile URL if found. Look for patterns like:
+      * linkedin.com/in/username
+      * https://www.linkedin.com/in/username
+      * in.linkedin.com/in/username
+      Extract the FULL URL including https:// if present, or prepend it if missing.
+    - leetcodeProfile: LeetCode profile URL if found. Look for patterns like:
+      * leetcode.com/username
+      * https://leetcode.com/username
+      Extract the FULL URL including https:// if present, or prepend it if missing.
 
+    CRITICAL INSTRUCTIONS FOR URL EXTRACTION:
+    - Scan the ENTIRE resume text for these URLs, including headers, footers, and contact sections.
+    - URLs may appear with or without "https://", "http://", or "www." - capture them regardless.
+    - If you find a partial URL (e.g., "github.com/john"), convert it to full format: "https://github.com/john"
+    - Return empty string "" if truly not found, but search thoroughly first.
+    
     Ensure:
-    - githubProfile must include "github.com".
-    - linkedinProfile must include "linkedin.com".
+    - githubProfile must include "github.com" if found.
+    - linkedinProfile must include "linkedin.com" if found.
+    - leetcodeProfile must include "leetcode.com" if found.
   `;
 
     const contents = [];
@@ -78,6 +97,7 @@ export const analyzeProfile = async (
                             },
                             strengths: { type: Type.ARRAY, items: { type: Type.STRING } },
                             weaknesses: { type: Type.ARRAY, items: { type: Type.STRING } },
+                            name: { type: Type.STRING },
                             mobileNumber: { type: Type.STRING },
                             location: { type: Type.STRING },
                             githubProfile: { type: Type.STRING },
@@ -104,13 +124,17 @@ export const analyzeProfile = async (
                 weaknesses: Array.isArray(data.weaknesses) ? data.weaknesses : []
             };
 
-            const extractedProfile = {
+            const extractedProfile: Partial<UserProfile> = {
                 mobileNumber: data.mobileNumber,
                 location: data.location,
                 githubProfile: data.githubProfile,
                 linkedinProfile: data.linkedinProfile,
                 leetcodeProfile: data.leetcodeProfile
             };
+
+            if (data.name) {
+                extractedProfile.name = data.name;
+            }
 
             return { analysis, extractedProfile };
 
@@ -136,35 +160,97 @@ export const optimizeResume = async (
         : `\nOptimize for ${targetRole} at top companies.`;
 
     // Hyper-optimized prompt - FAANG performance standards
-    const promptText = `Resume Optimizer (Ex-FAANG Recruiter)
+    const promptText = `
+Role: Senior FAANG Recruiter + ATS Optimization Specialist
+
+Objective:
+Optimize the candidate’s resume for maximum ATS ranking AND recruiter readability.
+The output will be rendered into a LaTeX-based resume, so content accuracy, redundancy, and structure are critical.
+
+PRIMARY GOAL:
+Produce an ATS-competitive resume (not just ATS-parseable) while preserving all truthful information from the original resume.
+
+STRICT RULES (NON-NEGOTIABLE):
+
+1. CONTENT PARITY (NO SIGNAL LOSS)
+- Do NOT remove or weaken any existing skills, technologies, tools, metrics, achievements, links, or education details.
+- If content is rewritten, ensure keywords remain explicitly present.
+- Achievements, GPA, certifications, and profile links MUST be preserved if present.
+
+2. ATS KEYWORD DENSITY & REPETITION
+- Critical skills (e.g., Python, Java, REST APIs, Spring Boot, Machine Learning, LLMs, Cloud) must appear:
+  - In the Skills section
+  - AND repeated naturally in Experience and/or Projects bullets
+- Do NOT over-compress skills into a single mention.
+
+3. METRICS & QUANTIFICATION (MANDATORY)
+- EVERY Experience and Project bullet must contain at least one metric:
+  - %, $, time saved, users impacted, scale, accuracy, latency, performance, ranking, or volume.
+- If exact numbers are missing, estimate conservatively (10–20%, 50+ users, etc.).
+- No bullet should be purely descriptive.
+
+4. EXPERIENCE BULLET FORMAT (STAR-COMPACT)
+- Action verb + technical action + business/result impact + metric
+- Example:
+  ❌ "Built REST APIs"
+  ✅ "Built REST APIs using Spring Boot, improving response latency by 35% across 1K+ requests/day"
+
+5. ACHIEVEMENTS SECTION (REQUIRED IF APPLICABLE)
+- Explicitly include awards, hackathon wins, rankings, selections, or recognitions.
+- Include scale (e.g., “Won among 2000+ participants”).
+- Use strong ATS keywords: Winner, Awarded, Selected, Ranked.
+
+6. EDUCATION COMPLETENESS
+- Degree, institution, dates must be present.
+- Include CGPA/GPA if available (especially for freshers).
+- Do NOT omit academic performance data.
+- Example format: "B.E. - Information Technology | GLWEC | 2021-2025 | CGPA: 8.14"
+
+7. CONTACT & PROFILE LINKS (PLAIN TEXT)
+- Ensure the following appear as plain text (not icons):
+  - Email
+  - Phone number
+  - LinkedIn URL (must contain “linkedin.com”)
+  - GitHub URL (must contain “github.com”)
+  - LeetCode URL if available
+- Do NOT hide links inside visuals or icons.
+
+8. SECTION STRUCTURE (ATS-STANDARD ONLY)
+Use ONLY the following section names:
+- Professional Summary
+- Technical Skills
+- Experience
+- Projects
+- Education
+- Certifications
+- Achievements (if applicable)
+
+9. NO HALLUCINATION
+- Do NOT add skills, tools, companies, or experience not present in the original resume.
+- You MAY rephrase, reorder, and strengthen wording.
+- You MAY infer soft skills (Agile, collaboration) ONLY if implied.
+
+10. OPTIMIZATION PRIORITY ORDER
+1. Business impact & metrics
+2. Technical depth
+3. Keyword alignment with target role / JD
+4. Leadership or ownership
+5. Formatting clarity
+
+OUTPUT REQUIREMENTS:
+- Produce optimized resume content suitable for LaTeX rendering.
+- Maintain clean, single-column structure.
+- Bullets must be concise, ATS-friendly, and metric-driven.
+- Ensure no section is empty unless truly absent in original data.
+
+FINAL CHECK BEFORE OUTPUT:
+- No important keyword removed
+- No achievement lost
+- No metrics missing
+- No contact/profile link missing
+- Resume reads well when copied as plain text
+
 Transform for: ${targetRole}${jdSnippet}
-
-ATS SCORING (0-100):
-- Keywords (30%): Tech skills, tools
-- Metrics (25%): Numbers, %,  $
-- Verbs (15%): Led/Built/Scaled
-- Format (15%): Clean structure
-- Relevance (15%): Role match
-
-RULES:
-1. STAR format: Action + Result (with metrics)
-   ❌ "Managed team" 
-   ✅ "Led 8 engineers, cut latency 40%, saved $200K/yr"
-
-2. Quantify EVERYTHING
-   - Add %, $, time, users to each bullet
-   - Estimate if unknown (10-15%, 50+ users)
-
-3. Power verbs
-   Managed→Led | Worked→Built | Helped→Optimized
-
-4. NO hallucination
-   - Don't add missing skills
-   - Don't fabricate experience
-   - CAN rephrase + add soft skills (Agile, Scrum)
-
-5. Order by impact
-   Business $ → Scale → Technical → Leadership
 
 OUTPUT JSON:
 {
@@ -281,13 +367,90 @@ export const generateLatexData = async (
     resumeText: string
 ): Promise<LatexResumeData> => {
     const promptText = `
-    Role: Professional Resume Formatter.
-    Task: Extract structured data from the provided resume text to populate a LaTeX template.
-    
-    Output strictly in JSON format matching the schema.
-    Ensure all bullet points are concise and impact-focused.
-    If specific fields are missing, try to infer them or leave them empty strings (do not hallucinate data).
-    Separate skills into languages, technologies, and tools if possible.
+You are a Senior Resume Architect. Extract ALL resume data into JSON format.
+
+CRITICAL: This resume will be used for REAL job applications. Missing data = application rejection.
+
+EXAMPLE INPUT:
+"B.E. Information Technology, GLWEC, 2021-2025, CGPA: 8.14
+Projects: CareerPilot (GDG Agentathon Winner) - Built AI platform
+Certifications: Advanced Data Science - Innomatics Research Labs (2024)"
+
+EXPECTED OUTPUT:
+{
+  "education": [{
+    "degree": "B.E. - Information Technology",
+    "university": "Gokaraju Lailavathi Women's Engineering College",
+    "location": "Hyderabad",
+    "dates": "2021 - 2025",
+    "gpa": "8.14 CGPA"  // ← MANDATORY IF PRESENT
+  }],
+  "achievements": [{
+    "title": "Winner, Google Developer Groups Agentathon 2025",
+    "description": "Built AI-driven career platform"
+  }],
+  "certifications": [{
+    "name": "Advanced Data Science Program",
+    "issuer": "Innomatics Research Labs",
+    "date": "2024"  // ← EXTRACT IF PRESENT
+  }]
+}
+
+MANDATORY EXTRACTION RULES:
+
+1. EDUCATION - ZERO DATA LOSS:
+   ✓ Extract CGPA/GPA from phrases like:
+     - "CGPA: 8.14"
+     - "8.14 CGPA"
+     - "GPA: 3.5/4.0"
+     - "85%"
+   ✓ If education mentions grades, YOU MUST extract them
+   ✓ For freshers, GPA is CRITICAL - never omit
+
+2. ACHIEVEMENTS - EXTRACT FROM PROJECT TITLES:
+   ✓ Scan for patterns:
+     - "(Winner)" → Extract as achievement
+     - "(Finalist)" → Extract as achievement
+     - "(Award)" → Extract as achievement
+   ✓ Example: "CareerPilot (GDG Agentathon Winner)"
+     → Achievement: "Winner, Google Developer Groups Agentathon 2025"
+   
+   ✓ CRITICAL - AVOID DUPLICATES:
+     - If you see "GDG Agentathon Winner" in project title AND "Google Agentathon 2025 Winner" in summary, these are THE SAME achievement
+     - Extract it ONLY ONCE with the most complete description
+     - Do NOT create separate entries for the same award mentioned in different places
+     - Example of WRONG output: 
+       * "Winner - Google Agentathon 2025"
+       * "GDG Agentathon Winner"  ← DUPLICATE! Don't do this!
+     - Example of CORRECT output:
+       * "Winner, Google Developer Groups Agentathon 2025: Won among 2000+ developers"  ← Single entry only
+
+3. CERTIFICATIONS - INCLUDE DATES:
+   ✓ Look for year patterns: "2024", "2023-2024", "Jan 2024"
+   ✓ If date is present, extract it
+   ✓ If no date, use empty string ""
+
+4. PERSONAL INFO:
+   ✓ fullName: Extract EXACTLY (e.g., "Dummani Leena Varma")
+   ✓ phone: Include country code (e.g., "+91 9390780317")
+   ✓ email: Must be present
+   ✓ location: Extract if mentioned
+
+5. SKILLS - CATEGORIZE PROPERLY:
+   ✓ languages: Python, Java, SQL, etc.
+   ✓ technologies: Spring Boot, Flask, ML, NLP, LLMs, etc.
+   ✓ tools: Git, Streamlit, GCP, etc.
+
+VALIDATION BEFORE RETURNING:
+□ Did I extract CGPA/GPA from education?
+□ Did I check project titles for achievements?
+□ Did I extract certification dates if present?
+□ Is phone number complete with country code?
+□ Are all sections populated with available data?
+
+If ANY checkbox is unchecked, RE-SCAN the resume text.
+
+OUTPUT: Complete JSON matching LatexResumeData schema.
     `;
 
     const contents = [
@@ -314,7 +477,7 @@ export const generateLatexData = async (
                                     linkedin: { type: Type.STRING },
                                     website: { type: Type.STRING }
                                 },
-                                required: ["fullName", "email", "phone", "location"]
+                                required: ["fullName"]  // Only name is required, rest will be filled from user profile
                             },
                             summary: { type: Type.STRING },
                             skills: {
@@ -337,7 +500,7 @@ export const generateLatexData = async (
                                         dates: { type: Type.STRING },
                                         bullets: { type: Type.ARRAY, items: { type: Type.STRING } }
                                     },
-                                    required: ["title", "company", "location", "dates", "bullets"]
+                                    required: ["title", "company", "dates", "bullets"]  // location is optional
                                 }
                             },
                             education: {
@@ -351,7 +514,7 @@ export const generateLatexData = async (
                                         dates: { type: Type.STRING },
                                         gpa: { type: Type.STRING }
                                     },
-                                    required: ["degree", "university", "location", "dates"]
+                                    required: ["degree", "university", "dates"]  // location and gpa are optional
                                 }
                             },
                             projects: {
@@ -377,6 +540,17 @@ export const generateLatexData = async (
                                         date: { type: Type.STRING }
                                     },
                                     required: ["name", "issuer", "date"]
+                                }
+                            },
+                            achievements: {
+                                type: Type.ARRAY,
+                                items: {
+                                    type: Type.OBJECT,
+                                    properties: {
+                                        title: { type: Type.STRING },
+                                        description: { type: Type.STRING }
+                                    },
+                                    required: ["title"]
                                 }
                             }
                         },
