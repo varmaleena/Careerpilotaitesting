@@ -407,28 +407,29 @@ MANDATORY EXTRACTION RULES:
    ✓ If education mentions grades, YOU MUST extract them
    ✓ For freshers, GPA is CRITICAL - never omit
 
-2. ACHIEVEMENTS - EXTRACT FROM PROJECT TITLES:
-   ✓ Scan for patterns:
-     - "(Winner)" → Extract as achievement
-     - "(Finalist)" → Extract as achievement
-     - "(Award)" → Extract as achievement
-   ✓ Example: "CareerPilot (GDG Agentathon Winner)"
-     → Achievement: "Winner, Google Developer Groups Agentathon 2025"
+2. ACHIEVEMENTS - GLOBAL EXTRACTION (CRITICAL):
+   ✓ Scan WHOLE RESUME (Headers, Education, Experience, Projects, Awards Section).
+   ✓ EXTRACT if you see keywords:
+     - "Winner", "Finalist", "Award", "Reward"
+     - "Place" (1st/2nd/3rd), "Rank" (e.g., "AIR 5", "Top 1%")
+     - "Medal" (Gold/Silver), "Scholarship", "Grant", "Patent"
+     - "Hackathon", "Coding Contest", "Olympiad"
+     - "Dean's List", "Best Paper", "Published"
    
-   ✓ CRITICAL - AVOID DUPLICATES:
-     - If you see "GDG Agentathon Winner" in project title AND "Google Agentathon 2025 Winner" in summary, these are THE SAME achievement
-     - Extract it ONLY ONCE with the most complete description
-     - Do NOT create separate entries for the same award mentioned in different places
-     - Example of WRONG output: 
-       * "Winner - Google Agentathon 2025"
-       * "GDG Agentathon Winner"  ← DUPLICATE! Don't do this!
-     - Example of CORRECT output:
-       * "Winner, Google Developer Groups Agentathon 2025: Won among 2000+ developers"  ← Single entry only
-
-3. CERTIFICATIONS - INCLUDE DATES:
-   ✓ Look for year patterns: "2024", "2023-2024", "Jan 2024"
-   ✓ If date is present, extract it
-   ✓ If no date, use empty string ""
+   ✓ HANDLE MIXED SOURCES:
+     - Case A: Achievement in Project Title ("CareerPilot (Winner)")
+       → Extract as Achievement: "Winner, CareerPilot Hackathon"
+     - Case B: Achievement in Education Bullet ("Secured Gold Medal")
+       → Extract as Achievement
+     - Case C: Explicit "Honors & Awards" section
+       → Extract all items
+   
+   ✓ AVOID DUPLICATES:
+     - If recognized in multiple places (e.g. summary AND project), create ONE consolidated entry.
+   
+   ✓ INCLUDE DATES:
+     - Try to find the year (e.g., "2024") and append to title if not in description.
+     - Example: "Winner, Smart India Hackathon (2023)"
 
 4. PERSONAL INFO:
    ✓ fullName: Extract EXACTLY (e.g., "Dummani Leena Varma")
