@@ -213,4 +213,8 @@ export interface LatexResumeData {
     issuer: string;
     date: string;
   }[];
+  achievements?: {
+    title: string;
+    description?: string;
+  }[];
 }
