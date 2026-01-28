@@ -265,47 +265,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin }) => {
             </div>
          </section>
 
-         {/* --- Testimonials --- */}
-         <section id="reviews" className="py-16 sm:py-24 border-t border-white/5">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-               <h2 className="text-3xl sm:text-4xl font-bold text-center mb-10 sm:mb-16">Career growth unlocked</h2>
-               <div className="grid md:grid-cols-3 gap-6 sm:gap-8">
-                  {[
-                     {
-                        quote: "I was stuck in tutorial hell for months. CareerPilot gave me a 2-week plan, I built the project, and got hired.",
-                        role: "Junior Dev",
-                        name: "Alex M."
-                     },
-                     {
-                        quote: "The mock interview feature is scary good. It asked the exact same question I got in my real interview.",
-                        role: "Product Manager",
-                        name: "Sarah J."
-                     },
-                     {
-                        quote: "Finally, a tool that tells me exactly what I'm missing instead of generic advice like 'learn React'.",
-                        role: "Frontend Engineer",
-                        name: "David K."
-                     }
-                  ].map((t, i) => (
-                     <div key={i} className="bg-white/5 p-6 sm:p-8 rounded-2xl border border-white/5">
-                        <div className="flex space-x-1 text-amber-400 mb-4">
-                           {[1, 2, 3, 4, 5].map(s => <Star key={s} className="w-3 h-3 sm:w-4 sm:h-4 fill-current" />)}
-                        </div>
-                        <p className="text-slate-300 mb-6 italic text-sm sm:text-base">"{t.quote}"</p>
-                        <div className="flex items-center space-x-3">
-                           <div className="w-8 h-8 sm:w-10 sm:h-10 bg-slate-800 rounded-full flex items-center justify-center font-bold text-slate-500 text-xs sm:text-sm">
-                              {t.name[0]}
-                           </div>
-                           <div>
-                              <div className="text-white font-bold text-sm">{t.name}</div>
-                              <div className="text-slate-500 text-xs">{t.role}</div>
-                           </div>
-                        </div>
-                     </div>
-                  ))}
-               </div>
-            </div>
-         </section>
+
 
          {/* --- CTA --- */}
          <section className="py-16 sm:py-20">
@@ -385,3 +345,4 @@ const PlayCircleIcon = ({ className }: { className?: string }) => (
 );
 
 export default LandingPage;
+//end of code
