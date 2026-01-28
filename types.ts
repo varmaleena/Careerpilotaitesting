@@ -90,7 +90,8 @@ export interface ProjectIdea {
   difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
   description: string;
   techStack: string[];
-  keyFeatures: string[];
+  userStories?: string[]; // User stories in "As a user, I want..." format
+  keyFeatures: string[]; // Core Features
   resumeValue: string; // Why this helps on a resume
   implementationFlow: string[]; // Step-by-step guide
   learningOutcomes: string[]; // What the student learns
@@ -217,4 +218,44 @@ export interface LatexResumeData {
     title: string;
     description?: string;
   }[];
+}
+
+// ATS Resume Analysis Types
+export interface ATSResumeAnalysis {
+  resumeOverview: {
+    resumeType: string;
+    experienceLevel: string;
+    domain: string;
+    overallATSScore: number;
+  };
+  extractedData: {
+    skills: string[];
+    education: string[];
+    experience: string[];
+    projects: string[];
+    certifications: string[];
+  };
+  strengths: string[];
+  weaknesses: string[];
+  criticalImprovements: string[];
+  atsKeywordOptimization: {
+    missingKeywords: string[];
+    suggestedKeywords: string[];
+    keywordDensityIssues: string[];
+  };
+  jobMatchAnalysis?: {
+    skillMatchPercent: number;
+    missingSkills: string[];
+    roleFitScore: number;
+  };
+  optimizationSuggestions: {
+    rewrittenLines: { original: string; improved: string }[];
+    betterActionVerbs: string[];
+    quantifiableMetrics: string[];
+  };
+  finalVerdict: {
+    isReady: boolean;
+    reason: string;
+    priorityImprovements: string[];
+  };
 }

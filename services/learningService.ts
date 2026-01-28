@@ -143,6 +143,8 @@ export const generateProjectIdeas = async (
         "difficulty": "Beginner/Intermediate/Advanced",
         "description": "2 sentences max. Highlight technical complexity.",
         "techStack": ["Tool1", "Tool2", "Tool3"],
+        "userStories": ["As a user, I want to...", "As a admin, I want to..."],
+        "keyFeatures": ["Feature 1", "Feature 2"],
         "resumeValue": "1 punchy sentence explaining why this impresses a recruiter.",
         "implementationFlow": ["Step 1", "Step 2", "Step 3"],
         "learningOutcomes": ["Skill 1", "Skill 2"]
@@ -157,8 +159,8 @@ export const generateProjectIdeas = async (
                 contents: prompt,
                 config: {
                     responseMimeType: "application/json",
-                    maxOutputTokens: 1024, // FORCE stop before 36k chars
-                    temperature: 0.8 // Slightly higher creativity to avoid repetition
+                    maxOutputTokens: 2048, // Increased for more details
+                    temperature: 0.8
                 }
             }
         );
@@ -189,10 +191,11 @@ export const generateProjectIdeas = async (
             description: p.description || "A technical project relevant to the role.",
             techStack: p.techStack || ["React", "Node.js"],
             difficulty: p.difficulty || "Intermediate",
+            userStories: p.userStories || [],
+            keyFeatures: p.keyFeatures || [],
             resumeValue: p.resumeValue || "Demonstrates core competencies.",
             implementationFlow: p.implementationFlow || ["Design", "Build", "Test"],
-            learningOutcomes: p.learningOutcomes || ["Full Stack Dev"],
-            keyFeatures: p.keyFeatures || []
+            learningOutcomes: p.learningOutcomes || ["Full Stack Dev"]
         }));
 
     } catch (error) {

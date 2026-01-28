@@ -66,7 +66,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
             <button
               key={item.id}
               onClick={() => handleMenuClick(item.id)}
-              className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 group ${currentView === item.id
+              className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 group border border-transparent ${currentView === item.id
                 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50'
                 : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
                 }`}
@@ -94,7 +94,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
               onLogout();
               setIsMobileMenuOpen(false);
             }}
-            className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-900 hover:text-white transition-colors"
+            className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-900 hover:text-white transition-colors border border-transparent"
           >
             <LogOut className="w-5 h-5" />
             <span>Sign Out</span>
@@ -105,9 +105,9 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
               onResetData();
               setIsMobileMenuOpen(false);
             }}
-            className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-slate-600 hover:bg-red-900/10 hover:text-red-400 transition-colors text-sm"
+            className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-slate-600 hover:bg-red-900/10 hover:text-red-400 transition-colors text-sm border border-transparent"
           >
-            <Trash2 className="w-4 h-4" />
+            <Trash2 className="w-5 h-5" />
             <span>Reset Progress</span>
           </button>
         </div>
