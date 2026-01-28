@@ -2,14 +2,15 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  signInWithPopup
 } from 'firebase/auth';
 import {
   doc,
   getDoc,
   setDoc,
 } from 'firebase/firestore';
-import { auth, db } from './firebaseConfig';
+import { auth, db, googleProvider } from './firebaseConfig';
 import { UserProfile, CareerAnalysis, WeeklyPlan, ProjectIdea, ChatMessage, InterviewFeedback, ResumeOptimizationResult } from '../types';
 
 // Fallback for dev without keys
@@ -130,6 +131,39 @@ export const AuthService = {
     if (!user) return { success: false, message: 'User not found.' };
     if (user.password !== password) return { success: false, message: 'Incorrect password.' };
     return { success: true, name: user.name };
+  },
+
+  loginWithGoogle: async (): Promise<{ success: boolean; message?: string; name?: string; email?: string }> => {
+    try {
+      if (auth) {
+        const result = await signInWithPopup(auth, googleProvider);
+        const user = result.user;
+        const name = user.displayName || user.email?.split('@')[0];
+
+        // Check if user data exists, if not create initial structure
+        if (user.email) {
+          const existingData = await AuthService.getUserData(user.email);
+          if (!existingData) {
+            const initialData: UserData = {
+              userProfile: { name: name || 'User', targetRole: '' },
+              analysis: null,
+              plan: null,
+              projects: [],
+              chatMessages: [],
+              interviewFeedback: null,
+              resumeAnalysisResult: null,
+              seenProjectTitles: []
+            };
+            await AuthService.saveUserData(user.email, initialData);
+          }
+        }
+
+        return { success: true, name: name, email: user.email! };
+      }
+      return { success: false, message: "Auth not initialized" };
+    } catch (error: any) {
+      return { success: false, message: error.message };
+    }
   },
 
   // --- Data Management ---
