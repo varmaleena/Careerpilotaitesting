@@ -34,6 +34,7 @@ import {
   TrendingUp,
   UploadCloud,
   User,
+  Users,
   UserPlus,
   Volume2,
   VolumeX,
@@ -62,7 +63,7 @@ import { generateLearningPlan, generateProjectIdeas } from './services/learningS
 import { downloadLatexPdf, downloadResumeAsPdf } from './services/pdfExportService';
 import { extractTextFromPdf } from './services/pdfService';
 import { evaluatePremiumInterview, generatePremiumInterviewResponse } from './services/premiumInterviewService';
-import { analyzeProfile, generateLatexData, optimizeResume } from './services/resumeService';
+import { analyzeProfile, generateLatexData, optimizeResume, validateResumeContent } from './services/resumeService';
 import { analytics, EVENTS, USER_PROPS } from './services/analytics';
 import {
   AppView,
@@ -350,6 +351,8 @@ const App = () => {
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [authError, setAuthError] = useState('');
+  const [isAuthLoading, setIsAuthLoading] = useState(false);
+  const [emailError, setEmailError] = useState('');
 
   // Profile Modal State
   const [profileTab, setProfileTab] = useState<'profile' | 'payments'>('profile');
@@ -359,6 +362,7 @@ const App = () => {
   const [userProfile, setUserProfile] = useState<UserProfile>({ name: 'User', targetRole: '' });
   const [analysis, setAnalysis] = useState<CareerAnalysis | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [validationError, setValidationError] = useState<string>('');
 
   // Learning Plan
   const [plan, setPlan] = useState<WeeklyPlan[] | null>(null);
@@ -526,16 +530,28 @@ const App = () => {
     e.preventDefault();
     setAuthError('');
 
-    // Validation
-    if (!AuthService.isValidEmail(emailInput)) {
-      setAuthError('Please enter a valid email address.');
+    // Empty field validation
+    if (!emailInput.trim()) {
+      setAuthError('Please enter your email address.');
       return;
     }
-    if (!AuthService.isValidPassword(passwordInput)) {
-      setAuthError('Password must be at least 6 characters.');
+    if (!passwordInput) {
+      setAuthError('Please enter your password.');
       return;
     }
 
+    // Format validation
+    if (!AuthService.isValidEmail(emailInput)) {
+      setAuthError('Please enter a valid email address (e.g., you@example.com).');
+      return;
+    }
+    // Password format validation only for signup (login validates against database)
+    if (authMode === 'signup' && !AuthService.isValidPassword(passwordInput)) {
+      const errors = AuthService.getPasswordValidationErrors(passwordInput);
+      setAuthError('Password requirements: ' + errors.join(', '));
+      return;
+    }
+    setIsAuthLoading(true);
     try {
       if (authMode === 'signup') {
         const result = await AuthService.signup(emailInput, passwordInput);
@@ -550,11 +566,13 @@ const App = () => {
         if (result.success) {
           await loginUser(emailInput);
         } else {
-          setAuthError(result.message || 'Login failed.');
+          setAuthError('Email or password is incorrect.');
         }
       }
     } catch (err) {
       setAuthError("An unexpected error occurred.");
+    } finally {
+      setIsAuthLoading(false);
     }
   };
 
@@ -694,7 +712,21 @@ const App = () => {
     if ((!userProfile?.resumeText && !userProfile?.resumeFile) || !userProfile?.targetRole) return;
 
     setIsAnalyzing(true);
+    setValidationError(''); // Clear any previous error
     try {
+      // Step 1: Validate document is a real resume before analysis
+      const validation = await validateResumeContent({
+        text: userProfile.resumeText,
+        file: userProfile.resumeFile
+      });
+
+      if (!validation.isValid) {
+        setValidationError('Please upload a valid document');
+        setIsAnalyzing(false);
+        return;
+      }
+
+      // Step 2: Only proceed with analysis if validation passed
       const result = await analyzeProfile(
         { text: userProfile.resumeText, file: userProfile.resumeFile },
         userProfile.targetRole
@@ -1398,11 +1430,28 @@ const App = () => {
                       type="email"
                       required
                       value={emailInput}
-                      onChange={(e) => setEmailInput(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 pl-10 text-white outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder-slate-600"
+                      onChange={(e) => {
+                        setEmailInput(e.target.value);
+                        // Clear error when user starts typing again
+                        if (emailError && AuthService.isValidEmail(e.target.value)) {
+                          setEmailError('');
+                        }
+                      }}
+                      onBlur={() => {
+                        // Validate on blur (when user leaves the field)
+                        if (emailInput.trim() && !AuthService.isValidEmail(emailInput)) {
+                          setEmailError('Please enter a valid email address');
+                        } else {
+                          setEmailError('');
+                        }
+                      }}
+                      className={`w-full bg-slate-950 border rounded-xl p-3 pl-10 text-white outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder-slate-600 ${emailError ? 'border-red-500' : 'border-slate-700'}`}
                       placeholder="you@example.com"
                     />
                   </div>
+                  {emailError && (
+                    <p className="text-red-400 text-xs mt-1 ml-1">{emailError}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1 ml-1">Password</label>
@@ -1417,6 +1466,14 @@ const App = () => {
                       placeholder="••••••••"
                     />
                   </div>
+                  {authMode === 'signup' && (
+                    <div className="mt-2 text-xs text-slate-500 space-y-0.5">
+                      <p className="text-slate-400 font-medium mb-1">Password requirements:</p>
+                      <p className={passwordInput.length >= 8 ? 'text-emerald-400' : ''}>• Minimum 8 characters</p>
+                      <p className={/\d/.test(passwordInput) ? 'text-emerald-400' : ''}>• At least one number (0-9)</p>
+                      <p className={/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(passwordInput) ? 'text-emerald-400' : ''}>• At least one special character (!@#$%^&*...)</p>
+                    </div>
+                  )}
                   {authMode === 'login' && (
                     <div className="flex justify-end mt-2">
                       <button
@@ -1446,10 +1503,20 @@ const App = () => {
 
                 <button
                   type="submit"
-                  className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-indigo-500/20 flex items-center justify-center space-x-2"
+                  disabled={isAuthLoading}
+                  className="w-full bg-indigo-600 hover:bg-indigo-500 hover:shadow-indigo-500/40 hover:scale-[1.02] active:scale-[0.98] text-white font-bold py-3 rounded-xl transition-all duration-200 shadow-lg shadow-indigo-500/20 flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100"
                 >
-                  {authMode === 'login' ? <LogIn className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
-                  <span>{authMode === 'login' ? 'Sign In' : 'Create Account'}</span>
+                  {isAuthLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>{authMode === 'login' ? 'Signing In...' : 'Creating Account...'}</span>
+                    </>
+                  ) : (
+                    <>
+                      {authMode === 'login' ? <LogIn className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
+                      <span>{authMode === 'login' ? 'Sign In' : 'Create Account'}</span>
+                    </>
+                  )}
                 </button>
 
                 <div className="relative my-4">
@@ -1664,6 +1731,14 @@ const App = () => {
 
             </div>
 
+            {/* Validation Error Message */}
+            {validationError && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-center space-x-3">
+                <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
+                <span className="text-red-400 font-medium">{validationError}</span>
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={isAnalyzing}
@@ -1698,7 +1773,7 @@ const App = () => {
         onResetData={handleResetData}
       />
 
-      <main className="flex-1 md:ml-64 p-6 md:p-10 pt-20 md:pt-10 overflow-y-auto max-h-screen bg-slate-950 relative">
+      <main className="flex-1 md:ml-64 p-6 md:p-10 pt-20 md:pt-10 bg-slate-950 relative">
         {/* Background Gradients */}
         <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
           <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-indigo-900/20 blur-[100px] rounded-full"></div>
@@ -2008,15 +2083,68 @@ const App = () => {
                 </div>
               </div>
 
-              {/* Loading State with Skeleton */}
+              {/* Loading State - Full page centered (same as initial page load) */}
               {isGeneratingProjects && projects?.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-32 bg-gradient-to-br from-white/5 to-indigo-500/5 rounded-3xl border border-white/10 relative overflow-hidden">
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(99,102,241,0.1),transparent_70%)] animate-pulse" />
-                  <div className="relative">
-                    <Loader2 className="w-16 h-16 text-indigo-500 animate-spin mb-6" />
-                    <p className="text-slate-300 text-lg font-medium mb-2">Crafting Your Perfect Projects...</p>
-                    <p className="text-slate-500 text-sm">Analyzing your skills and target role</p>
+                <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-slate-500">
+                  {/* CSS Animation */}
+                  <style>{`
+                    @keyframes iconPulse {
+                      0%, 100% { opacity: 0.3; transform: scale(1); color: #64748b; }
+                      50% { opacity: 1; transform: scale(1.15); color: #818cf8; }
+                    }
+                    .portfolio-loader-icon {
+                      width: 48px;
+                      height: 48px;
+                      color: #64748b; /* Start as slate-500/grey */
+                      animation: iconPulse 1.5s ease-in-out infinite;
+                    }
+                    @keyframes dotBounce {
+                      0%, 100% { transform: translateY(0); opacity: 0.5; }
+                      50% { transform: translateY(-6px); opacity: 1; }
+                    }
+                  `}</style>
+
+                  {/* Career Icons Animation */}
+                  <div className="flex items-center gap-6 mb-8">
+                    {/* Resume/FileText icon */}
+                    <svg className="portfolio-loader-icon" style={{ animationDelay: '0s' }} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M15 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7z"></path>
+                      <polyline points="14 2 14 8 20 8"></polyline>
+                      <line x1="16" y1="13" x2="8" y2="13"></line>
+                      <line x1="16" y1="17" x2="8" y2="17"></line>
+                      <line x1="10" y1="9" x2="8" y2="9"></line>
+                    </svg>
+                    {/* Code icon */}
+                    <svg className="portfolio-loader-icon" style={{ animationDelay: '0.15s' }} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="16 18 22 12 16 6"></polyline>
+                      <polyline points="8 6 2 12 8 18"></polyline>
+                    </svg>
+                    {/* Layers icon */}
+                    <svg className="portfolio-loader-icon" style={{ animationDelay: '0.3s' }} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                      <polyline points="2 17 12 22 22 17"></polyline>
+                      <polyline points="2 12 12 17 22 12"></polyline>
+                    </svg>
+                    {/* Briefcase icon */}
+                    <svg className="portfolio-loader-icon" style={{ animationDelay: '0.45s' }} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                      <path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"></path>
+                    </svg>
+                    {/* MessageSquare icon */}
+                    <svg className="portfolio-loader-icon" style={{ animationDelay: '0.6s' }} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"></path>
+                    </svg>
                   </div>
+
+                  {/* Loading Text */}
+                  <p className="text-slate-400 text-sm tracking-wide">
+                    Crafting Your Perfect Projects
+                    <span className="inline-flex gap-1 ml-1">
+                      <span className="w-1 h-1 bg-indigo-400 rounded-full" style={{ animation: 'dotBounce 1.2s ease-in-out infinite', animationDelay: '0s' }}></span>
+                      <span className="w-1 h-1 bg-indigo-400 rounded-full" style={{ animation: 'dotBounce 1.2s ease-in-out infinite', animationDelay: '0.15s' }}></span>
+                      <span className="w-1 h-1 bg-indigo-400 rounded-full" style={{ animation: 'dotBounce 1.2s ease-in-out infinite', animationDelay: '0.3s' }}></span>
+                    </span>
+                  </p>
                 </div>
               )}
 
@@ -2194,112 +2322,118 @@ const App = () => {
           {/* Project Details Modal */}
           {selectedProject && (
             <div
-              className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300"
+              className="fixed inset-0 md:left-64 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300"
               onClick={() => setSelectedProject(null)}
             >
               <div
                 className="bg-gradient-to-br from-slate-900 to-slate-950 rounded-3xl border border-indigo-500/30 max-w-4xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl shadow-indigo-500/20"
                 onClick={(e) => e.stopPropagation()}
               >
-                {/* Modal Header */}
-                <div className="sticky top-0 bg-gradient-to-br from-indigo-900/40 via-purple-900/30 to-slate-900/40 backdrop-blur-xl border-b border-indigo-500/20 p-6 z-10">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className={`px-3 py-1.5 rounded-lg text-xs font-bold border shadow-lg ${selectedProject.difficulty === 'Beginner'
-                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                          : selectedProject.difficulty === 'Intermediate'
-                            ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
-                            : 'bg-purple-500/20 text-purple-300 border-purple-500/30'
-                          }`}>
-                          {selectedProject.difficulty}
-                        </div>
-                      </div>
-                      <h2 className="text-3xl font-bold text-white mb-2">{selectedProject.title}</h2>
-                      <p className="text-slate-400 text-sm leading-relaxed">{selectedProject.description}</p>
-                    </div>
+                {/* Blueprint Header */}
+                <div className="sticky top-0 bg-gradient-to-r from-indigo-900/60 to-purple-900/40 backdrop-blur-xl border-b border-indigo-500/30 p-6 z-10">
+                  <div className="flex flex-col items-center text-center relative">
                     <button
                       onClick={() => setSelectedProject(null)}
-                      className="ml-4 w-10 h-10 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-indigo-500/50 flex items-center justify-center transition-all"
+                      className="absolute right-0 top-0 w-10 h-10 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-indigo-500/50 flex items-center justify-center transition-all"
                     >
                       <X className="w-5 h-5 text-slate-400 hover:text-white" />
                     </button>
+
+                    <div className="text-xs font-bold text-indigo-400 tracking-widest uppercase mb-2">
+                      CareerPilot AI Project Blueprint
+                    </div>
+                    <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">{selectedProject.title}</h2>
+                    <div className="flex flex-wrap items-center justify-center gap-3 mb-4">
+                      <span className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${selectedProject.difficulty === 'Beginner'
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                        : selectedProject.difficulty === 'Intermediate'
+                          ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
+                          : 'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                        }`}>
+                        {selectedProject.difficulty}
+                      </span>
+                      <span className="text-slate-400">|</span>
+                      <span className="text-slate-300 text-sm">{selectedProject.techStack?.join(', ')}</span>
+                    </div>
+                    <p className="text-slate-300 leading-relaxed max-w-2xl mx-auto">{selectedProject.description}</p>
                   </div>
                 </div>
 
-                {/* Modal Content */}
-                <div className="p-6 space-y-6">
-                  {/* Tech Stack */}
-                  <div>
-                    <h3 className="text-lg font-bold text-white mb-3 flex items-center">
-                      <Code className="w-5 h-5 mr-2 text-indigo-400" />
-                      Tech Stack
-                    </h3>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedProject.techStack?.map(t => (
-                        <span
-                          key={t}
-                          className="text-sm bg-slate-800/80 text-slate-300 px-3 py-1.5 rounded-lg border border-slate-700 hover:border-indigo-500/50 transition-colors"
-                        >
-                          {t}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Key Features */}
-                  {selectedProject.keyFeatures && selectedProject.keyFeatures.length > 0 && (
+                {/* Blueprint Content */}
+                <div className="p-6 space-y-8">
+                  {/* User Stories Section - Only show if explicit user stories exist */}
+                  {selectedProject.userStories && selectedProject.userStories.length > 0 && (
                     <div>
-                      <h3 className="text-lg font-bold text-white mb-3 flex items-center">
-                        <CheckCircle className="w-5 h-5 mr-2 text-emerald-400" />
-                        Key Features
+                      <h3 className="text-xl font-bold text-white mb-4 flex items-center">
+                        <Users className="w-5 h-5 mr-3 text-indigo-400" />
+                        User Stories
                       </h3>
-                      <ul className="space-y-2">
-                        {selectedProject.keyFeatures.map((feature, idx) => (
+                      <ul className="space-y-3">
+                        {selectedProject.userStories.map((story, idx) => (
                           <li key={idx} className="flex items-start text-slate-300">
-                            <ChevronRight className="w-4 h-4 mr-2 mt-1 text-indigo-400 shrink-0" />
-                            <span>{feature}</span>
+                            <span className="text-indigo-400 mr-3 mt-1">•</span>
+                            <span className="leading-relaxed">{story}</span>
                           </li>
                         ))}
                       </ul>
                     </div>
                   )}
 
-                  {/* Implementation Flow */}
+                  {/* Key Features Section */}
+                  {selectedProject.keyFeatures && selectedProject.keyFeatures.length > 0 && (
+                    <div>
+                      <h3 className="text-xl font-bold text-white mb-4 flex items-center">
+                        <CheckCircle className="w-5 h-5 mr-3 text-emerald-400" />
+                        Key Features
+                      </h3>
+                      <ul className="space-y-3">
+                        {selectedProject.keyFeatures.map((feature, idx) => (
+                          <li key={idx} className="flex items-start text-slate-300">
+                            <span className="text-emerald-400 mr-3 mt-1">•</span>
+                            <span className="leading-relaxed">{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Implementation Steps Section */}
                   {selectedProject.implementationFlow && selectedProject.implementationFlow.length > 0 && (
                     <div>
-                      <h3 className="text-lg font-bold text-white mb-3 flex items-center">
-                        <List className="w-5 h-5 mr-2 text-purple-400" />
+                      <h3 className="text-xl font-bold text-white mb-4 flex items-center">
+                        <List className="w-5 h-5 mr-3 text-indigo-400" />
                         Implementation Steps
                       </h3>
-                      <div className="space-y-3">
+                      <div className="space-y-4">
                         {selectedProject.implementationFlow.map((step, idx) => (
-                          <div key={idx} className="flex items-start bg-white/5 p-4 rounded-xl border border-white/10">
-                            <span className="text-indigo-400 font-bold text-lg mr-3 shrink-0">{idx + 1}.</span>
-                            <span className="text-slate-300">{step}</span>
+                          <div key={idx} className="flex items-start">
+                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 font-bold text-sm mr-4 mt-0.5">
+                              {idx + 1}
+                            </div>
+                            <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50 flex-1">
+                              <p className="text-slate-300 leading-relaxed">{step.replace(/^\d+\.\s*/, '')}</p>
+                            </div>
                           </div>
                         ))}
                       </div>
                     </div>
                   )}
 
-                  {/* Learning Outcomes */}
+                  {/* You'll Learn Section */}
                   {selectedProject.learningOutcomes && selectedProject.learningOutcomes.length > 0 && (
                     <div>
-                      <h3 className="text-lg font-bold text-white mb-3 flex items-center">
-                        <Award className="w-5 h-5 mr-2 text-amber-400" />
-                        What You'll Learn
+                      <h3 className="text-xl font-bold text-white mb-4 flex items-center">
+                        <Award className="w-5 h-5 mr-3 text-amber-400" />
+                        You'll Learn
                       </h3>
-                      <div className="flex flex-wrap gap-2">
+                      <ul className="space-y-3">
                         {selectedProject.learningOutcomes.map((outcome, idx) => (
-                          <span
-                            key={idx}
-                            className="text-sm bg-emerald-500/10 text-emerald-400 px-3 py-1.5 rounded-lg border border-emerald-500/20"
-                          >
-                            {outcome}
-                          </span>
+                          <li key={idx} className="flex items-start text-slate-300">
+                            <span className="text-amber-400 mr-3 mt-1">•</span>
+                            <span className="leading-relaxed">{outcome}</span>
+                          </li>
                         ))}
-                      </div>
+                      </ul>
                     </div>
                   )}
 

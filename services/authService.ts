@@ -34,12 +34,25 @@ let userDataCache: { [email: string]: UserData } = {};
 export const AuthService = {
   // --- Validation Helpers ---
   isValidEmail: (email: string): boolean => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
+    // Standard email format: user@domain.extension
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return emailRegex.test(email.trim());
   },
 
   isValidPassword: (password: string): boolean => {
-    return password.length >= 6;
+    // Minimum 8 characters, at least one number, at least one special character
+    if (password.length < 8) return false;
+    const hasNumber = /\d/.test(password);
+    const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+    return hasNumber && hasSpecialChar;
+  },
+
+  getPasswordValidationErrors: (password: string): string[] => {
+    const errors: string[] = [];
+    if (password.length < 8) errors.push("At least 8 characters");
+    if (!/\d/.test(password)) errors.push("At least one number");
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) errors.push("At least one special character (!@#$%^&*...)");
+    return errors;
   },
 
   // --- Auth Actions ---

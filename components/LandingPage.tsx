@@ -21,7 +21,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin }) => {
                </div>
 
                <div className="flex items-center space-x-3 sm:space-x-4">
-                  <button onClick={onLogin} className="text-sm font-medium text-slate-300 hover:text-white transition-colors hidden sm:block">
+                  <button onClick={onLogin} className="text-sm font-medium text-slate-300 hover:text-white transition-all duration-200 hidden sm:block relative after:absolute after:bottom-0 after:left-0 after:w-0 after:h-0.5 after:bg-indigo-500 after:transition-all hover:after:w-full">
                      Log In
                   </button>
                   <button

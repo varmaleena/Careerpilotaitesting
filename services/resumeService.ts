@@ -1,9 +1,220 @@
 import { Type } from "@google/genai";
 import axios from "axios";
-import { CareerAnalysis, LatexResumeData, ResumeOptimizationResult, UserProfile } from "../types";
+import { ATSResumeAnalysis, CareerAnalysis, LatexResumeData, ResumeOptimizationResult, UserProfile } from "../types";
 import { cleanJson, GEMINI_MODEL, generateWithRetry } from "./geminiClient";
 
 const API_URL = "https://api.example.com/resume";
+
+// Allowed MIME types for resume files
+const ALLOWED_MIME_TYPES = [
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+    'application/msword', // .doc
+];
+
+/**
+ * Validates if the file type is an allowed resume format (PDF, DOCX, DOC)
+ */
+export const validateResumeFileType = (mimeType: string): boolean => {
+    return ALLOWED_MIME_TYPES.includes(mimeType);
+};
+
+/**
+ * Uses AI to validate if the document content is actually a resume
+ * Returns true if valid resume, throws error if not
+ */
+export const validateResumeContent = async (
+    resumeInput: { text?: string; file?: { data: string; mimeType: string } }
+): Promise<{ isValid: boolean; reason: string }> => {
+
+    // First validate file type
+    if (resumeInput.file && !validateResumeFileType(resumeInput.file.mimeType)) {
+        return {
+            isValid: false,
+            reason: `Invalid file type. Only PDF, DOCX, and DOC files are allowed. Received: ${resumeInput.file.mimeType}`
+        };
+    }
+
+    const validationPrompt = `
+You are a document classifier. Your ONLY task is to determine if the given document is a RESUME/CV or not.
+
+A RESUME/CV typically contains:
+- Personal information (name, contact details)
+- Education section
+- Work experience or internships
+- Skills section
+- Projects (optional)
+- Certifications (optional)
+
+Respond with ONLY a JSON object:
+{
+  "isResume": true/false,
+  "confidence": 0-100,
+  "reason": "Brief explanation"
+}
+
+If the document is:
+- A random PDF (invoice, receipt, article, book, image, etc.) → isResume: false
+- A cover letter only → isResume: false  
+- An actual resume/CV with career information → isResume: true
+
+Be STRICT. If it doesn't look like a resume, reject it.
+`;
+
+    const contents = [];
+    if (resumeInput.file) {
+        contents.push({
+            inlineData: {
+                mimeType: resumeInput.file.mimeType,
+                data: resumeInput.file.data
+            }
+        });
+        contents.push({ text: validationPrompt });
+    } else if (resumeInput.text) {
+        contents.push({ text: `Document Content:\n"${resumeInput.text.slice(0, 5000)}"\n\n${validationPrompt}` });
+    } else {
+        return { isValid: false, reason: "No document provided." };
+    }
+
+    try {
+        const response = await generateWithRetry(
+            GEMINI_MODEL,
+            {
+                contents: contents,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            isResume: { type: Type.BOOLEAN },
+                            confidence: { type: Type.NUMBER },
+                            reason: { type: Type.STRING }
+                        },
+                        required: ["isResume", "confidence", "reason"]
+                    }
+                }
+            }
+        );
+
+        const text = response.text;
+        if (!text) {
+            return { isValid: false, reason: "Failed to validate document." };
+        }
+
+        const result = JSON.parse(cleanJson(text));
+
+        if (!result.isResume || result.confidence < 60) {
+            return {
+                isValid: false,
+                reason: result.reason || "Invalid input. Please upload a valid resume of a student or professional."
+            };
+        }
+
+        return { isValid: true, reason: "Valid resume detected." };
+    } catch (error) {
+        console.error("Resume validation failed:", error);
+        return { isValid: false, reason: "Failed to validate document. Please try again." };
+    }
+};
+
+
+// ATS Resume Analysis System Prompt
+const ATS_ANALYSIS_PROMPT = `
+You are an expert ATS (Applicant Tracking System), Senior Technical Recruiter,
+Resume Analyst, and Career Coach combined.
+
+Your task is to STRICTLY analyze and optimize resumes with extreme precision.
+
+=====================
+INPUT CONSTRAINTS
+=====================
+
+1. ACCEPT ONLY RESUME FILES.
+   - Allowed formats: PDF, DOCX, DOC.
+   - Reject any other file types (images, zip, txt, links, screenshots, etc.).
+   - If the input is NOT a resume, respond with:
+     "Invalid input. Please upload a valid resume of a student or professional."
+
+2. The resume may belong to:
+   - A student (fresher / intern / graduate)
+   - An experienced professional
+
+=====================
+CORE OBJECTIVES
+=====================
+
+You MUST:
+- Read and analyze EVERY LINE, EVERY WORD, and EVERY SECTION of the resume.
+- Do NOT skip or summarize blindly.
+- Extract information with 100% accuracy.
+- Detect missing, weak, irrelevant, or poorly written content.
+- Optimize the resume for ATS + recruiter readability.
+- Match the resume against a given TARGET JOB PROFILE (if provided).
+
+=====================
+STEP-BY-STEP ANALYSIS
+=====================
+
+STEP 1: Resume Validation
+- Confirm it is a real resume.
+- Identify resume type: Student / Experienced Professional.
+- Identify industry/domain.
+
+STEP 2: Complete Information Extraction
+Extract and structure the following clearly:
+
+- Personal Details (Name, Location, Contact – exclude sensitive data in output)
+- Professional Summary / Objective
+- Skills (Technical, Soft, Tools, Frameworks)
+- Education (Degree, Institution, Year, CGPA if available)
+- Experience (Role, Company, Duration, Responsibilities, Impact)
+- Projects (Title, Tech Stack, Description, Outcome)
+- Certifications
+- Achievements
+- Extra sections (Publications, Open Source, Leadership, etc.)
+
+STEP 3: Line-by-Line Quality Evaluation
+For EACH section:
+- Check clarity
+- Check relevance
+- Check action verbs
+- Check quantification (metrics, numbers, impact)
+- Identify weak or generic statements
+- Identify grammar or wording issues
+
+STEP 4: ATS Optimization Analysis
+- Identify missing keywords
+- Detect keyword stuffing or underuse
+- Check formatting issues that ATS may reject
+- Evaluate resume length suitability
+- Evaluate section ordering
+
+STEP 5: Job Profile Matching (If Job Description is Provided)
+- Calculate skill match percentage
+- Identify missing mandatory skills
+- Identify transferable skills
+- Highlight experience gaps
+- Provide role-fit score (0–100)
+
+=====================
+STRICT RULES
+=====================
+
+- Be objective, professional, and extremely detailed.
+- Do NOT hallucinate information.
+- Do NOT assume skills not mentioned.
+- If information is missing, explicitly state "Not provided".
+- Do NOT add fake experience or fake skills.
+- Maintain factual accuracy at all times.
+- Optimize for FAANG-level and product-based company standards.
+
+=====================
+GOAL
+=====================
+
+Deliver a PERFECT, ATS-OPTIMIZED, JOB-ALIGNED resume analysis that can
+directly improve interview shortlisting chances.
+`;
 
 /**
  * Analyzes the user's resume (Text or PDF) against a target role.
@@ -574,6 +785,199 @@ export const fetchResume = async (userId: string) => {
         const response = await axios.get(`${API_URL}/${userId}`);
         return response.data;
     } catch (error) {
+        throw error;
+    }
+};
+
+/**
+ * Comprehensive ATS Resume Analysis
+ * Analyzes resume with extreme precision for ATS optimization and job matching.
+ */
+export const analyzeResumeATS = async (
+    resumeInput: { text?: string; file?: { data: string; mimeType: string } },
+    targetRole?: string,
+    jobDescription?: string
+): Promise<ATSResumeAnalysis> => {
+
+    // Step 1: Validate the document is a resume
+    const validation = await validateResumeContent(resumeInput);
+    if (!validation.isValid) {
+        throw new Error(validation.reason);
+    }
+
+    const roleContext = targetRole
+        ? `\n\nTARGET ROLE: ${targetRole}`
+        : '';
+
+    const jdContext = jobDescription
+        ? `\n\nJOB DESCRIPTION:\n${jobDescription.slice(0, 3000)}`
+        : '';
+
+    const promptText = `${ATS_ANALYSIS_PROMPT}${roleContext}${jdContext}
+
+OUTPUT FORMAT (JSON):
+{
+  "resumeOverview": {
+    "resumeType": "Student | Experienced Professional",
+    "experienceLevel": "Fresher | Junior | Mid | Senior",
+    "domain": "Technology domain/industry",
+    "overallATSScore": 0-100
+  },
+  "extractedData": {
+    "skills": ["skill1", "skill2"],
+    "education": ["degree - institution - year"],
+    "experience": ["role at company - duration - key responsibility"],
+    "projects": ["project - tech stack - outcome"],
+    "certifications": ["certification name - issuer"]
+  },
+  "strengths": ["strength1", "strength2"],
+  "weaknesses": ["weakness1", "weakness2"],
+  "criticalImprovements": ["improvement1", "improvement2"],
+  "atsKeywordOptimization": {
+    "missingKeywords": ["keyword1"],
+    "suggestedKeywords": ["keyword1"],
+    "keywordDensityIssues": ["issue1"]
+  },
+  "jobMatchAnalysis": {
+    "skillMatchPercent": 0-100,
+    "missingSkills": ["skill1"],
+    "roleFitScore": 0-100
+  },
+  "optimizationSuggestions": {
+    "rewrittenLines": [{"original": "weak line", "improved": "strong line"}],
+    "betterActionVerbs": ["verb1"],
+    "quantifiableMetrics": ["add X% improvement"]
+  },
+  "finalVerdict": {
+    "isReady": true/false,
+    "reason": "Clear explanation",
+    "priorityImprovements": ["top1", "top2", "top3"]
+  }
+}`;
+
+    const contents = [];
+
+    if (resumeInput.file) {
+        contents.push({
+            inlineData: {
+                mimeType: resumeInput.file.mimeType,
+                data: resumeInput.file.data
+            }
+        });
+        contents.push({ text: promptText });
+    } else if (resumeInput.text) {
+        contents.push({ text: `Resume Content:\n"${resumeInput.text.slice(0, 30000)}"\n\n${promptText}` });
+    } else {
+        throw new Error("No resume input provided. Please upload a valid resume (PDF, DOCX, or DOC).");
+    }
+
+    try {
+        const response = await generateWithRetry(
+            GEMINI_MODEL,
+            {
+                contents: contents,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            resumeOverview: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    resumeType: { type: Type.STRING },
+                                    experienceLevel: { type: Type.STRING },
+                                    domain: { type: Type.STRING },
+                                    overallATSScore: { type: Type.NUMBER }
+                                },
+                                required: ["resumeType", "experienceLevel", "domain", "overallATSScore"]
+                            },
+                            extractedData: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    skills: { type: Type.ARRAY, items: { type: Type.STRING } },
+                                    education: { type: Type.ARRAY, items: { type: Type.STRING } },
+                                    experience: { type: Type.ARRAY, items: { type: Type.STRING } },
+                                    projects: { type: Type.ARRAY, items: { type: Type.STRING } },
+                                    certifications: { type: Type.ARRAY, items: { type: Type.STRING } }
+                                },
+                                required: ["skills", "education", "experience", "projects", "certifications"]
+                            },
+                            strengths: { type: Type.ARRAY, items: { type: Type.STRING } },
+                            weaknesses: { type: Type.ARRAY, items: { type: Type.STRING } },
+                            criticalImprovements: { type: Type.ARRAY, items: { type: Type.STRING } },
+                            atsKeywordOptimization: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    missingKeywords: { type: Type.ARRAY, items: { type: Type.STRING } },
+                                    suggestedKeywords: { type: Type.ARRAY, items: { type: Type.STRING } },
+                                    keywordDensityIssues: { type: Type.ARRAY, items: { type: Type.STRING } }
+                                },
+                                required: ["missingKeywords", "suggestedKeywords", "keywordDensityIssues"]
+                            },
+                            jobMatchAnalysis: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    skillMatchPercent: { type: Type.NUMBER },
+                                    missingSkills: { type: Type.ARRAY, items: { type: Type.STRING } },
+                                    roleFitScore: { type: Type.NUMBER }
+                                }
+                            },
+                            optimizationSuggestions: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    rewrittenLines: {
+                                        type: Type.ARRAY,
+                                        items: {
+                                            type: Type.OBJECT,
+                                            properties: {
+                                                original: { type: Type.STRING },
+                                                improved: { type: Type.STRING }
+                                            },
+                                            required: ["original", "improved"]
+                                        }
+                                    },
+                                    betterActionVerbs: { type: Type.ARRAY, items: { type: Type.STRING } },
+                                    quantifiableMetrics: { type: Type.ARRAY, items: { type: Type.STRING } }
+                                },
+                                required: ["rewrittenLines", "betterActionVerbs", "quantifiableMetrics"]
+                            },
+                            finalVerdict: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    isReady: { type: Type.BOOLEAN },
+                                    reason: { type: Type.STRING },
+                                    priorityImprovements: { type: Type.ARRAY, items: { type: Type.STRING } }
+                                },
+                                required: ["isReady", "reason", "priorityImprovements"]
+                            }
+                        },
+                        required: [
+                            "resumeOverview",
+                            "extractedData",
+                            "strengths",
+                            "weaknesses",
+                            "criticalImprovements",
+                            "atsKeywordOptimization",
+                            "optimizationSuggestions",
+                            "finalVerdict"
+                        ]
+                    }
+                }
+            }
+        );
+
+        const text = response.text;
+        if (!text) throw new Error("No response from AI");
+
+        try {
+            const data = JSON.parse(cleanJson(text));
+            return data as ATSResumeAnalysis;
+        } catch (parseError) {
+            console.error("JSON Parse Error:", parseError, "Raw Text:", text);
+            throw new Error("Failed to parse AI response. Please try again.");
+        }
+    } catch (error) {
+        console.error("ATS Resume Analysis failed:", error);
         throw error;
     }
 };
