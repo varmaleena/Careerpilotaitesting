@@ -21,12 +21,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin }) => {
                </div>
 
                <div className="flex items-center space-x-3 sm:space-x-4">
-                  <button onClick={onLogin} className="text-sm font-medium text-slate-300 hover:text-white transition-all duration-200 hidden sm:block relative after:absolute after:bottom-0 after:left-0 after:w-0 after:h-0.5 after:bg-indigo-500 after:transition-all hover:after:w-full">
+                  <button onClick={onLogin} className="text-xs sm:text-sm font-medium text-slate-300 hover:text-white transition-all duration-200 relative after:absolute after:bottom-0 after:left-0 after:w-0 after:h-0.5 after:bg-indigo-500 after:transition-all hover:after:w-full">
                      Log In
                   </button>
                   <button
                      onClick={onGetStarted}
-                     className="bg-white text-slate-950 px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-bold hover:bg-slate-200 transition-all transform hover:scale-105 shadow-lg shadow-white/10 whitespace-nowrap"
+                     className="bg-white text-slate-950 px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-bold hover:bg-slate-200 transition-colors shadow-lg shadow-white/10 whitespace-nowrap"
                   >
                      Get Started
                   </button>
@@ -45,9 +45,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin }) => {
 
                   {/* Hero Copy */}
                   <div className="lg:w-1/2 text-center lg:text-left">
-                     <div className="inline-flex items-center space-x-2 bg-white/5 border border-white/10 rounded-full px-3 py-1 sm:px-4 sm:py-1.5 mb-6 sm:mb-8 backdrop-blur-sm animate-in fade-in slide-in-from-bottom-4 duration-700">
+                     <div className="inline-flex items-center space-x-2 bg-white/5 border border-white/10 rounded-full px-3 py-1 sm:px-4 sm:py-1.5 mb-6 sm:mb-8 backdrop-blur-sm">
                         <span className="relative flex h-2 w-2">
-                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                         </span>
                         <span className="text-xs sm:text-sm font-medium text-slate-300">AI-Powered Career Architect v2.0</span>
@@ -141,7 +140,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin }) => {
                         </div>
 
                         {/* Floating Elements - Repositioned for Mobile */}
-                        <div className="absolute right-2 -bottom-6 sm:-right-6 sm:top-10 sm:bottom-auto bg-slate-800 p-3 sm:p-4 rounded-xl border border-slate-700 shadow-xl flex items-center space-x-3 w-max max-w-[calc(100%-20px)] animate-bounce duration-[3000ms]">
+                        <div className="absolute right-2 -bottom-6 sm:-right-6 sm:top-10 sm:bottom-auto bg-slate-800 p-3 sm:p-4 rounded-xl border border-slate-700 shadow-xl flex items-center space-x-3 w-max max-w-[calc(100%-20px)]">
                            <div className="bg-emerald-500/20 p-1.5 sm:p-2 rounded-lg"><CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" /></div>
                            <div>
                               <div className="text-[10px] sm:text-xs text-slate-400">Readiness Score</div>

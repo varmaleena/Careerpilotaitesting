@@ -28,6 +28,9 @@ export interface UserProfile {
   linkedinProfile?: string;
   leetcodeProfile?: string;
   paymentHistory?: PaymentTransaction[];
+  streak?: number;
+  lastLoginDate?: string;
+  xp?: number;
 }
 
 export interface PaymentTransaction {
@@ -139,11 +142,26 @@ export interface InterviewSession {
 }
 
 export interface InterviewFeedback {
-  score: number; // 0-10
+  score: number; // 0-10 or 0-100
   feedbackSummary: string;
   strengths: string[];
   improvements: string[];
   recommendedFocus: string;
+  // Premium Fields
+  communication?: number;
+  technicalCompetence?: number;
+  problemSolving?: number;
+  confidenceUnderPressure?: number;
+  timeManagement?: number;
+  decision?: 'Strong Hire' | 'Hire' | 'Borderline' | 'No-Hire';
+  blockingGaps?: string[];
+  improvementRoadmap?: {
+    immediate: string[];
+    shortTerm: string[];
+    longTerm: string[];
+  };
+  comparisonToHiringBar?: string;
+  detailedFeedback?: string;
 }
 
 export interface ResumeImprovement {
