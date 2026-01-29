@@ -14,6 +14,7 @@ export interface UserProfile {
   experienceLevel?: string; // student, fresher, junior, mid, senior
   graduationYear?: string;
   targetCompanies?: string; // Comma-separated dream companies
+  pastInterviews?: PastInterview[]; // History of completed interviews
   resumeText?: string;
   resumeFile?: {
     data: string; // Base64
@@ -162,6 +163,15 @@ export interface InterviewFeedback {
   };
   comparisonToHiringBar?: string;
   detailedFeedback?: string;
+}
+
+export interface PastInterview {
+  id: string;
+  date: string;
+  targetRole: string;
+  companyName: string;
+  score: number;
+  feedback: InterviewFeedback;
 }
 
 export interface ResumeImprovement {

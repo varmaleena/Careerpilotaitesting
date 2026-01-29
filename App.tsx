@@ -1,4 +1,4 @@
-import { Chat } from '@google/genai';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   AlertCircle,
   ArrowRight,
@@ -23,6 +23,7 @@ import {
   Mail,
   MapPin,
   MessageSquare,
+  History,
   Mic,
   Play,
   PlayCircle,
@@ -53,7 +54,7 @@ import {
   Zap,
   Share2
 } from 'lucide-react';
-import React, { useCallback, useEffect, useRef, useState } from "react";
+
 import LandingPage from "./components/LandingPage";
 import { FeedbackModal } from './components/FeedbackModal';
 import { ScoreGauge } from "./components/ScoreGauge";
@@ -80,6 +81,7 @@ import {
   ChatMessage,
   InterviewFeedback,
   LatexResumeData,
+  PastInterview,
   ProjectIdea,
   ResumeOptimizationResult,
   UserProfile,
@@ -412,17 +414,19 @@ const App = () => {
   // Interview
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
-  const [chatInstance, setChatInstance] = useState<Chat | null>(null);
+  const [chatInstance, setChatInstance] = useState<any | null>(null);
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [isInterviewStarted, setIsInterviewStarted] = useState(false);
   const [interviewFeedback, setInterviewFeedback] = useState<InterviewFeedback | null>(null);
   const [isGeneratingFeedback, setIsGeneratingFeedback] = useState(false);
+  const [showPastInterviewsDropdown, setShowPastInterviewsDropdown] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Voice State
   const [isListening, setIsListening] = useState(false);
   const [isSpeakingEnabled, setIsSpeakingEnabled] = useState(true);
   const recognitionRef = useRef<any>(null);
+  const recognitionStoppedRef = useRef(false); // Track intentional stops to prevent stale transcripts
 
   // Upload State
   const [isUploadingResume, setIsUploadingResume] = useState(false);
@@ -1399,6 +1403,20 @@ const App = () => {
         detailedFeedback: evaluation.detailedFeedback,
       };
 
+      const newPastInterview: PastInterview = {
+        id: Date.now().toString(),
+        date: new Date().toISOString(),
+        targetRole: userProfile.targetRole,
+        companyName: userProfile.targetCompanies?.split(',')[0] || 'Tech Company',
+        score: feedback.score,
+        feedback: feedback
+      };
+
+      setUserProfile(prev => ({
+        ...prev,
+        pastInterviews: [newPastInterview, ...(prev.pastInterviews || [])]
+      }));
+
       setInterviewFeedback(feedback);
       setInterviewStartTime(null);
       setInterviewElapsedSeconds(0);
@@ -1417,6 +1435,7 @@ const App = () => {
 
     // Stop mic if active (ensures mic stays active UNTIL send is clicked)
     if (recognitionRef.current) {
+      recognitionStoppedRef.current = true; // Mark as intentionally stopped to ignore final events
       recognitionRef.current.stop();
       setIsListening(false);
       recognitionRef.current = null;
@@ -1532,6 +1551,7 @@ const App = () => {
       recognition.lang = 'en-US';
 
       recognition.onstart = () => {
+        recognitionStoppedRef.current = false; // Reset flag for new session
         setIsListening(true);
       };
 
@@ -1546,10 +1566,19 @@ const App = () => {
       };
 
       recognition.onresult = (event: any) => {
-        const currentContent = Array.from(event.results)
-          .map((result: any) => result[0].transcript)
-          .join('');
-        setChatInput(currentContent);
+        // Ignore results if recognition was intentionally stopped (e.g., on message send)
+        if (recognitionStoppedRef.current) {
+          return;
+        }
+
+        // Build the complete transcript from all results in this session
+        let transcript = '';
+        for (let i = 0; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        // Simply set the entire transcript as the current input
+        // This replaces the previous content, which is the expected behavior
+        setChatInput(transcript);
       };
 
       recognition.onerror = (event: any) => {
@@ -2094,126 +2123,133 @@ const App = () => {
             <div className="absolute bottom-[-10%] left-[10%] w-[400px] h-[400px] bg-purple-900/10 blur-[100px] rounded-full"></div>
           </div>
 
-          <div className="relative z-10 max-w-5xl mx-auto">
-            {/* Header */}
-            <header className="flex justify-between items-center mb-10">
-              <div>
-                <h2 className="text-3xl font-bold text-white tracking-tight">
-                  {view === AppView.DASHBOARD && 'Dashboard'}
-                  {view === AppView.PLAN && 'Learning Plan'}
-                  {view === AppView.INTERVIEW && 'Interview Simulator'}
-                </h2>
-                <p className="text-slate-400 text-sm mt-1">Target Role: <span className="text-indigo-400 font-medium">{userProfile.targetRole}</span></p>
-              </div>
-              <div className="flex items-center space-x-4">
-                {/* Daily Streak Badge */}
-                {isLoggedIn && (
-                  <div className="flex items-center space-x-4 mr-2">
-                    <div className="hidden md:flex flex-col items-end">
-                      <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Daily Streak</span>
-                      <div className="flex items-center space-x-1.5 text-amber-400">
-                        <Zap className="w-4 h-4 fill-current" />
-                        <span className="font-bold">{userProfile.streak || 1} Days</span>
-                      </div>
-                    </div>
+          <div className="relative z-10 flex-1 flex flex-col">
+            {/* Top Bar - Streak & Profile */}
+            <header className="flex justify-end items-center px-6 py-3">
+              {isLoggedIn && (
+                <div className="flex items-center space-x-4">
+                  <div className="hidden md:flex items-center space-x-1.5 text-amber-400 bg-amber-500/10 px-3 py-1.5 rounded-lg border border-amber-500/20">
+                    <Zap className="w-3.5 h-3.5 fill-current" />
+                    <span className="text-xs font-bold">{userProfile.streak || 1} Day Streak</span>
                   </div>
-                )}
-
-                <button
-                  onClick={() => setShowProfileModal(true)}
-                  className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-500/20 hover:scale-110 transition-transform cursor-pointer"
-                >
-                  {userProfile.name?.[0]?.toUpperCase() || 'U'}
-                </button>
-              </div>
+                  <button
+                    onClick={() => setShowProfileModal(true)}
+                    className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm hover:scale-105 transition-transform cursor-pointer"
+                  >
+                    {userProfile.name?.[0]?.toUpperCase() || 'U'}
+                  </button>
+                </div>
+              )}
             </header>
 
             {/* Dashboard View */}
             {view === AppView.DASHBOARD && analysis && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {/* Score Card */}
-                  <div className="bg-white/5 backdrop-blur-xl p-8 rounded-3xl border border-white/10 col-span-1 shadow-xl relative">
-                    <button
-                      onClick={() => setShowShareModal(true)}
-                      className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-indigo-300 transition-colors"
-                    >
-                      <Share2 className="w-4 h-4" />
-                    </button>
-                    <h3 className="text-xs font-bold text-slate-400 mb-6 uppercase tracking-widest">Match Potential</h3>
-                    <ScoreGauge score={analysis.readinessScore} />
-                    <p className="text-center text-sm text-slate-300 mt-4 leading-relaxed">
-                      {analysis.readinessScore > 75
-                        ? "You're a strong candidate! Focus on polishing your advanced skills."
-                        : "Great foundation. Completing your plan can boost this significantly."}
-                    </p>
+              <div className="flex-1 flex flex-col overflow-hidden">
+                {/* Compact Header */}
+                <div className="flex justify-between items-center px-6 py-4 border-b border-white/5">
+                  <div>
+                    <h1 className="text-xl font-bold text-white">Dashboard</h1>
+                    <p className="text-sm text-slate-500 mt-0.5">Target: <span className="text-slate-300">{userProfile.targetRole}</span></p>
                   </div>
-
-                  {/* Strengths & Weaknesses */}
-                  <div className="bg-white/5 backdrop-blur-xl p-8 rounded-3xl border border-white/10 col-span-2 flex flex-col justify-between shadow-xl">
-                    <div className="mb-6">
-                      <h3 className="text-xs font-bold text-emerald-400 mb-4 uppercase tracking-widest flex items-center">
-                        <TrendingUp className="w-4 h-4 mr-2" /> Top Strengths
-                      </h3>
-                      <div className="space-y-3">
-                        {analysis.strengths?.map((s, i) => (
-                          <div key={i} className="flex items-start text-sm text-slate-200 bg-emerald-500/10 p-3 rounded-lg border border-emerald-500/20">
-                            <span className="mr-2 text-emerald-500 font-bold">•</span> {s}
-                          </div>
-                        ))}
-                        {(!analysis.strengths || analysis.strengths.length === 0) && <div className="text-slate-500 text-sm">No strengths detected yet.</div>}
-                      </div>
-                    </div>
-                    <div className="pt-6 border-t border-white/5">
-                      <h3 className="text-xs font-bold text-amber-400 mb-4 uppercase tracking-widest flex items-center">
-                        <Target className="w-4 h-4 mr-2" /> Key Gaps
-                      </h3>
-                      <div className="space-y-3">
-                        {analysis.weaknesses?.map((w, i) => (
-                          <div key={i} className="flex items-start text-sm text-slate-200 bg-amber-500/10 p-3 rounded-lg border border-amber-500/20">
-                            <span className="mr-2 text-amber-500 font-bold">•</span> {w}
-                          </div>
-                        ))}
-                        {(!analysis.weaknesses || analysis.weaknesses.length === 0) && <div className="text-slate-500 text-sm">No gaps detected yet.</div>}
-                      </div>
-                    </div>
-                  </div>
+                  <button
+                    onClick={() => setShowShareModal(true)}
+                    className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors"
+                  >
+                    <Share2 className="w-4 h-4" />
+                  </button>
                 </div>
 
-                {/* Skills Matrix */}
-                <div className="bg-white/5 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-xl">
-                  <div className="flex justify-between items-center mb-8">
-                    <h3 className="text-xl font-bold text-white">Skills Breakdown</h3>
-                    <span className="text-xs font-bold px-3 py-1 bg-white/10 border border-white/10 rounded-full text-slate-300">
-                      {analysis.skills?.length || 0} skills tracked
-                    </span>
-                  </div>
+                {/* Main Content */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6">
+                  {/* Score & Summary Row */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    {/* Score Card */}
+                    <div className="bg-slate-900/50 rounded-xl border border-white/5 p-6">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Match Potential</p>
+                      <ScoreGauge score={analysis.readinessScore} />
+                      <p className="text-center text-xs text-slate-400 mt-4">
+                        {analysis.readinessScore > 75
+                          ? "Strong candidate. Focus on polishing advanced skills."
+                          : "Great foundation. Complete your plan to boost this score."}
+                      </p>
+                    </div>
 
-                  <div className="grid md:grid-cols-2 gap-8">
-                    <div>
-                      <h4 className="text-sm text-slate-400 mb-4 font-bold uppercase tracking-wider">Acquired</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {analysis.skills?.filter(s => s.status === 'acquired').map(s => <SkillCard key={s.name} skill={s} />)}
-                        {analysis.skills?.filter(s => s.status === 'acquired').length === 0 && <span className="text-sm text-slate-500 italic">No exact matches found yet.</span>}
+                    {/* Strengths */}
+                    <div className="bg-slate-900/50 rounded-xl border border-white/5 p-6">
+                      <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-3 flex items-center">
+                        <TrendingUp className="w-3.5 h-3.5 mr-1.5" />
+                        Top Strengths
+                      </p>
+                      <div className="space-y-2">
+                        {analysis.strengths?.slice(0, 3).map((s, i) => (
+                          <div key={i} className="text-sm text-slate-300 bg-emerald-500/5 p-2.5 rounded-lg border border-emerald-500/10 flex items-start">
+                            <span className="text-emerald-400 mr-2">•</span>
+                            <span className="line-clamp-2">{s}</span>
+                          </div>
+                        ))}
+                        {(!analysis.strengths || analysis.strengths.length === 0) && (
+                          <p className="text-sm text-slate-500 italic">No strengths detected yet.</p>
+                        )}
                       </div>
                     </div>
-                    <div>
-                      <h4 className="text-sm text-slate-400 mb-4 font-bold uppercase tracking-wider">Missing / To Learn</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {analysis.skills?.filter(s => s.status === 'missing').map(s => <SkillCard key={s.name} skill={s} />)}
+
+                    {/* Gaps */}
+                    <div className="bg-slate-900/50 rounded-xl border border-white/5 p-6">
+                      <p className="text-xs font-bold text-amber-400 uppercase tracking-wider mb-3 flex items-center">
+                        <Target className="w-3.5 h-3.5 mr-1.5" />
+                        Key Gaps
+                      </p>
+                      <div className="space-y-2">
+                        {analysis.weaknesses?.slice(0, 3).map((w, i) => (
+                          <div key={i} className="text-sm text-slate-300 bg-amber-500/5 p-2.5 rounded-lg border border-amber-500/10 flex items-start">
+                            <span className="text-amber-400 mr-2">•</span>
+                            <span className="line-clamp-2">{w}</span>
+                          </div>
+                        ))}
+                        {(!analysis.weaknesses || analysis.weaknesses.length === 0) && (
+                          <p className="text-sm text-slate-500 italic">No gaps detected yet.</p>
+                        )}
                       </div>
                     </div>
                   </div>
 
-                  <div className="mt-10 flex justify-end">
-                    <button
-                      onClick={handleGeneratePlan}
-                      disabled={isGeneratingPlan}
-                      className="bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-3 rounded-xl shadow-[0_0_20px_rgba(79,70,229,0.3)] hover:shadow-[0_0_30px_rgba(79,70,229,0.5)] transition-all flex items-center space-x-2 text-sm font-bold disabled:opacity-70"
-                    >
-                      {isGeneratingPlan ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
-                      <span>{plan ? 'Regenerate Roadmap' : 'Generate Career Roadmap'}</span>
-                    </button>
+                  {/* Skills Matrix */}
+                  <div className="bg-slate-900/50 rounded-xl border border-white/5 p-6">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-sm font-bold text-white">Skills Breakdown</h3>
+                      <span className="text-[11px] font-bold px-2.5 py-1 bg-slate-800 rounded text-slate-400">
+                        {analysis.skills?.length || 0} skills tracked
+                      </span>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-6">
+                      <div>
+                        <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-3">Acquired</p>
+                        <div className="flex flex-wrap gap-2">
+                          {analysis.skills?.filter(s => s.status === 'acquired').map(s => <SkillCard key={s.name} skill={s} />)}
+                          {analysis.skills?.filter(s => s.status === 'acquired').length === 0 && (
+                            <span className="text-sm text-slate-500 italic">No exact matches found yet.</span>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-3">Missing / To Learn</p>
+                        <div className="flex flex-wrap gap-2">
+                          {analysis.skills?.filter(s => s.status === 'missing').map(s => <SkillCard key={s.name} skill={s} />)}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-6 pt-4 border-t border-white/5 flex justify-end">
+                      <button
+                        onClick={handleGeneratePlan}
+                        disabled={isGeneratingPlan}
+                        className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-xl font-bold text-sm flex items-center transition-all disabled:opacity-70"
+                      >
+                        {isGeneratingPlan ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <BookOpen className="w-4 h-4 mr-2" />}
+                        {plan ? 'Regenerate Roadmap' : 'Generate Career Roadmap'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2221,318 +2257,327 @@ const App = () => {
 
             {/* Learning Plan View */}
             {view === AppView.PLAN && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {!plan && !isGeneratingPlan && (
-                  <EmptyState
-                    icon={BookOpen}
-                    title="No Learning Plan Yet"
-                    description="Create a personalized curriculum based on your skill gaps. Our AI architect will build a week-by-week roadmap for you."
-                    actionLabel="Generate Plan Now"
-                    onAction={handleGeneratePlan}
-                    color="indigo"
-                  />
-                )}
-
-                {isGeneratingPlan && (
-                  <div className="flex flex-col items-center justify-center py-32 space-y-6">
-                    <Loader2 className="w-12 h-12 text-indigo-500 animate-spin" />
-                    <p className="text-slate-300 font-medium text-lg">Designing your curriculum...</p>
+              <div className="flex-1 flex flex-col overflow-hidden">
+                {/* Compact Header */}
+                <div className="flex justify-between items-center px-6 py-4 border-b border-white/5">
+                  <div>
+                    <h1 className="text-xl font-bold text-white">Learning Plan</h1>
+                    <p className="text-sm text-slate-500 mt-0.5">Roadmap for <span className="text-slate-300">{userProfile.targetRole}</span></p>
                   </div>
-                )}
+                  {plan && (
+                    <button
+                      onClick={handleGeneratePlan}
+                      disabled={isGeneratingPlan}
+                      className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded-xl font-bold text-sm transition-all flex items-center disabled:opacity-50"
+                    >
+                      {isGeneratingPlan ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                      Regenerate
+                    </button>
+                  )}
+                </div>
 
-                {plan && (
-                  <div className="space-y-8">
-                    {/* Statistics Panel */}
-                    {(() => {
-                      const stats = calculatePlanStatistics(plan, 2); // 2 hours/day default
-                      const currentWeek = getCurrentWeek(plan);
-                      const progressMessage = getProgressMessage(stats.progressPercentage);
+                {/* Main Content */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
+                  {!plan && !isGeneratingPlan && (
+                    <div className="text-center py-16">
+                      <div className="w-14 h-14 bg-indigo-500/10 rounded-xl flex items-center justify-center mx-auto mb-4">
+                        <BookOpen className="w-7 h-7 text-indigo-400" />
+                      </div>
+                      <h3 className="text-lg font-bold text-white mb-2">No Learning Plan Yet</h3>
+                      <p className="text-sm text-slate-400 mb-6 max-w-sm mx-auto">
+                        Create a personalized curriculum based on your skill gaps.
+                      </p>
+                      <button
+                        onClick={handleGeneratePlan}
+                        className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-xl font-bold text-sm flex items-center mx-auto transition-all"
+                      >
+                        <BookOpen className="w-4 h-4 mr-2" />
+                        Generate Plan
+                      </button>
+                    </div>
+                  )}
 
-                      return (
-                        <div className="bg-indigo-500/5 backdrop-blur-xl rounded-3xl border border-white/10 p-8 shadow-xl">
-                          {/* Header */}
-                          <div className="flex items-start justify-between mb-6">
-                            <div>
-                              <h3 className="text-2xl font-bold text-white mb-2">Your Learning Journey</h3>
-                              <p className="text-indigo-300 text-sm font-medium">{progressMessage}</p>
+                  {isGeneratingPlan && (
+                    <div className="flex flex-col items-center justify-center py-24">
+                      <Loader2 className="w-10 h-10 text-indigo-500 animate-spin mb-4" />
+                      <p className="text-slate-400 text-sm">Designing your curriculum...</p>
+                    </div>
+                  )}
+
+                  {plan && (
+                    <>
+                      {/* Statistics Panel */}
+                      {(() => {
+                        const stats = calculatePlanStatistics(plan, 2);
+                        const currentWeek = getCurrentWeek(plan);
+                        const progressMessage = getProgressMessage(stats.progressPercentage);
+
+                        return (
+                          <div className="bg-slate-900/50 rounded-xl border border-white/5 p-6">
+                            {/* Top Row - Progress */}
+                            <div className="flex items-center justify-between mb-5">
+                              <div className="flex items-center gap-4">
+                                <div className="text-4xl font-bold text-white">{stats.progressPercentage}%</div>
+                                <div>
+                                  <p className="text-sm font-bold text-white">Complete</p>
+                                  <p className="text-sm text-indigo-400">{progressMessage}</p>
+                                </div>
+                              </div>
                             </div>
-                            <div className="text-right">
-                              <div className="text-3xl font-bold text-white mb-1">{stats.progressPercentage}%</div>
-                              <div className="text-xs text-slate-400">Complete</div>
-                            </div>
-                          </div>
 
-                          {/* Progress Bar */}
-                          <div className="mb-6">
-                            <div className="h-3 bg-slate-800/50 rounded-full overflow-hidden">
+                            {/* Progress Bar */}
+                            <div className="h-3 bg-slate-800 rounded-full overflow-hidden mb-6">
                               <div
-                                className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500 ease-out"
+                                className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all"
                                 style={{ width: `${stats.progressPercentage}%` }}
                               />
                             </div>
-                          </div>
 
-                          {/* Stats Grid */}
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            {/* Current Week */}
-                            <div className="bg-white/5 rounded-xl p-4 border border-white/10">
-                              <div className="flex items-center space-x-2 mb-2">
-                                <Target className="w-4 h-4 text-indigo-400" />
-                                <span className="text-xs font-bold text-slate-400 uppercase">Current Week</span>
+                            {/* Stats Grid */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                              {/* Tasks */}
+                              <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <CheckCircle className="w-4 h-4 text-emerald-400" />
+                                  <span className="text-xs font-bold text-slate-400 uppercase">Tasks</span>
+                                </div>
+                                <p className="text-2xl font-bold text-white">{stats.completedTasks}<span className="text-slate-500 text-base font-normal">/{stats.totalTasks}</span></p>
                               </div>
-                              <div className="text-2xl font-bold text-white">Week {currentWeek}</div>
-                              <div className="text-xs text-slate-500 mt-1">of {stats.totalWeeks}</div>
+
+                              {/* Hours */}
+                              <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <Clock className="w-4 h-4 text-amber-400" />
+                                  <span className="text-xs font-bold text-slate-400 uppercase">Hours</span>
+                                </div>
+                                <p className="text-2xl font-bold text-white">{stats.completedHours}<span className="text-slate-500 text-base font-normal">/{stats.totalHours}h</span></p>
+                              </div>
+
+                              {/* Target Date */}
+                              <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <Target className="w-4 h-4 text-purple-400" />
+                                  <span className="text-xs font-bold text-slate-400 uppercase">Est. Done</span>
+                                </div>
+                                <p className="text-base font-bold text-white">{stats.estimatedCompletionDate}</p>
+                              </div>
+
+                              {/* Current Week */}
+                              <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <TrendingUp className="w-4 h-4 text-indigo-400" />
+                                  <span className="text-xs font-bold text-slate-400 uppercase">Week</span>
+                                </div>
+                                <p className="text-2xl font-bold text-white">{currentWeek}<span className="text-slate-500 text-base font-normal">/{stats.totalWeeks}</span></p>
+                              </div>
                             </div>
 
-                            {/* Tasks Progress */}
-                            <div className="bg-white/5 rounded-xl p-4 border border-white/10">
-                              <div className="flex items-center space-x-2 mb-2">
-                                <CheckCircle className="w-4 h-4 text-emerald-400" />
-                                <span className="text-xs font-bold text-slate-400 uppercase">Tasks</span>
-                              </div>
-                              <div className="text-2xl font-bold text-white">{stats.completedTasks}/{stats.totalTasks}</div>
-                              <div className="text-xs text-slate-500 mt-1">completed</div>
-                            </div>
-
-                            {/* Hours Progress */}
-                            <div className="bg-white/5 rounded-xl p-4 border border-white/10">
-                              <div className="flex items-center space-x-2 mb-2">
-                                <Clock className="w-4 h-4 text-amber-400" />
-                                <span className="text-xs font-bold text-slate-400 uppercase">Hours</span>
-                              </div>
-                              <div className="text-2xl font-bold text-white">{stats.completedHours}/{stats.totalHours}</div>
-                              <div className="text-xs text-slate-500 mt-1">invested</div>
-                            </div>
-
-                            {/* Completion Date */}
-                            <div className="bg-white/5 rounded-xl p-4 border border-white/10">
-                              <div className="flex items-center space-x-2 mb-2">
-                                <TrendingUp className="w-4 h-4 text-purple-400" />
-                                <span className="text-xs font-bold text-slate-400 uppercase">Est. Done</span>
-                              </div>
-                              <div className="text-lg font-bold text-white leading-tight">{stats.estimatedCompletionDate}</div>
-                              <div className="text-xs text-slate-500 mt-1">at 2h/day</div>
-                            </div>
-                          </div>
-
-                          {/* Task Type Breakdown */}
-                          <div className="mt-6 pt-6 border-t border-white/10">
-                            <div className="flex items-center justify-between text-xs">
-                              <div className="flex items-center space-x-2">
+                            {/* Task Type Breakdown */}
+                            <div className="flex items-center justify-center gap-8 mt-5 pt-5 border-t border-white/5">
+                              <div className="flex items-center gap-2">
                                 <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                                <span className="text-slate-400">Courses: <span className="text-white font-bold">{stats.taskBreakdown.course}</span></span>
+                                <span className="text-sm text-slate-400"><span className="text-white font-bold">{stats.taskBreakdown.course}</span> Courses</span>
                               </div>
-                              <div className="flex items-center space-x-2">
+                              <div className="flex items-center gap-2">
                                 <div className="w-3 h-3 rounded-full bg-purple-500"></div>
-                                <span className="text-slate-400">Projects: <span className="text-white font-bold">{stats.taskBreakdown.project}</span></span>
+                                <span className="text-sm text-slate-400"><span className="text-white font-bold">{stats.taskBreakdown.project}</span> Projects</span>
                               </div>
-                              <div className="flex items-center space-x-2">
+                              <div className="flex items-center gap-2">
                                 <div className="w-3 h-3 rounded-full bg-amber-500"></div>
-                                <span className="text-slate-400">Reading: <span className="text-white font-bold">{stats.taskBreakdown.reading}</span></span>
+                                <span className="text-sm text-slate-400"><span className="text-white font-bold">{stats.taskBreakdown.reading}</span> Reading</span>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      );
-                    })()}
+                        );
+                      })()}
 
-                    {/* Weekly Plan */}
-                    {plan?.map((week, idx) => {
-                      const completedCount = week.tasks.filter(t => t.completed).length;
-                      const totalCount = week.tasks.length;
-                      const weekProgress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+                      {/* Weekly Plan */}
+                      {plan?.map((week, idx) => {
+                        const completedCount = week.tasks.filter(t => t.completed).length;
+                        const totalCount = week.tasks.length;
+                        const weekProgress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
-                      return (
-                        <div key={idx} className="bg-white/5 backdrop-blur-md rounded-3xl border border-white/10 overflow-hidden">
-                          <div className="bg-white/5 px-8 py-5 border-b border-white/5 flex justify-between items-center">
-                            <div className="flex-1">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <h3 className="text-xl font-bold text-white">Week {idx + 1}</h3>
-                                  <p className="text-sm text-indigo-300 mt-1 font-medium">{week.theme}</p>
+                        return (
+                          <div key={idx} className="bg-slate-900/50 rounded-xl border border-white/5 overflow-hidden">
+                            {/* Week Header */}
+                            <div className="px-5 py-4 border-b border-white/5 flex justify-between items-center">
+                              <div>
+                                <h3 className="text-sm font-bold text-white">Week {idx + 1}</h3>
+                                <p className="text-xs text-indigo-400 mt-0.5">{week.theme}</p>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="text-xs text-slate-400">{completedCount}/{totalCount}</span>
+                                <div className="w-20 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-emerald-500 rounded-full transition-all"
+                                    style={{ width: `${weekProgress}%` }}
+                                  />
                                 </div>
-                                <div className="text-right">
-                                  <div className="text-sm font-bold text-white mb-1">{completedCount}/{totalCount} Tasks</div>
-                                  <div className="flex items-center space-x-2">
-                                    <div className="w-24 h-2 bg-slate-800 rounded-full overflow-hidden">
-                                      <div
-                                        className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-300"
-                                        style={{ width: `${weekProgress}%` }}
-                                      />
-                                    </div>
-                                    <span className="text-xs font-bold text-slate-400">{weekProgress}%</span>
-                                  </div>
-                                </div>
+                                <span className="text-xs font-bold text-slate-400">{weekProgress}%</span>
                               </div>
                             </div>
-                          </div>
-                          <div className="divide-y divide-white/5">
-                            {week.tasks?.map((task) => (
-                              <div key={task.id} className="p-8 hover:bg-white/5 transition-colors group relative">
-                                <div className="flex items-start space-x-6">
-                                  <div className={`p-3 rounded-xl shrink-0 ${task.type === 'project' ? 'bg-purple-500/20 text-purple-300' :
-                                    task.type === 'course' ? 'bg-blue-500/20 text-blue-300' :
-                                      'bg-amber-500/20 text-amber-300'
-                                    }`}>
-                                    {task.type === 'project' ? <Briefcase className="w-6 h-6" /> :
-                                      task.type === 'course' ? <PlayCircle className="w-6 h-6" /> :
-                                        <BookOpen className="w-6 h-6" />}
-                                  </div>
-                                  <div className="flex-1">
-                                    <div className="flex justify-between items-start pr-8">
-                                      <h4 className={`text-lg font-bold mb-2 transition-all ${task.completed ? 'text-slate-500 line-through' : 'text-white'}`}>
-                                        {task.title}
-                                      </h4>
-                                      <span className="text-xs font-bold px-2 py-1 bg-white/10 rounded text-slate-400 flex items-center shrink-0">
-                                        <Clock className="w-3 h-3 mr-1.5" />
-                                        {task.estimatedHours}h
-                                      </span>
+
+                            {/* Tasks */}
+                            <div className="divide-y divide-white/5">
+                              {week.tasks?.map((task) => (
+                                <div key={task.id} className="px-5 py-4 hover:bg-white/5 transition-colors group relative">
+                                  <div className="flex items-start gap-4">
+                                    {/* Icon */}
+                                    <div className={`p-2 rounded-lg shrink-0 ${task.type === 'project' ? 'bg-purple-500/10 text-purple-400' :
+                                      task.type === 'course' ? 'bg-blue-500/10 text-blue-400' :
+                                        'bg-amber-500/10 text-amber-400'
+                                      }`}>
+                                      {task.type === 'project' ? <Briefcase className="w-4 h-4" /> :
+                                        task.type === 'course' ? <PlayCircle className="w-4 h-4" /> :
+                                          <BookOpen className="w-4 h-4" />}
                                     </div>
-                                    <p className="text-sm text-slate-400 mb-4 leading-relaxed">{task.description}</p>
 
-                                    <div className="flex items-center space-x-4 mt-2">
-                                      {/* Video Resource Link */}
-                                      {task.videoQuery && (
-                                        <a
-                                          href={`https://www.youtube.com/results?search_query=${encodeURIComponent(task.videoQuery)}`}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="inline-flex items-center text-xs font-bold text-red-400 hover:text-red-300 bg-red-500/10 px-3 py-1.5 rounded-lg border border-red-500/20 transition-colors"
-                                        >
-                                          <Youtube className="w-3 h-3 mr-2" /> Watch Tutorial
-                                        </a>
-                                      )}
+                                    {/* Content */}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-start justify-between gap-2">
+                                        <h4 className={`text-sm font-bold transition-all ${task.completed ? 'text-slate-500 line-through' : 'text-white'}`}>
+                                          {task.title}
+                                        </h4>
+                                        <span className="text-[11px] font-bold px-2 py-0.5 bg-slate-800 rounded text-slate-400 shrink-0">
+                                          {task.estimatedHours}h
+                                        </span>
+                                      </div>
+                                      <p className="text-xs text-slate-400 mt-1 line-clamp-2">{task.description}</p>
 
-                                      <button
-                                        onClick={() => handleToggleTask(idx, task.id)}
-                                        className={`text-xs font-bold transition-all inline-flex items-center ${task.completed
-                                          ? 'text-emerald-400'
-                                          : 'text-indigo-400 opacity-0 group-hover:opacity-100'
-                                          } hover:text-indigo-300`}
-                                      >
-                                        {task.completed ? (
-                                          <><Check className="w-3 h-3 mr-1" /> Done</>
-                                        ) : (
-                                          <>Mark Done <ChevronRight className="w-3 h-3 ml-1" /></>
+                                      <div className="flex items-center gap-3 mt-3">
+                                        {task.videoQuery && (
+                                          <a
+                                            href={`https://www.youtube.com/results?search_query=${encodeURIComponent(task.videoQuery)}`}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="inline-flex items-center text-[11px] font-bold text-red-400 hover:text-red-300 bg-red-500/10 px-2 py-1 rounded border border-red-500/20 transition-colors"
+                                          >
+                                            <Youtube className="w-3 h-3 mr-1.5" /> Watch
+                                          </a>
                                         )}
-                                      </button>
-                                    </div>
-                                  </div>
-                                  <button
-                                    onClick={() => handleDeleteTask(idx, task.id)}
-                                    className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 p-2 text-slate-600 hover:text-red-400 transition-all"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
 
-                            {/* Add Task UI */}
-                            <div className="p-4 bg-white/5">
-                              {addingTaskWeek === idx ? (
-                                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-700 animate-in fade-in slide-in-from-top-2">
-                                  <div className="space-y-4">
-                                    <input
-                                      type="text"
-                                      value={newTaskTitle}
-                                      onChange={(e) => setNewTaskTitle(e.target.value)}
-                                      placeholder="Task title..."
-                                      className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white focus:ring-1 focus:ring-indigo-500 outline-none"
-                                    />
-                                    <div className="flex space-x-3">
-                                      <select
-                                        value={newTaskType}
-                                        onChange={(e) => setNewTaskType(e.target.value as any)}
-                                        className="bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-slate-300 outline-none"
-                                      >
-                                        <option value="reading">Reading</option>
-                                        <option value="course">Course</option>
-                                        <option value="project">Project</option>
-                                      </select>
-                                      <input
-                                        type="number"
-                                        value={newTaskHours}
-                                        onChange={(e) => setNewTaskHours(Number(e.target.value))}
-                                        min={0.5}
-                                        step={0.5}
-                                        className="w-24 bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white outline-none"
-                                      />
-                                      <div className="flex-1"></div>
-                                      <button
-                                        onClick={() => setAddingTaskWeek(null)}
-                                        className="p-3 text-slate-400 hover:text-white"
-                                      >
-                                        <X className="w-5 h-5" />
-                                      </button>
-                                      <button
-                                        onClick={() => handleAddTask(idx)}
-                                        className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-xl"
-                                      >
-                                        Add Task
-                                      </button>
+                                        <button
+                                          onClick={() => handleToggleTask(idx, task.id)}
+                                          className={`text-[11px] font-bold transition-all inline-flex items-center ${task.completed
+                                            ? 'text-emerald-400'
+                                            : 'text-indigo-400 opacity-0 group-hover:opacity-100'
+                                            }`}
+                                        >
+                                          {task.completed ? (
+                                            <><Check className="w-3 h-3 mr-1" /> Done</>
+                                          ) : (
+                                            <>Mark Done <ChevronRight className="w-3 h-3 ml-1" /></>
+                                          )}
+                                        </button>
+                                      </div>
                                     </div>
+
+                                    {/* Delete Button */}
+                                    <button
+                                      onClick={() => handleDeleteTask(idx, task.id)}
+                                      className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-600 hover:text-red-400 transition-all shrink-0"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
                                   </div>
                                 </div>
-                              ) : (
-                                <button
-                                  onClick={() => setAddingTaskWeek(idx)}
-                                  className="w-full py-3 flex items-center justify-center text-sm font-medium text-slate-500 hover:text-indigo-400 border border-dashed border-white/10 hover:border-indigo-500/50 rounded-xl transition-all"
-                                >
-                                  <Plus className="w-4 h-4 mr-2" /> Add Custom Task
-                                </button>
-                              )}
+                              ))}
+
+                              {/* Add Task UI */}
+                              <div className="p-3 bg-slate-800/30">
+                                {addingTaskWeek === idx ? (
+                                  <div className="bg-slate-900 p-4 rounded-lg border border-slate-700">
+                                    <div className="space-y-3">
+                                      <input
+                                        type="text"
+                                        value={newTaskTitle}
+                                        onChange={(e) => setNewTaskTitle(e.target.value)}
+                                        placeholder="Task title..."
+                                        className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:ring-1 focus:ring-indigo-500 outline-none"
+                                      />
+                                      <div className="flex gap-2">
+                                        <select
+                                          value={newTaskType}
+                                          onChange={(e) => setNewTaskType(e.target.value as any)}
+                                          className="bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-300 outline-none"
+                                        >
+                                          <option value="reading">Reading</option>
+                                          <option value="course">Course</option>
+                                          <option value="project">Project</option>
+                                        </select>
+                                        <input
+                                          type="number"
+                                          value={newTaskHours}
+                                          onChange={(e) => setNewTaskHours(Number(e.target.value))}
+                                          min={0.5}
+                                          step={0.5}
+                                          className="w-20 bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-sm text-white outline-none"
+                                        />
+                                        <div className="flex-1"></div>
+                                        <button
+                                          onClick={() => setAddingTaskWeek(null)}
+                                          className="p-2.5 text-slate-400 hover:text-white"
+                                        >
+                                          <X className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleAddTask(idx)}
+                                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-lg"
+                                        >
+                                          Add
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => setAddingTaskWeek(idx)}
+                                    className="w-full py-2.5 flex items-center justify-center text-xs font-medium text-slate-500 hover:text-indigo-400 border border-dashed border-white/10 hover:border-indigo-500/50 rounded-lg transition-all"
+                                  >
+                                    <Plus className="w-3.5 h-3.5 mr-1.5" /> Add Task
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                        );
+                      })}
+                    </>
+                  )}
+                </div>
               </div>
             )}
 
             {/* Projects Hub View */}
             {view === AppView.PROJECTS && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {/* Header Section with Gradient */}
-                <div className="relative overflow-hidden bg-gradient-to-br from-indigo-900/40 via-purple-900/30 to-slate-900/40 rounded-3xl border border-indigo-500/20 p-8 backdrop-blur-xl">
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.1),transparent_50%)]" />
-                  <div className="relative flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div>
-                      <h3 className="text-3xl font-bold text-white mb-2 flex items-center">
-                        <Code className="w-8 h-8 mr-3 text-indigo-400" />
-                        Portfolio Builder
-                      </h3>
-                      <p className="text-slate-300 text-sm max-w-2xl">
-                        AI-powered project ideas tailored to <span className="text-indigo-400 font-semibold">{userProfile.targetRole}</span> at your target companies
-                      </p>
-                    </div>
-                    <button
-                      onClick={handleGenerateProjects}
-                      disabled={isGeneratingProjects}
-                      className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center transition-all shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isGeneratingProjects ? (
-                        <>
-                          <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                          Generating...
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw className="w-5 h-5 mr-2" />
-                          Generate New Ideas
-                        </>
-                      )}
-                    </button>
+              <div className="flex-1 flex flex-col overflow-hidden">
+                {/* Compact Header */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center px-6 py-4 border-b border-white/5 gap-4 sm:gap-0">
+                  <div>
+                    <h1 className="text-xl font-bold text-white">Portfolio Builder</h1>
+                    <p className="text-sm text-slate-500 mt-0.5">AI-generated projects for <span className="text-slate-300">{userProfile.targetRole}</span></p>
                   </div>
+                  <button
+                    onClick={handleGenerateProjects}
+                    disabled={isGeneratingProjects}
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/10"
+                  >
+                    {isGeneratingProjects ? (
+                      <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Generating...</>
+                    ) : (
+                      <><RefreshCw className="w-4 h-4 mr-2" /> Generate Ideas</>
+                    )}
+                  </button>
                 </div>
 
-                {/* Loading State - Full page centered (same as initial page load) */}
-                {isGeneratingProjects && projects?.length === 0 && (
-                  <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-slate-500">
-                    {/* CSS Animation */}
-                    <style>{`
+                {/* Main Content */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+
+                  {/* Loading State - Full page centered (same as initial page load) */}
+                  {isGeneratingProjects && projects?.length === 0 && (
+                    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-slate-500">
+                      {/* CSS Animation */}
+                      <style>{`
                     @keyframes iconPulse {
                       0%, 100% { opacity: 0.3; transform: scale(1); color: #64748b; }
                       50% { opacity: 1; transform: scale(1.15); color: #818cf8; }
@@ -2549,433 +2594,345 @@ const App = () => {
                     }
                   `}</style>
 
-                    {/* Career Icons Animation */}
-                    <div className="flex items-center gap-6 mb-8">
-                      {/* Resume/FileText icon */}
-                      <svg className="portfolio-loader-icon" style={{ animationDelay: '0s' }} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M15 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7z"></path>
-                        <polyline points="14 2 14 8 20 8"></polyline>
-                        <line x1="16" y1="13" x2="8" y2="13"></line>
-                        <line x1="16" y1="17" x2="8" y2="17"></line>
-                        <line x1="10" y1="9" x2="8" y2="9"></line>
-                      </svg>
-                      {/* Code icon */}
-                      <svg className="portfolio-loader-icon" style={{ animationDelay: '0.15s' }} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="16 18 22 12 16 6"></polyline>
-                        <polyline points="8 6 2 12 8 18"></polyline>
-                      </svg>
-                      {/* Layers icon */}
-                      <svg className="portfolio-loader-icon" style={{ animationDelay: '0.3s' }} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
-                        <polyline points="2 17 12 22 22 17"></polyline>
-                        <polyline points="2 12 12 17 22 12"></polyline>
-                      </svg>
-                      {/* Briefcase icon */}
-                      <svg className="portfolio-loader-icon" style={{ animationDelay: '0.45s' }} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
-                        <path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"></path>
-                      </svg>
-                      {/* MessageSquare icon */}
-                      <svg className="portfolio-loader-icon" style={{ animationDelay: '0.6s' }} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"></path>
-                      </svg>
+                      {/* Career Icons Animation */}
+                      <div className="flex items-center gap-6 mb-8">
+                        {/* Resume/FileText icon */}
+                        <svg className="portfolio-loader-icon" style={{ animationDelay: '0s' }} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M15 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7z"></path>
+                          <polyline points="14 2 14 8 20 8"></polyline>
+                          <line x1="16" y1="13" x2="8" y2="13"></line>
+                          <line x1="16" y1="17" x2="8" y2="17"></line>
+                          <line x1="10" y1="9" x2="8" y2="9"></line>
+                        </svg>
+                        {/* Code icon */}
+                        <svg className="portfolio-loader-icon" style={{ animationDelay: '0.15s' }} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="16 18 22 12 16 6"></polyline>
+                          <polyline points="8 6 2 12 8 18"></polyline>
+                        </svg>
+                        {/* Layers icon */}
+                        <svg className="portfolio-loader-icon" style={{ animationDelay: '0.3s' }} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                          <polyline points="2 17 12 22 22 17"></polyline>
+                          <polyline points="2 12 12 17 22 12"></polyline>
+                        </svg>
+                        {/* Briefcase icon */}
+                        <svg className="portfolio-loader-icon" style={{ animationDelay: '0.45s' }} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                          <path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"></path>
+                        </svg>
+                        {/* MessageSquare icon */}
+                        <svg className="portfolio-loader-icon" style={{ animationDelay: '0.6s' }} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"></path>
+                        </svg>
+                      </div>
+
+                      {/* Loading Text */}
+                      <p className="text-slate-400 text-sm tracking-wide">
+                        Crafting Your Perfect Projects
+                        <span className="inline-flex gap-1 ml-1">
+                          <span className="w-1 h-1 bg-indigo-400 rounded-full" style={{ animation: 'dotBounce 1.2s ease-in-out infinite', animationDelay: '0s' }}></span>
+                          <span className="w-1 h-1 bg-indigo-400 rounded-full" style={{ animation: 'dotBounce 1.2s ease-in-out infinite', animationDelay: '0.15s' }}></span>
+                          <span className="w-1 h-1 bg-indigo-400 rounded-full" style={{ animation: 'dotBounce 1.2s ease-in-out infinite', animationDelay: '0.3s' }}></span>
+                        </span>
+                      </p>
                     </div>
+                  )}
 
-                    {/* Loading Text */}
-                    <p className="text-slate-400 text-sm tracking-wide">
-                      Crafting Your Perfect Projects
-                      <span className="inline-flex gap-1 ml-1">
-                        <span className="w-1 h-1 bg-indigo-400 rounded-full" style={{ animation: 'dotBounce 1.2s ease-in-out infinite', animationDelay: '0s' }}></span>
-                        <span className="w-1 h-1 bg-indigo-400 rounded-full" style={{ animation: 'dotBounce 1.2s ease-in-out infinite', animationDelay: '0.15s' }}></span>
-                        <span className="w-1 h-1 bg-indigo-400 rounded-full" style={{ animation: 'dotBounce 1.2s ease-in-out infinite', animationDelay: '0.3s' }}></span>
-                      </span>
-                    </p>
-                  </div>
-                )}
+                  {/* Projects Grid */}
+                  {/* Empty State */}
+                  {!isGeneratingProjects && (!projects || projects.length === 0) && (
+                    <EmptyState
+                      icon={Code}
+                      title="No Projects Yet"
+                      description="Generate your first portfolio project tailored to your target role. We'll give you the tech stack, features, and difficulty level."
+                      actionLabel="Generate New Ideas"
+                      onAction={handleGenerateProjects}
+                      color="indigo"
+                    />
+                  )}
 
-                {/* Projects Grid */}
-                {/* Empty State */}
-                {!isGeneratingProjects && (!projects || projects.length === 0) && (
-                  <EmptyState
-                    icon={Code}
-                    title="No Projects Yet"
-                    description="Generate your first portfolio project tailored to your target role. We'll give you the tech stack, features, and difficulty level."
-                    actionLabel="Generate New Ideas"
-                    onAction={handleGenerateProjects}
-                    color="indigo"
-                  />
-                )}
-
-                {/* Projects Grid */}
-                {projects?.length > 0 && (
-                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {projects?.map((project, idx) => (
-                      <div
-                        key={idx}
-                        className="group relative bg-gradient-to-br from-white/5 to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden hover:border-indigo-500/50 transition-all duration-300 hover:shadow-2xl hover:shadow-indigo-500/20 hover:-translate-y-1"
-                      >
-                        {/* Gradient Overlay on Hover */}
-                        <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/0 to-purple-500/0 group-hover:from-indigo-500/10 group-hover:to-purple-500/10 transition-all duration-300" />
-
-                        {/* Card Content */}
-                        <div className="relative p-6 flex flex-col h-full">
-                          {/* Header with Difficulty Badge */}
-                          <div className="flex justify-between items-start mb-4">
-                            <div className={`px-3 py-1.5 rounded-lg text-xs font-bold border shadow-lg ${project.difficulty === 'Beginner'
-                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30 shadow-emerald-500/20'
-                              : project.difficulty === 'Intermediate'
-                                ? 'bg-blue-500/20 text-blue-300 border-blue-500/30 shadow-blue-500/20'
-                                : 'bg-purple-500/20 text-purple-300 border-purple-500/30 shadow-purple-500/20'
-                              }`}>
-                              {project.difficulty}
+                  {/* Projects Grid */}
+                  {projects?.length > 0 && (
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {projects?.map((project, idx) => (
+                        <div
+                          key={idx}
+                          className="group bg-slate-900/50 rounded-xl border border-white/5 hover:border-indigo-500/30 transition-all overflow-hidden"
+                        >
+                          <div className="p-5 flex flex-col h-full">
+                            {/* Header Row */}
+                            <div className="flex items-start justify-between mb-3">
+                              <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold ${project.difficulty === 'Beginner'
+                                ? 'bg-emerald-500/10 text-emerald-400'
+                                : project.difficulty === 'Intermediate'
+                                  ? 'bg-blue-500/10 text-blue-400'
+                                  : 'bg-purple-500/10 text-purple-400'
+                                }`}>
+                                {project.difficulty}
+                              </span>
+                              <Layers className="w-4 h-4 text-slate-600" />
                             </div>
-                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center border border-slate-700 group-hover:border-indigo-500/50 transition-all">
-                              <Layers className="w-5 h-5 text-slate-400 group-hover:text-indigo-400 transition-colors" />
-                            </div>
-                          </div>
 
-                          {/* Project Title */}
-                          <h4 className="text-xl font-bold text-white mb-3 group-hover:text-indigo-400 transition-colors leading-tight">
-                            {project.title}
-                          </h4>
+                            {/* Title */}
+                            <h4 className="text-lg font-bold text-white mb-2 group-hover:text-indigo-400 transition-colors line-clamp-2">
+                              {project.title}
+                            </h4>
 
-                          {/* Description */}
-                          <p className="text-slate-400 text-sm mb-4 flex-1 leading-relaxed line-clamp-3">
-                            {project.description}
-                          </p>
+                            {/* Description */}
+                            <p className="text-sm text-slate-400 mb-4 flex-1 line-clamp-2 leading-relaxed">
+                              {project.description}
+                            </p>
 
-                          {/* Tech Stack */}
-                          <div className="mb-4">
-                            <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center">
-                              <Code className="w-3 h-3 mr-1.5" />
-                              Tech Stack
-                            </h5>
-                            <div className="flex flex-wrap gap-2">
-                              {project.techStack?.slice(0, 4).map(t => (
-                                <span
-                                  key={t}
-                                  className="text-xs bg-slate-800/80 text-slate-300 px-2.5 py-1 rounded-lg border border-slate-700 hover:border-indigo-500/50 transition-colors"
-                                >
-                                  {t}
-                                </span>
-                              ))}
-                              {project.techStack?.length > 4 && (
-                                <span className="text-xs bg-slate-800/80 text-slate-400 px-2.5 py-1 rounded-lg border border-slate-700">
-                                  +{project.techStack.length - 4} more
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Key Features - Collapsible */}
-                          {project.keyFeatures && project.keyFeatures.length > 0 && (
+                            {/* Tech Stack */}
                             <div className="mb-4">
-                              <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center">
-                                <CheckCircle className="w-3 h-3 mr-1.5" />
-                                Key Features
-                              </h5>
-                              <ul className="space-y-1.5">
-                                {project.keyFeatures.slice(0, 3).map((feature, fIdx) => (
-                                  <li key={fIdx} className="text-xs text-slate-400 flex items-start">
-                                    <ChevronRight className="w-3 h-3 mr-1 mt-0.5 text-indigo-400 shrink-0" />
-                                    <span className="line-clamp-1">{feature}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-
-                          {/* Resume Value Highlight */}
-                          <div className="bg-gradient-to-br from-indigo-900/30 to-purple-900/20 p-4 rounded-xl border border-indigo-500/30 mb-4 relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-20 h-20 bg-indigo-500/10 rounded-full blur-2xl" />
-                            <div className="relative flex items-start space-x-2">
-                              <TrendingUp className="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" />
-                              <div>
-                                <p className="text-xs font-bold text-indigo-300 mb-1">Resume Impact</p>
-                                <p className="text-xs text-indigo-200/90 italic leading-relaxed">"{project.resumeValue}"</p>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Learning Outcomes */}
-                          {project.learningOutcomes && project.learningOutcomes.length > 0 && (
-                            <div className="mb-4 pb-4 border-b border-slate-700/50">
-                              <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center">
-                                <Award className="w-3 h-3 mr-1.5" />
-                                You'll Learn
-                              </h5>
                               <div className="flex flex-wrap gap-1.5">
-                                {project.learningOutcomes.slice(0, 3).map((outcome, oIdx) => (
-                                  <span
-                                    key={oIdx}
-                                    className="text-xs bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded border border-emerald-500/20"
-                                  >
-                                    {outcome}
+                                {project.techStack?.slice(0, 4).map(t => (
+                                  <span key={t} className="text-[11px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded">
+                                    {t}
                                   </span>
                                 ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Implementation Steps Preview */}
-                          {project.implementationFlow && project.implementationFlow.length > 0 && (
-                            <div className="mb-4">
-                              <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center">
-                                <List className="w-3 h-3 mr-1.5" />
-                                Implementation Steps
-                              </h5>
-                              <div className="space-y-1.5">
-                                {project.implementationFlow.slice(0, 2).map((step, sIdx) => (
-                                  <div key={sIdx} className="flex items-start text-xs text-slate-400">
-                                    <span className="text-indigo-400 font-bold mr-2 shrink-0">{sIdx + 1}.</span>
-                                    <span className="line-clamp-1">{step}</span>
-                                  </div>
-                                ))}
-                                {project.implementationFlow.length > 2 && (
-                                  <p className="text-xs text-slate-500 italic ml-5">+{project.implementationFlow.length - 2} more steps...</p>
+                                {project.techStack?.length > 4 && (
+                                  <span className="text-[11px] bg-slate-800 text-slate-500 px-2 py-0.5 rounded">
+                                    +{project.techStack.length - 4}
+                                  </span>
                                 )}
                               </div>
                             </div>
-                          )}
 
-                          {/* Action Button */}
-                          <button
-                            onClick={() => setSelectedProject(project)}
-                            className="w-full mt-auto bg-gradient-to-r from-indigo-600/80 to-purple-600/80 hover:from-indigo-600 hover:to-purple-600 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center transition-all shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40 group-hover:scale-[1.02]"
-                          >
-                            <ExternalLink className="w-4 h-4 mr-2" />
-                            View Full Details
-                          </button>
+                            {/* Resume Impact - Simplified */}
+                            <div className="bg-indigo-500/5 rounded-lg p-3 mb-4 border border-indigo-500/10">
+                              <div className="flex items-start gap-2">
+                                <TrendingUp className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
+                                <p className="text-xs text-indigo-200/80 italic line-clamp-2">"{project.resumeValue}"</p>
+                              </div>
+                            </div>
+
+                            {/* Action Button */}
+                            <button
+                              onClick={() => setSelectedProject(project)}
+                              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 rounded-lg font-bold text-sm flex items-center justify-center transition-all"
+                            >
+                              <ExternalLink className="w-4 h-4 mr-2" />
+                              View Details
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  )}
 
-                {/* Empty State */}
-                {!isGeneratingProjects && projects?.length === 0 && (
-                  <div className="text-center py-24 bg-gradient-to-br from-white/5 to-indigo-500/5 rounded-3xl border border-white/10 relative overflow-hidden">
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(99,102,241,0.1),transparent_70%)]" />
-                    <div className="relative">
-                      <div className="w-20 h-20 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-indigo-500/30">
-                        <Code className="w-10 h-10 text-indigo-400" />
+                  {/* Empty State */}
+                  {!isGeneratingProjects && projects?.length === 0 && (
+                    <div className="text-center py-16">
+                      <div className="w-14 h-14 bg-indigo-500/10 rounded-xl flex items-center justify-center mx-auto mb-4">
+                        <Code className="w-7 h-7 text-indigo-400" />
                       </div>
-                      <h3 className="text-2xl font-bold text-white mb-3">Build Your Portfolio</h3>
-                      <p className="text-slate-400 mb-8 max-w-md mx-auto leading-relaxed">
-                        Stuck on what to build? Get 3 tailored project ideas (Beginner to Advanced) designed to impress recruiters at <span className="text-indigo-400 font-semibold">{userProfile.targetCompanies || 'top companies'}</span>.
+                      <h3 className="text-lg font-bold text-white mb-2">Build Your Portfolio</h3>
+                      <p className="text-sm text-slate-400 mb-6 max-w-sm mx-auto">
+                        Get 3 project ideas (Beginner to Advanced) designed to impress recruiters.
                       </p>
                       <button
                         onClick={handleGenerateProjects}
-                        className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-8 py-4 rounded-xl font-bold text-base flex items-center mx-auto transition-all shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:scale-105"
+                        className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-xl font-bold text-sm flex items-center mx-auto transition-all"
                       >
-                        <Code className="w-5 h-5 mr-2" />
-                        Generate Projects Now
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Generate Projects
                       </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Project Details Modal */}
+                {selectedProject && (
+                  <div
+                    className="fixed inset-0 md:left-64 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
+                    onClick={() => setSelectedProject(null)}
+                  >
+                    <div
+                      className="bg-slate-900 rounded-xl border border-white/10 max-w-3xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {/* Modal Header */}
+                      <div className="sticky top-0 bg-slate-900/95 backdrop-blur-sm border-b border-white/5 px-6 py-4 z-10">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 pr-4">
+                            <div className="flex items-center gap-3 mb-2">
+                              <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold ${selectedProject.difficulty === 'Beginner'
+                                ? 'bg-emerald-500/10 text-emerald-400'
+                                : selectedProject.difficulty === 'Intermediate'
+                                  ? 'bg-blue-500/10 text-blue-400'
+                                  : 'bg-purple-500/10 text-purple-400'
+                                }`}>
+                                {selectedProject.difficulty}
+                              </span>
+                            </div>
+                            <h2 className="text-xl font-bold text-white mb-1">{selectedProject.title}</h2>
+                            <p className="text-sm text-slate-400 line-clamp-1">{selectedProject.techStack?.join(' • ')}</p>
+                          </div>
+                          <button
+                            onClick={() => setSelectedProject(null)}
+                            className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center transition-all shrink-0"
+                          >
+                            <X className="w-4 h-4 text-slate-400" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Modal Content */}
+                      <div className="p-6 space-y-6">
+                        {/* Description */}
+                        <div>
+                          <p className="text-sm text-slate-300 leading-relaxed">{selectedProject.description}</p>
+                        </div>
+                        {/* User Stories Section */}
+                        {selectedProject.userStories && selectedProject.userStories.length > 0 && (
+                          <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
+                            <h3 className="text-sm font-bold text-white mb-3 flex items-center">
+                              <Users className="w-4 h-4 mr-2 text-indigo-400" />
+                              User Stories
+                            </h3>
+                            <ul className="space-y-2">
+                              {selectedProject.userStories.map((story, idx) => (
+                                <li key={idx} className="text-sm text-slate-300 flex items-start">
+                                  <span className="text-indigo-400 mr-2">•</span>
+                                  {story}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Key Features Section */}
+                        {selectedProject.keyFeatures && selectedProject.keyFeatures.length > 0 && (
+                          <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
+                            <h3 className="text-sm font-bold text-white mb-3 flex items-center">
+                              <CheckCircle className="w-4 h-4 mr-2 text-emerald-400" />
+                              Key Features
+                            </h3>
+                            <ul className="space-y-2">
+                              {selectedProject.keyFeatures.map((feature, idx) => (
+                                <li key={idx} className="text-sm text-slate-300 flex items-start">
+                                  <span className="text-emerald-400 mr-2">•</span>
+                                  {feature}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Implementation Steps Section */}
+                        {selectedProject.implementationFlow && selectedProject.implementationFlow.length > 0 && (
+                          <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
+                            <h3 className="text-sm font-bold text-white mb-3 flex items-center">
+                              <List className="w-4 h-4 mr-2 text-indigo-400" />
+                              Implementation Steps
+                            </h3>
+                            <div className="space-y-2">
+                              {selectedProject.implementationFlow.map((step, idx) => (
+                                <div key={idx} className="flex items-start text-sm text-slate-300">
+                                  <span className="text-indigo-400 font-bold mr-2 shrink-0">{idx + 1}.</span>
+                                  <span>{step.replace(/^\d+\.\s*/, '')}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* You'll Learn Section */}
+                        {selectedProject.learningOutcomes && selectedProject.learningOutcomes.length > 0 && (
+                          <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
+                            <h3 className="text-sm font-bold text-white mb-3 flex items-center">
+                              <Award className="w-4 h-4 mr-2 text-amber-400" />
+                              You'll Learn
+                            </h3>
+                            <div className="flex flex-wrap gap-2">
+                              {selectedProject.learningOutcomes.map((outcome, idx) => (
+                                <span key={idx} className="text-xs bg-amber-500/10 text-amber-400 px-2.5 py-1 rounded border border-amber-500/20">
+                                  {outcome}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Resume Value */}
+                        <div className="bg-indigo-500/5 rounded-lg p-4 border border-indigo-500/10">
+                          <div className="flex items-start gap-3">
+                            <TrendingUp className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-xs font-bold text-indigo-300 mb-1">Resume Impact</p>
+                              <p className="text-sm text-indigo-200/80 italic">"{selectedProject.resumeValue}"</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Implementation Resources */}
+                        {selectedProject.implementationResources && selectedProject.implementationResources.length > 0 && (
+                          <div>
+                            <h3 className="text-sm font-bold text-white mb-3 flex items-center">
+                              <ExternalLink className="w-4 h-4 mr-2 text-blue-400" />
+                              Resources
+                            </h3>
+                            <div className="space-y-2">
+                              {selectedProject.implementationResources.map((resource, idx) => (
+                                <a
+                                  key={idx}
+                                  href={resource.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center justify-between p-3 bg-slate-800/50 hover:bg-slate-800 rounded-lg border border-white/5 transition-all group"
+                                >
+                                  <span className="text-sm text-slate-300 group-hover:text-white">{resource.name}</span>
+                                  <ExternalLink className="w-3.5 h-3.5 text-slate-500 group-hover:text-indigo-400" />
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Source Paper */}
+                        {selectedProject.sourcePaper && (
+                          <div className="bg-amber-500/5 rounded-lg p-4 border border-amber-500/10">
+                            <h3 className="text-sm font-bold text-amber-300 mb-2 flex items-center">
+                              <FileText className="w-4 h-4 mr-2" />
+                              Research Paper
+                            </h3>
+                            <p className="text-sm text-white font-medium mb-1">{selectedProject.sourcePaper.title}</p>
+                            <p className="text-xs text-slate-400 mb-2">{selectedProject.sourcePaper.authors.join(', ')}</p>
+                            <a
+                              href={selectedProject.sourcePaper.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center text-xs text-amber-400 hover:text-amber-300 font-medium"
+                            >
+                              Read Paper <ExternalLink className="w-3 h-3 ml-1" />
+                            </a>
+                          </div>
+                        )}
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-3 pt-2">
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(`${selectedProject.title}\n\n${selectedProject.description}\n\nTech Stack: ${selectedProject.techStack?.join(', ')}`);
+                              alert('Project details copied to clipboard!');
+                            }}
+                            className="flex-1 bg-slate-800 hover:bg-slate-700 text-white py-2.5 rounded-lg font-bold text-sm flex items-center justify-center transition-all"
+                          >
+                            <Copy className="w-4 h-4 mr-2" />
+                            Copy
+                          </button>
+                          <button
+                            onClick={() => setSelectedProject(null)}
+                            className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 rounded-lg font-bold text-sm flex items-center justify-center transition-all"
+                          >
+                            Done
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
-              </div>
-            )}
-
-            {/* Project Details Modal */}
-            {selectedProject && (
-              <div
-                className="fixed inset-0 md:left-64 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300"
-                onClick={() => setSelectedProject(null)}
-              >
-                <div
-                  className="bg-gradient-to-br from-slate-900 to-slate-950 rounded-3xl border border-indigo-500/30 max-w-4xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl shadow-indigo-500/20"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {/* Blueprint Header */}
-                  <div className="sticky top-0 bg-gradient-to-r from-indigo-900/60 to-purple-900/40 backdrop-blur-xl border-b border-indigo-500/30 p-6 z-10">
-                    <div className="flex flex-col items-center text-center relative">
-                      <button
-                        onClick={() => setSelectedProject(null)}
-                        className="absolute right-0 top-0 w-10 h-10 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-indigo-500/50 flex items-center justify-center transition-all"
-                      >
-                        <X className="w-5 h-5 text-slate-400 hover:text-white" />
-                      </button>
-
-                      <div className="text-xs font-bold text-indigo-400 tracking-widest uppercase mb-2">
-                        CareerPilot AI Project Blueprint
-                      </div>
-                      <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">{selectedProject.title}</h2>
-                      <div className="flex flex-wrap items-center justify-center gap-3 mb-4">
-                        <span className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${selectedProject.difficulty === 'Beginner'
-                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                          : selectedProject.difficulty === 'Intermediate'
-                            ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
-                            : 'bg-purple-500/20 text-purple-300 border-purple-500/30'
-                          }`}>
-                          {selectedProject.difficulty}
-                        </span>
-                        <span className="text-slate-400">|</span>
-                        <span className="text-slate-300 text-sm">{selectedProject.techStack?.join(', ')}</span>
-                      </div>
-                      <p className="text-slate-300 leading-relaxed max-w-2xl mx-auto">{selectedProject.description}</p>
-                    </div>
-                  </div>
-
-                  {/* Blueprint Content */}
-                  <div className="p-6 space-y-8">
-                    {/* User Stories Section - Only show if explicit user stories exist */}
-                    {selectedProject.userStories && selectedProject.userStories.length > 0 && (
-                      <div>
-                        <h3 className="text-xl font-bold text-white mb-4 flex items-center">
-                          <Users className="w-5 h-5 mr-3 text-indigo-400" />
-                          User Stories
-                        </h3>
-                        <ul className="space-y-3">
-                          {selectedProject.userStories.map((story, idx) => (
-                            <li key={idx} className="flex items-start text-slate-300">
-                              <span className="text-indigo-400 mr-3 mt-1">•</span>
-                              <span className="leading-relaxed">{story}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {/* Key Features Section */}
-                    {selectedProject.keyFeatures && selectedProject.keyFeatures.length > 0 && (
-                      <div>
-                        <h3 className="text-xl font-bold text-white mb-4 flex items-center">
-                          <CheckCircle className="w-5 h-5 mr-3 text-emerald-400" />
-                          Key Features
-                        </h3>
-                        <ul className="space-y-3">
-                          {selectedProject.keyFeatures.map((feature, idx) => (
-                            <li key={idx} className="flex items-start text-slate-300">
-                              <span className="text-emerald-400 mr-3 mt-1">•</span>
-                              <span className="leading-relaxed">{feature}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {/* Implementation Steps Section */}
-                    {selectedProject.implementationFlow && selectedProject.implementationFlow.length > 0 && (
-                      <div>
-                        <h3 className="text-xl font-bold text-white mb-4 flex items-center">
-                          <List className="w-5 h-5 mr-3 text-indigo-400" />
-                          Implementation Steps
-                        </h3>
-                        <div className="space-y-4">
-                          {selectedProject.implementationFlow.map((step, idx) => (
-                            <div key={idx} className="flex items-start">
-                              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 font-bold text-sm mr-4 mt-0.5">
-                                {idx + 1}
-                              </div>
-                              <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50 flex-1">
-                                <p className="text-slate-300 leading-relaxed">{step.replace(/^\d+\.\s*/, '')}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* You'll Learn Section */}
-                    {selectedProject.learningOutcomes && selectedProject.learningOutcomes.length > 0 && (
-                      <div>
-                        <h3 className="text-xl font-bold text-white mb-4 flex items-center">
-                          <Award className="w-5 h-5 mr-3 text-amber-400" />
-                          You'll Learn
-                        </h3>
-                        <ul className="space-y-3">
-                          {selectedProject.learningOutcomes.map((outcome, idx) => (
-                            <li key={idx} className="flex items-start text-slate-300">
-                              <span className="text-amber-400 mr-3 mt-1">•</span>
-                              <span className="leading-relaxed">{outcome}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {/* Resume Value */}
-                    <div className="bg-gradient-to-br from-indigo-900/30 to-purple-900/20 p-6 rounded-2xl border border-indigo-500/30 relative overflow-hidden">
-                      <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl" />
-                      <div className="relative">
-                        <h3 className="text-lg font-bold text-indigo-300 mb-2 flex items-center">
-                          <TrendingUp className="w-5 h-5 mr-2" />
-                          Resume Impact
-                        </h3>
-                        <p className="text-indigo-200 italic leading-relaxed">"{selectedProject.resumeValue}"</p>
-                      </div>
-                    </div>
-
-                    {/* Implementation Resources */}
-                    {selectedProject.implementationResources && selectedProject.implementationResources.length > 0 && (
-                      <div>
-                        <h3 className="text-lg font-bold text-white mb-3 flex items-center">
-                          <ExternalLink className="w-5 h-5 mr-2 text-blue-400" />
-                          Helpful Resources
-                        </h3>
-                        <div className="space-y-2">
-                          {selectedProject.implementationResources.map((resource, idx) => (
-                            <a
-                              key={idx}
-                              href={resource.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 hover:border-indigo-500/50 transition-all group"
-                            >
-                              <span className="text-slate-300 group-hover:text-white transition-colors">{resource.name}</span>
-                              <ExternalLink className="w-4 h-4 text-slate-500 group-hover:text-indigo-400 transition-colors" />
-                            </a>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Source Paper (if available) */}
-                    {selectedProject.sourcePaper && (
-                      <div className="bg-amber-900/20 p-6 rounded-2xl border border-amber-500/20">
-                        <h3 className="text-lg font-bold text-amber-300 mb-3 flex items-center">
-                          <FileText className="w-5 h-5 mr-2" />
-                          Research Paper Source
-                        </h3>
-                        <div className="space-y-2">
-                          <p className="text-white font-semibold">{selectedProject.sourcePaper.title}</p>
-                          <p className="text-slate-400 text-sm">{selectedProject.sourcePaper.authors.join(', ')}</p>
-                          <p className="text-slate-500 text-xs mb-3">{selectedProject.sourcePaper.publishedDate}</p>
-                          <p className="text-slate-300 text-sm mb-4">{selectedProject.sourcePaper.abstractSummary}</p>
-                          <a
-                            href={selectedProject.sourcePaper.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center text-amber-400 hover:text-amber-300 text-sm font-medium"
-                          >
-                            Read Full Paper <ExternalLink className="w-3 h-3 ml-1" />
-                          </a>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Action Buttons */}
-                    <div className="flex gap-3 pt-4">
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(`${selectedProject.title}\n\n${selectedProject.description}\n\nTech Stack: ${selectedProject.techStack?.join(', ')}`);
-                          alert('Project details copied to clipboard!');
-                        }}
-                        className="flex-1 bg-slate-800 hover:bg-slate-700 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center transition-all border border-slate-700 hover:border-indigo-500/50"
-                      >
-                        <Copy className="w-4 h-4 mr-2" />
-                        Copy Details
-                      </button>
-                      <button
-                        onClick={() => setSelectedProject(null)}
-                        className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center transition-all shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50"
-                      >
-                        Got It!
-                      </button>
-                    </div>
-                  </div>
-                </div>
               </div>
             )}
 
@@ -3033,213 +2990,150 @@ const App = () => {
 
             {/* Resume View */}
             {view === AppView.RESUME && /*userProfile.isResumePremium &&*/ (
-              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="bg-white/5 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-xl">
-                  <div className="flex justify-between items-center mb-8">
-                    <div>
-                      <h2 className="text-2xl font-bold text-white mb-2">Resume Architect</h2>
-                      <p className="text-slate-400">Transform your resume into an ATS-beating machine for {userProfile.targetRole}.</p>
-                    </div>
+              <div className="flex-1 flex flex-col overflow-hidden">
+                {/* Compact Header */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center px-6 py-4 border-b border-white/5 gap-4 sm:gap-0">
+                  <div>
+                    <h1 className="text-xl font-bold text-white">Resume Architect</h1>
+                    <p className="text-sm text-slate-500 mt-0.5">Transform your resume for <span className="text-slate-300">{userProfile.targetRole}</span></p>
                   </div>
+                  <button
+                    onClick={handleOptimizeResume}
+                    disabled={isOptimizingResume || !userProfile.githubProfile || !userProfile.linkedinProfile}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-500/10"
+                  >
+                    {isOptimizingResume ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                    {optimizedResume ? 'Regenerate' : 'Polish Resume'}
+                  </button>
+                </div>
 
-                  {/* Profile URLs Section - REQUIRED BEFORE OPTIMIZATION */}
-                  <div className="bg-gradient-to-br from-indigo-900/20 to-purple-900/20 p-6 rounded-2xl border border-indigo-500/30 mb-8">
-                    <div className="flex items-start mb-4">
-                      <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center mr-4 shrink-0">
-                        <Link className="w-5 h-5 text-indigo-400" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-bold text-white mb-1">Profile Links (Required)</h3>
-                        <p className="text-slate-400 text-sm">Add your professional profile URLs to include them in your optimized resume.</p>
+                {/* Main Content */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6">
+
+                  {/* Profile Links - Compact Row */}
+                  <div className="bg-slate-900/50 rounded-xl border border-white/5 p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center">
+                        <Link className="w-4 h-4 text-indigo-400 mr-2" />
+                        <span className="text-sm font-bold text-white">Profile Links</span>
+                        {(!userProfile.githubProfile || !userProfile.linkedinProfile) && (
+                          <span className="ml-2 text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">Required</span>
+                        )}
                       </div>
                     </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {/* GitHub - Syncs with Profile */}
-                      <div>
-                        <label className="block text-xs font-bold text-slate-400 mb-2 ml-1">
-                          <Github className="w-3 h-3 inline mr-1" />
-                          GitHub Profile
-                        </label>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div className="relative">
+                        <Github className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                         <input
                           type="url"
-                          placeholder="https://github.com/yourname"
+                          placeholder="GitHub URL"
                           value={userProfile.githubProfile || ''}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setUserProfile(prev => ({ ...prev, githubProfile: val }));
-                          }}
-                          className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder-slate-600"
+                          onChange={(e) => setUserProfile(prev => ({ ...prev, githubProfile: e.target.value }))}
+                          className="w-full bg-slate-800/50 border border-white/5 rounded-lg pl-10 pr-3 py-2.5 text-white text-sm outline-none focus:ring-1 focus:ring-indigo-500 transition-all placeholder-slate-600"
                         />
                       </div>
-
-                      {/* LinkedIn - Syncs with Profile */}
-                      <div>
-                        <label className="block text-xs font-bold text-slate-400 mb-2 ml-1">
-                          <Linkedin className="w-3 h-3 inline mr-1" />
-                          LinkedIn Profile
-                        </label>
+                      <div className="relative">
+                        <Linkedin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                         <input
                           type="url"
-                          placeholder="https://linkedin.com/in/yourname"
+                          placeholder="LinkedIn URL"
                           value={userProfile.linkedinProfile || ''}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setUserProfile(prev => ({ ...prev, linkedinProfile: val }));
-                          }}
-                          className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder-slate-600"
+                          onChange={(e) => setUserProfile(prev => ({ ...prev, linkedinProfile: e.target.value }))}
+                          className="w-full bg-slate-800/50 border border-white/5 rounded-lg pl-10 pr-3 py-2.5 text-white text-sm outline-none focus:ring-1 focus:ring-indigo-500 transition-all placeholder-slate-600"
                         />
                       </div>
-
-                      {/* LeetCode - Syncs with Profile */}
-                      <div>
-                        <label className="block text-xs font-bold text-slate-400 mb-2 ml-1">
-                          <Code className="w-3 h-3 inline mr-1" />
-                          LeetCode Profile (Optional)
-                        </label>
+                      <div className="relative">
+                        <Code className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                         <input
                           type="url"
-                          placeholder="https://leetcode.com/yourname"
+                          placeholder="LeetCode URL (Optional)"
                           value={userProfile.leetcodeProfile || ''}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setUserProfile(prev => ({ ...prev, leetcodeProfile: val }));
-                          }}
-                          className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder-slate-600"
+                          onChange={(e) => setUserProfile(prev => ({ ...prev, leetcodeProfile: e.target.value }))}
+                          className="w-full bg-slate-800/50 border border-white/5 rounded-lg pl-10 pr-3 py-2.5 text-white text-sm outline-none focus:ring-1 focus:ring-indigo-500 transition-all placeholder-slate-600"
                         />
                       </div>
                     </div>
-
-                    {/* Warning if URLs missing */}
-                    {(!userProfile.githubProfile || !userProfile.linkedinProfile) && (
-                      <div className="mt-4 flex items-start space-x-2 text-amber-400 text-sm bg-amber-500/10 p-3 rounded-lg border border-amber-500/20">
-                        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                        <p>Please add at least GitHub and LinkedIn URLs for a complete professional resume.</p>
-                      </div>
-                    )}
                   </div>
 
-                  {/* Optimize Button */}
-                  <div className="flex justify-end mb-8">
-                    <button
-                      onClick={handleOptimizeResume}
-                      disabled={isOptimizingResume || !userProfile.githubProfile || !userProfile.linkedinProfile}
-                      className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-8 py-4 rounded-xl font-bold hover:shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isOptimizingResume ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <RefreshCw className="w-5 h-5 mr-2" />}
-                      {optimizedResume ? 'Regenerate Version' : 'Polish My Resume'}
-                    </button>
-                  </div>
-
-                  {/* New Feature: ATS Score & Improvements Dashboard */}
+                  {/* ATS Score Impact - Only show after optimization */}
                   {resumeAnalysisResult && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 animate-in fade-in slide-in-from-top-4 duration-700">
-                      {/* Score Card */}
-                      <div className="bg-gradient-to-br from-indigo-900/50 to-purple-900/50 p-6 rounded-2xl border border-indigo-500/30 flex items-center justify-between relative overflow-hidden group">
-                        <div className="absolute inset-0 bg-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="bg-gradient-to-br from-indigo-600/20 to-purple-600/10 rounded-xl border border-indigo-500/20 p-4 flex items-center justify-between">
                         <div>
-                          <p className="text-indigo-300 text-xs font-bold uppercase tracking-wider mb-1">ATS Score Impact</p>
-                          <div className="flex items-baseline space-x-3">
-                            <span className="text-slate-400 text-2xl font-bold line-through opacity-50">{resumeAnalysisResult.atsScore.before}</span>
-                            <ArrowRight className="w-5 h-5 text-indigo-400" />
-                            <span className="text-4xl font-bold text-white text-shadow-glow">{resumeAnalysisResult.atsScore.after}</span>
+                          <p className="text-xs text-indigo-300 font-bold uppercase tracking-wider mb-1">ATS Score</p>
+                          <div className="flex items-center space-x-2">
+                            <span className="text-xl font-bold text-slate-500 line-through">{resumeAnalysisResult.atsScore.before}</span>
+                            <ArrowRight className="w-4 h-4 text-indigo-400" />
+                            <span className="text-2xl font-bold text-white">{resumeAnalysisResult.atsScore.after}</span>
                           </div>
                         </div>
-                        <div className="h-12 w-12 rounded-full bg-indigo-500/20 flex items-center justify-center border border-indigo-500/40">
-                          <TrendingUp className="w-6 h-6 text-indigo-400" />
+                        <div className="w-10 h-10 bg-indigo-500/20 rounded-full flex items-center justify-center">
+                          <TrendingUp className="w-5 h-5 text-indigo-400" />
                         </div>
                       </div>
-
-                      {/* Quick Stats */}
-                      <div className="bg-white/5 p-6 rounded-2xl border border-white/10 flex flex-col justify-center">
-                        <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Keywords Added</p>
-                        <div className="flex flex-wrap gap-2">
+                      <div className="bg-slate-900/50 rounded-xl border border-white/5 p-4">
+                        <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-2">Keywords Added</p>
+                        <div className="flex flex-wrap gap-1.5">
                           {resumeAnalysisResult.missingKeywordsAdded.slice(0, 4).map(k => (
-                            <span key={k} className="px-2 py-1 rounded bg-emerald-500/10 text-emerald-400 text-xs border border-emerald-500/20">{k}</span>
+                            <span key={k} className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[11px] border border-emerald-500/20">{k}</span>
                           ))}
                           {resumeAnalysisResult.missingKeywordsAdded.length > 4 && (
-                            <span className="px-2 py-1 rounded bg-slate-800 text-slate-400 text-xs border border-slate-700">+{resumeAnalysisResult.missingKeywordsAdded.length - 4} more</span>
+                            <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-400 text-[11px]">+{resumeAnalysisResult.missingKeywordsAdded.length - 4}</span>
                           )}
                         </div>
                       </div>
-
-                      {/* Summary */}
-                      <div className="bg-white/5 p-6 rounded-2xl border border-white/10 flex flex-col justify-center">
-                        <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Optimization Focus</p>
-                        <p className="text-sm text-slate-300 leading-relaxed">
-                          Enhanced impact metrics, standardized formatting, and injected {resumeAnalysisResult.missingKeywordsAdded.length} missing keywords for {userProfile.targetRole}.
-                        </p>
+                      <div className="bg-slate-900/50 rounded-xl border border-white/5 p-4">
+                        <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-2">Changes Made</p>
+                        <p className="text-sm text-slate-300">{resumeAnalysisResult.keyImprovements?.length || 0} improvements applied</p>
                       </div>
                     </div>
                   )}
 
-                  <div className="grid md:grid-cols-2 gap-8 h-[600px]">
-                    {/* Original / Source */}
-                    <div className="bg-slate-900/50 p-6 rounded-2xl border border-white/5 flex flex-col">
-                      <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">Original Content</h3>
-                      <div className="flex-1 overflow-y-auto custom-scrollbar text-sm text-slate-300 font-mono whitespace-pre-wrap leading-relaxed opacity-70">
+                  {/* Side-by-Side Comparison */}
+                  <div className="grid md:grid-cols-2 gap-4 flex-1 min-h-[500px]">
+                    {/* Original */}
+                    <div className="bg-slate-900/50 rounded-xl border border-white/5 flex flex-col overflow-hidden">
+                      <div className="px-4 py-3 border-b border-white/5 bg-white/5">
+                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Original Resume</h3>
+                      </div>
+                      <div className="flex-1 p-4 overflow-y-auto custom-scrollbar">
                         {userProfile.resumeText ? (
-                          userProfile.resumeText
+                          <pre className="text-sm text-slate-400 font-mono whitespace-pre-wrap leading-relaxed">{userProfile.resumeText}</pre>
                         ) : userProfile.resumeFile ? (
-                          <div className="flex flex-col items-center justify-center h-full text-slate-500">
-                            <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mb-4 border border-slate-700">
-                              <FileText className="w-8 h-8 text-emerald-500" />
-                            </div>
-                            <p className="font-medium text-slate-300">Resume File Uploaded</p>
-                            <p className="text-xs text-slate-500 mt-1">PDF / DOCX ready for analysis</p>
-                            <p className="text-xs text-slate-600 mt-4 max-w-[200px] text-center">
-                              Click "Polish My Resume" to extract text and optimize.
-                            </p>
+                          <div className="h-full flex flex-col items-center justify-center text-center">
+                            <FileText className="w-10 h-10 text-emerald-500/50 mb-3" />
+                            <p className="text-sm text-slate-400">Resume file uploaded</p>
+                            <p className="text-xs text-slate-600 mt-1">Click "Polish Resume" to extract and optimize</p>
                           </div>
                         ) : (
-                          <label className="flex flex-col items-center justify-center h-full text-slate-500 cursor-pointer hover:bg-white/5 rounded-xl transition-all border-2 border-dashed border-slate-700 hover:border-indigo-500">
-                            <input
-                              type="file"
-                              accept=".pdf"
-                              className="hidden"
-                              onChange={handleResumeUpload}
-                            />
-                            <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mb-4 border border-slate-700">
-                              <Download className="w-8 h-8 text-indigo-500 rotate-180" />
-                            </div>
-                            <p className="font-medium text-slate-300">Upload Resume (PDF)</p>
-                            <p className="text-xs text-slate-500 mt-1">We will extract the text automatically.</p>
+                          <label className="h-full flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 rounded-lg transition-all border-2 border-dashed border-slate-700 hover:border-indigo-500 p-8">
+                            <input type="file" accept=".pdf" className="hidden" onChange={handleResumeUpload} />
+                            <UploadCloud className="w-10 h-10 text-slate-600 mb-3" />
+                            <p className="text-sm text-slate-400 font-medium">Upload your resume</p>
+                            <p className="text-xs text-slate-600 mt-1">PDF format recommended</p>
                           </label>
                         )}
                       </div>
                     </div>
 
-                    {/* Optimized Result */}
-                    <div className="bg-indigo-900/10 p-6 rounded-2xl border border-indigo-500/20 flex flex-col relative overflow-hidden">
-                      <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-widest flex items-center">
-                          <Award className="w-4 h-4 mr-2" /> AI Optimized Version
+                    {/* Optimized */}
+                    <div className="bg-indigo-900/10 rounded-xl border border-indigo-500/20 flex flex-col overflow-hidden">
+                      <div className="px-4 py-3 border-b border-indigo-500/20 bg-indigo-500/5 flex justify-between items-center">
+                        <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-wider flex items-center">
+                          <Award className="w-3 h-3 mr-1.5" /> AI Optimized
                         </h3>
                         {optimizedResume && (
-                          <div className="flex gap-3 items-center">
-                            {/* Format Toggle */}
-                            <div className="flex bg-slate-700/50 rounded-lg border border-slate-600 p-1">
+                          <div className="flex items-center gap-2">
+                            <div className="flex bg-slate-800 rounded-lg p-0.5">
                               <button
                                 onClick={() => setResumeFormat('text')}
-                                className={`px-3 py-1.5 text-xs font-medium rounded transition-all ${resumeFormat === 'text'
-                                  ? 'bg-indigo-600 text-white'
-                                  : 'text-slate-300 hover:text-white'
-                                  }`}
-                              >
-                                Text
-                              </button>
+                                className={`px-2.5 py-1 text-[11px] font-medium rounded transition-all ${resumeFormat === 'text' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                              >Text</button>
                               <button
                                 onClick={() => setResumeFormat('latex')}
-                                className={`px-3 py-1.5 text-xs font-medium rounded transition-all ${resumeFormat === 'latex'
-                                  ? 'bg-indigo-600 text-white'
-                                  : 'text-slate-300 hover:text-white'
-                                  }`}
-                              >
-                                LaTeX
-                              </button>
+                                className={`px-2.5 py-1 text-[11px] font-medium rounded transition-all ${resumeFormat === 'latex' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                              >LaTeX</button>
                             </div>
-
-                            {/* Copy Button - Symbol Only */}
                             <button
                               onClick={() => {
                                 const contentToCopy = resumeFormat === 'latex' ? latexResume : optimizedResume;
@@ -3247,68 +3141,61 @@ const App = () => {
                                 setIsCopied(true);
                                 setTimeout(() => setIsCopied(false), 2000);
                               }}
-                              className="p-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors border border-slate-600"
-                              title={resumeFormat === 'latex' ? 'Copy LaTeX code' : 'Copy resume text'}
+                              className="p-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors"
+                              title="Copy"
                             >
-                              {isCopied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                              {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                             </button>
-
-                            {/* Download Button - Symbol Only */}
                             <button
                               onClick={() => {
-                                // Always prefer the professional LaTeX format if available
-                                if (latexData) {
-                                  downloadLatexPdf(latexData);
-                                } else if (resumeAnalysisResult) {
-                                  downloadResumeAsPdf(resumeAnalysisResult, userProfile.name);
-                                }
+                                if (latexData) downloadLatexPdf(latexData);
+                                else if (resumeAnalysisResult) downloadResumeAsPdf(resumeAnalysisResult, userProfile.name);
                               }}
                               className="p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors"
-                              title="Download as PDF"
+                              title="Download PDF"
                             >
-                              <Download className="w-4 h-4" />
+                              <Download className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         )}
                       </div>
-
-                      {optimizedResume ? (
-                        <div className="flex-1 overflow-y-auto custom-scrollbar text-sm text-slate-200 font-mono whitespace-pre-wrap leading-relaxed">
-                          {resumeFormat === 'latex' ? latexResume : optimizedResume}
-                        </div>
-                      ) : (
-                        <div className="flex-1 flex flex-col items-center justify-center text-center opacity-40">
-                          <FileText className="w-16 h-16 mb-4" />
-                          <p>Click "Polish My Resume" to generate the improved version.</p>
-                        </div>
-                      )}
+                      <div className="flex-1 p-4 overflow-y-auto custom-scrollbar">
+                        {optimizedResume ? (
+                          <pre className="text-sm text-slate-200 font-mono whitespace-pre-wrap leading-relaxed">{resumeFormat === 'latex' ? latexResume : optimizedResume}</pre>
+                        ) : (
+                          <div className="h-full flex flex-col items-center justify-center text-center opacity-50">
+                            <FileText className="w-10 h-10 text-indigo-400 mb-3" />
+                            <p className="text-sm text-slate-400">Optimized version will appear here</p>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  {/* Improvements List */}
-                  {resumeAnalysisResult && resumeAnalysisResult.keyImprovements && (
-                    <div className="mt-8 bg-white/5 rounded-2xl border border-white/10 p-6">
-                      <h3 className="text-lg font-bold text-white mb-4">Detailed Improvements</h3>
-                      <div className="grid gap-4">
+                  {/* Improvements List - Collapsible Style */}
+                  {resumeAnalysisResult && resumeAnalysisResult.keyImprovements && resumeAnalysisResult.keyImprovements.length > 0 && (
+                    <div className="bg-slate-900/50 rounded-xl border border-white/5">
+                      <div className="px-4 py-3 border-b border-white/5">
+                        <h3 className="text-sm font-bold text-white">Detailed Improvements</h3>
+                      </div>
+                      <div className="divide-y divide-white/5">
                         {resumeAnalysisResult.keyImprovements.map((imp, idx) => (
-                          <div key={idx} className="bg-slate-900/50 p-4 rounded-xl border border-white/5">
-                            <div className="flex items-center mb-2">
-                              <span className={`text-xs font-bold px-2 py-1 rounded mr-3 uppercase tracking-wider ${imp.category === 'Impact' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                                imp.category === 'Keywords' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                                  'bg-purple-500/10 text-purple-400 border-purple-500/20'
-                                }`}>
-                                {imp.category}
-                              </span>
-                              <p className="text-slate-200 font-medium text-sm">{imp.suggestion}</p>
+                          <div key={idx} className="p-4">
+                            <div className="flex items-start gap-3">
+                              <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded uppercase ${imp.category === 'Impact' ? 'bg-emerald-500/10 text-emerald-400' :
+                                imp.category === 'Keywords' ? 'bg-blue-500/10 text-blue-400' :
+                                  'bg-purple-500/10 text-purple-400'
+                                }`}>{imp.category}</span>
+                              <p className="text-sm text-slate-300">{imp.suggestion}</p>
                             </div>
-                            <div className="grid md:grid-cols-2 gap-4 text-xs font-mono mt-3">
-                              <div className="bg-red-900/10 p-3 rounded text-red-300 border border-red-500/10">
-                                <p className="mb-1 text-[10px] uppercase opacity-50">Before</p>
-                                "{imp.originalSnippet}"
+                            <div className="grid md:grid-cols-2 gap-3 mt-3 ml-0 md:ml-[60px]">
+                              <div className="bg-red-900/10 p-3 rounded-lg border border-red-500/10">
+                                <p className="text-[10px] text-red-400 uppercase font-bold mb-1">Before</p>
+                                <p className="text-xs text-red-300 font-mono">"{imp.originalSnippet}"</p>
                               </div>
-                              <div className="bg-emerald-900/10 p-3 rounded text-emerald-300 border border-emerald-500/10">
-                                <p className="mb-1 text-[10px] uppercase opacity-50">After</p>
-                                "{imp.improvedSnippet}"
+                              <div className="bg-emerald-900/10 p-3 rounded-lg border border-emerald-500/10">
+                                <p className="text-[10px] text-emerald-400 uppercase font-bold mb-1">After</p>
+                                <p className="text-xs text-emerald-300 font-mono">"{imp.improvedSnippet}"</p>
                               </div>
                             </div>
                           </div>
@@ -3385,7 +3272,6 @@ const App = () => {
                   </div>
                 ) : interviewFeedback ? (
                   /* Feedback Report */
-                  /* Feedback Report */
                   <InterviewAnalysisView
                     feedback={interviewFeedback}
                     onClose={() => {
@@ -3394,23 +3280,79 @@ const App = () => {
                     }}
                   />
                 ) : !isInterviewStarted ? (
-                  /* Start Screen */
-                  <div className="flex-1 flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
-                    <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-indigo-900/20 to-slate-900/50 z-0"></div>
-                    <div className="relative z-10 max-w-lg">
-                      <div className="w-20 h-20 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-8 shadow-[0_0_40px_rgba(79,70,229,0.4)] transform rotate-3">
-                        <MessageSquare className="w-10 h-10 text-white" />
+                  /* Minimal Focused Start Screen */
+                  <div className="flex-1 flex flex-col">
+                    {/* Compact Header */}
+                    <div className="flex justify-between items-center px-6 py-4 border-b border-white/5">
+                      <div>
+                        <h1 className="text-xl font-bold text-white">Mock Interview Simulator</h1>
+                        <p className="text-sm text-slate-500 mt-0.5">Target Role: <span className="text-slate-300">{userProfile.targetRole}</span></p>
                       </div>
-                      <h3 className="text-3xl font-bold text-white mb-4">Mock Interview Simulator</h3>
-                      <p className="text-slate-300 text-lg mb-8 leading-relaxed">
-                        Ready to practice? I'll act as a hiring manager for the <span className="text-indigo-400 font-semibold">{userProfile.targetRole}</span> role. I'll ask questions and provide feedback on your answers.
-                      </p>
-                      <button
-                        onClick={startInterview}
-                        className="bg-white text-indigo-900 px-8 py-4 rounded-xl font-bold text-lg hover:bg-slate-200 transition-all transform hover:scale-105 shadow-xl flex items-center mx-auto"
-                      >
-                        <Play className="w-5 h-5 mr-2 fill-indigo-900" /> Start Session
-                      </button>
+                      {/* Past Interviews Dropdown */}
+                      <div className="relative">
+                        <button
+                          onClick={() => setShowPastInterviewsDropdown(!showPastInterviewsDropdown)}
+                          className="text-sm text-slate-400 hover:text-white flex items-center transition-colors"
+                        >
+                          <History className="w-4 h-4 mr-1.5" />
+                          Past Interviews
+                          <ChevronRight className={`w-4 h-4 ml-1 transition-transform ${showPastInterviewsDropdown ? 'rotate-90' : ''}`} />
+                        </button>
+
+                        {/* Dropdown */}
+                        {showPastInterviewsDropdown && (
+                          <div className="absolute right-0 top-full mt-2 w-72 bg-slate-900 border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden">
+                            <div className="max-h-64 overflow-y-auto custom-scrollbar">
+                              {userProfile.pastInterviews && userProfile.pastInterviews.length > 0 ? (
+                                userProfile.pastInterviews.map((interview) => (
+                                  <div
+                                    key={interview.id}
+                                    className="px-4 py-3 hover:bg-white/5 border-b border-white/5 last:border-b-0 flex items-center justify-between"
+                                  >
+                                    <div>
+                                      <div className="text-sm font-medium text-white">{interview.targetRole}</div>
+                                      <div className="text-xs text-slate-500 mt-0.5">
+                                        {new Date(interview.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                        <span className="mx-1.5">•</span>
+                                        <span className={interview.score >= 70 ? 'text-emerald-400' : 'text-amber-400'}>{interview.score}%</span>
+                                      </div>
+                                    </div>
+                                    <button
+                                      onClick={() => {
+                                        setInterviewFeedback(interview.feedback);
+                                        setShowPastInterviewsDropdown(false);
+                                      }}
+                                      className="text-xs text-indigo-400 hover:text-indigo-300 font-medium"
+                                    >
+                                      View Analysis
+                                    </button>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="px-4 py-6 text-center text-sm text-slate-500">
+                                  No past interviews yet.
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Centered Main Action */}
+                    <div className="flex-1 flex items-center justify-center px-6">
+                      <div className="text-center max-w-md">
+                        <button
+                          onClick={startInterview}
+                          className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-500 text-white px-12 py-5 rounded-2xl font-bold text-lg transition-all transform hover:scale-[1.02] shadow-lg shadow-indigo-500/20 flex items-center justify-center mx-auto"
+                        >
+                          <Play className="w-6 h-6 mr-3 fill-white" />
+                          Start Mock Interview
+                        </button>
+                        <p className="text-sm text-slate-500 mt-4">
+                          Role-specific AI interviewer with instant feedback
+                        </p>
+                      </div>
                     </div>
                   </div>
                 ) : (
