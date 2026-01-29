@@ -578,7 +578,7 @@ const App = () => {
   const handleApiError = (error: any, defaultMsg: string) => {
     console.error(error);
     if (error.message?.includes('429') || error.message?.includes('quota') || error.message?.includes('RESOURCE_EXHAUSTED')) {
-      const msg = "The AI system reached its daily limit (Quota Exceeded). \n\nFIX: Please wait a moment, or add a second Gemini API Key to your .env.local file as VITE_GEMINI_API_KEY_2 to double your capacity!";
+      const msg = "🚦 AI System Busy\n\nAll API keys have reached their rate limit. This typically resets within a few minutes.\n\n✅ What to do:\n• Wait 2-3 minutes and try again\n• The system is automatically retrying with backup keys\n\nIf this persists, the daily quota may have been reached. Quotas reset at midnight Pacific Time.";
       alert(msg);
     } else {
       alert(`${defaultMsg}: ${error.message || "Unknown error"}.`);

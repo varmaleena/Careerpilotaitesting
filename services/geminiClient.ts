@@ -5,11 +5,15 @@ import { RequestLoadBalancer } from "./loadBalancer";
 // Available models: gemini-2.5-flash, gemini-2.0-flash, gemini-2.0-flash-exp
 export const GEMINI_MODEL = 'gemini-2.0-flash';
 
-// Initialize API Keys
+// Initialize API Keys (7 keys for 105 RPM capacity)
 const keys = [
     import.meta.env.VITE_GEMINI_API_KEY,
     import.meta.env.VITE_GEMINI_API_KEY_2,
-    import.meta.env.VITE_GEMINI_API_KEY_3
+    import.meta.env.VITE_GEMINI_API_KEY_3,
+    import.meta.env.VITE_GEMINI_API_KEY_4,
+    import.meta.env.VITE_GEMINI_API_KEY_5,
+    import.meta.env.VITE_GEMINI_API_KEY_6,
+    import.meta.env.VITE_GEMINI_API_KEY_7
 ].filter(Boolean);
 
 // Initialize the Load Balancer
