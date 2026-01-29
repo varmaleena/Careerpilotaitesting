@@ -1,4 +1,4 @@
-﻿import { Chat } from '@google/genai';
+import { Chat } from '@google/genai';
 import {
   AlertCircle,
   ArrowRight,
@@ -49,17 +49,26 @@ import {
   Receipt,
   Linkedin,
   Edit2,
-  Save
+  Save,
+  Zap,
+  Share2
 } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import LandingPage from "./components/LandingPage";
-import FeedbackFloating from './components/FeedbackFloating';
+import { FeedbackModal } from './components/FeedbackModal';
 import { ScoreGauge } from "./components/ScoreGauge";
 import Sidebar from "./components/Sidebar";
+import MobileBottomNav from "./components/MobileBottomNav";
 import { SkillCard } from "./components/SkillCard";
+import { ShareSuccessModal } from "./components/ShareSuccessModal";
+import { InterviewAnalysisView } from "./components/InterviewAnalysisView";
+import { ConfirmResetModal } from "./components/ConfirmResetModal";
+import { ProfileModal } from "./components/ProfileModal";
+import { EmptyState } from "./components/EmptyState";
 import { AuthService } from './services/authService';
 import { canStartNewInterview } from './services/interviewSessionManager';
 import { generateLearningPlan, generateProjectIdeas } from './services/learningService';
+import { calculatePlanStatistics, getProgressMessage, getCurrentWeek } from './services/planStatistics';
 import { downloadLatexPdf, downloadResumeAsPdf } from './services/pdfExportService';
 import { extractTextFromPdf } from './services/pdfService';
 import { evaluatePremiumInterview, generatePremiumInterviewResponse } from './services/premiumInterviewService';
@@ -343,9 +352,15 @@ const App = () => {
   // Auth State
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [showProfileModal, setShowProfileModal] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [currentUserEmail, setCurrentUserEmail] = useState('');
+
+  // Modals & UI State
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [profileTab, setProfileTab] = useState<'profile' | 'payments'>('profile');
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
 
   // Auth Form State
   const [emailInput, setEmailInput] = useState('');
@@ -353,10 +368,6 @@ const App = () => {
   const [authError, setAuthError] = useState('');
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [emailError, setEmailError] = useState('');
-
-  // Profile Modal State
-  const [profileTab, setProfileTab] = useState<'profile' | 'payments'>('profile');
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
 
   // User Data State
   const [userProfile, setUserProfile] = useState<UserProfile>({ name: 'User', targetRole: '' });
@@ -413,11 +424,45 @@ const App = () => {
   const [isSpeakingEnabled, setIsSpeakingEnabled] = useState(true);
   const recognitionRef = useRef<any>(null);
 
+  // Upload State
+  const [isUploadingResume, setIsUploadingResume] = useState(false);
+
+  // Browser Support Detection
+  const [isSpeechRecognitionSupported, setIsSpeechRecognitionSupported] = useState(false);
+
+  // Modal States
+  const [showConfirmResetModal, setShowConfirmResetModal] = useState(false);
+
+  // Navigation Loading State
+  const [isNavigating, setIsNavigating] = useState(false);
+
+  // Detect Speech Recognition support on mount
+  useEffect(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    setIsSpeechRecognitionSupported(!!SpeechRecognition);
+  }, []);
+
   // --- Persistence Effects ---
+
+  // --- Session Persistence ---
+
+  // Hydrate session on mount
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('careerPilot_session_email');
+    if (savedEmail) {
+      // Attempt auto-login
+      loginUser(savedEmail).catch(err => {
+        console.error("Session restoration failed", err);
+        localStorage.removeItem('careerPilot_session_email');
+      });
+    }
+  }, []);
 
   // Save state on critical updates ONLY if logged in
   useEffect(() => {
     if (isLoggedIn && currentUserEmail) {
+      localStorage.setItem('careerPilot_session_email', currentUserEmail); // Keep session alive
+
       AuthService.saveUserData(currentUserEmail, {
         userProfile,
         analysis,
@@ -469,6 +514,22 @@ const App = () => {
       isLoggedIn
     });
   }, [view]);
+
+  // Persist current view to localStorage for page reload restoration
+  useEffect(() => {
+    if (isLoggedIn && view !== AppView.LANDING && view !== AppView.ONBOARDING) {
+      localStorage.setItem('careerPilot_last_view', view);
+    }
+  }, [view, isLoggedIn]);
+
+  // Show loading indicator during navigation
+  useEffect(() => {
+    if (isLoggedIn) {
+      setIsNavigating(true);
+      const timer = setTimeout(() => setIsNavigating(false), 300);
+      return () => clearTimeout(timer);
+    }
+  }, [view, isLoggedIn]);
 
   // CRITICAL FIX: Cancel audio when switching views
   useEffect(() => {
@@ -566,7 +627,7 @@ const App = () => {
         if (result.success) {
           await loginUser(emailInput);
         } else {
-          setAuthError('Email or password is incorrect.');
+          setAuthError(result.message || 'Login failed.');
         }
       }
     } catch (err) {
@@ -589,9 +650,41 @@ const App = () => {
     }
   };
 
+
+
+  // ... (existing state)
+
   const loginUser = async (email: string) => {
     const userData = await AuthService.getUserData(email);
     if (userData) {
+      // Calculate Streak
+      const today = new Date().toDateString();
+      const lastDatestr = userData.userProfile.lastLoginDate;
+      const lastLogin = lastDatestr ? new Date(lastDatestr).toDateString() : null;
+
+      let newStreak = userData.userProfile.streak || 1;
+      let newXp = userData.userProfile.xp || 0;
+
+      if (lastLogin !== today) {
+        // New day login
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = yesterday.toDateString();
+
+        if (lastLogin === yesterdayStr) {
+          newStreak += 1;
+        } else {
+          newStreak = 1; // broken streak
+        }
+        // Save new login date
+        userData.userProfile.lastLoginDate = new Date().toISOString();
+        userData.userProfile.streak = newStreak;
+        userData.userProfile.xp = newXp + 10; // Bonus for daily login
+
+        // Persist immediately
+        await AuthService.saveUserData(email, userData);
+      }
+
       // Hydrate State
       setCurrentUserEmail(email);
       setIsLoggedIn(true);
@@ -613,7 +706,14 @@ const App = () => {
 
       // Route Logic
       if (userData.analysis) {
-        setView(AppView.DASHBOARD);
+        const lastView = localStorage.getItem('careerPilot_last_view') as AppView;
+        const validViews = [AppView.DASHBOARD, AppView.PLAN, AppView.PROJECTS, AppView.RESUME, AppView.INTERVIEW];
+
+        if (lastView && validViews.includes(lastView)) {
+          setView(lastView);
+        } else {
+          setView(AppView.DASHBOARD);
+        }
       } else {
         setView(AppView.ONBOARDING);
       }
@@ -625,6 +725,7 @@ const App = () => {
   const handleLogout = () => {
     setIsLoggedIn(false);
     setCurrentUserEmail('');
+    localStorage.removeItem('careerPilot_session_email'); // Clear persistent session
 
     // Reset all local state
     setUserProfile({ name: 'User', targetRole: '' });
@@ -639,12 +740,34 @@ const App = () => {
     setView(AppView.LANDING);
   };
 
-  const handleResetData = async () => {
+  const handleResetData = () => {
     if (!currentUserEmail) return;
-    if (window.confirm("Are you sure? This will delete your resume, learning plan, and progress PERMANENTLY.")) {
-      // Create fresh empty data
+    setShowConfirmResetModal(true);
+  };
+
+  const confirmResetData = async () => {
+    if (!currentUserEmail) return;
+
+    try {
+      // Preserve critical account data
+      const preservedProfile = {
+        ...userProfile,
+        targetRole: '', // Reset target
+        resumeText: '', // Reset resume
+        resumeFile: undefined,
+        experienceLevel: '',
+        graduationYear: '',
+        targetCompanies: '',
+        // Explicitly keep these (though spread ...userProfile handles it, being explicit is safer against future changes)
+        isPremium: userProfile.isPremium,
+        paymentHistory: userProfile.paymentHistory,
+        streak: userProfile.streak,
+        xp: userProfile.xp,
+        credits: userProfile.credits
+      };
+
       const emptyData = {
-        userProfile: { name: userProfile.name, targetRole: '' },
+        userProfile: preservedProfile,
         analysis: null,
         plan: null,
         projects: [],
@@ -654,10 +777,12 @@ const App = () => {
         interviewFeedback: null,
         resumeAnalysisResult: null
       };
+
       // Save empty data to storage
       await AuthService.saveUserData(currentUserEmail, emptyData);
+
       // Hydrate state with empty data
-      setUserProfile(emptyData.userProfile);
+      setUserProfile(preservedProfile);
       setAnalysis(null);
       setPlan(null);
       setProjects([]);
@@ -666,6 +791,9 @@ const App = () => {
       setChatMessages([]);
       setInterviewFeedback(null);
       setView(AppView.ONBOARDING);
+    } catch (error) {
+      console.error("Reset failed:", error);
+      alert("Failed to reset data. Please try again.");
     }
   };
 
@@ -685,25 +813,39 @@ const App = () => {
 
   // --- App Logic Handlers ---
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 2 * 1024 * 1024) {
         alert("File size too large. Please upload a PDF smaller than 2MB.");
         return;
       }
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64String = (reader.result as string).split(',')[1];
-        setUserProfile(prev => ({
-          ...prev,
-          resumeFile: {
-            data: base64String,
-            mimeType: file.type
-          }
-        }));
-      };
-      reader.readAsDataURL(file);
+
+      setIsUploadingResume(true);
+
+      try {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64String = (reader.result as string).split(',')[1];
+          setUserProfile(prev => ({
+            ...prev,
+            resumeFile: {
+              data: base64String,
+              mimeType: file.type
+            }
+          }));
+          setIsUploadingResume(false);
+        };
+        reader.onerror = () => {
+          alert("Failed to read file. Please try again.");
+          setIsUploadingResume(false);
+        };
+        reader.readAsDataURL(file);
+      } catch (error) {
+        console.error("Upload error:", error);
+        alert("Failed to upload file. Please try again.");
+        setIsUploadingResume(false);
+      }
     }
   };
 
@@ -721,7 +863,8 @@ const App = () => {
       });
 
       if (!validation.isValid) {
-        setValidationError('Please upload a valid document');
+        // Use the specific reason from the AI validator (e.g. "This looks like an invoice, not a resume")
+        setValidationError(validation.reason || 'The uploaded document does not appear to be a valid resume. Please upload a professional CV.');
         setIsAnalyzing(false);
         return;
       }
@@ -1023,12 +1166,12 @@ const App = () => {
   const handlePayment = async () => {
     /*
     const res = await loadScript('https://checkout.razorpay.com/v1/checkout.js');
-
+  
     if (!res) {
       alert('Razorpay SDK failed to load. Are you online?');
       return;
     }
-
+  
     const options = {
       key: import.meta.env.VITE_RAZORPAY_KEY_ID,
       amount: 100,
@@ -1065,7 +1208,7 @@ const App = () => {
         color: "#4f46e5"
       }
     };
-
+  
     const paymentObject = new (window as any).Razorpay(options);
     paymentObject.open();
     */
@@ -1074,12 +1217,12 @@ const App = () => {
   const handleResumePayment = async () => {
     /*
     const res = await loadScript('https://checkout.razorpay.com/v1/checkout.js');
-
+  
     if (!res) {
       alert('Razorpay SDK failed to load. Are you online?');
       return;
     }
-
+  
     const options = {
       key: import.meta.env.VITE_RAZORPAY_KEY_ID,
       amount: 100, // 100 paise = ₹1
@@ -1112,7 +1255,7 @@ const App = () => {
         color: "#10b981" // Emerald color for resume section
       }
     };
-
+  
     const paymentObject = new (window as any).Razorpay(options);
     paymentObject.open();
     */
@@ -1196,6 +1339,14 @@ const App = () => {
   }, [userProfile, isSpeakingEnabled, analysis]);
 
   const handleEndInterview = async () => {
+    // 1. Force Stop Audio & Listening Immediately
+    window.speechSynthesis.cancel();
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
+    setIsListening(false);
+
     if (chatMessages.length < 2) {
       setIsInterviewStarted(false);
       setChatMessages([]);
@@ -1204,7 +1355,6 @@ const App = () => {
       return;
     }
 
-    window.speechSynthesis.cancel();
     setIsInterviewStarted(false);
     setIsGeneratingFeedback(true);
 
@@ -1230,11 +1380,23 @@ const App = () => {
 
       // Convert to InterviewFeedback format
       const feedback: InterviewFeedback = {
-        score: evaluation.overallScore / 10, // Convert 0-100 to 0-10
-        feedbackSummary: evaluation.detailedFeedback,
+        score: evaluation.overallScore, // Keep raw 0-100 score
+        feedbackSummary: evaluation.detailedFeedback.split('\n')[0] || "Evaluation Complete", // Short summary for header
         strengths: evaluation.strengths,
-        improvements: evaluation.blockingGaps,
-        recommendedFocus: evaluation.nextSteps[0] || 'Continue practicing'
+        improvements: evaluation.blockingGaps, // Map blocking gaps to improvements for backward compat or use specific fields
+        recommendedFocus: evaluation.nextSteps[0] || 'Continue practicing',
+
+        // Detailed Premium Fields
+        communication: evaluation.communication,
+        technicalCompetence: evaluation.technicalCompetence,
+        problemSolving: evaluation.problemSolving,
+        confidenceUnderPressure: evaluation.confidenceUnderPressure,
+        timeManagement: evaluation.timeManagement,
+        decision: evaluation.decision,
+        blockingGaps: evaluation.blockingGaps,
+        improvementRoadmap: evaluation.improvementRoadmap,
+        comparisonToHiringBar: evaluation.comparisonToHiringBar,
+        detailedFeedback: evaluation.detailedFeedback,
       };
 
       setInterviewFeedback(feedback);
@@ -1252,6 +1414,13 @@ const App = () => {
   const handleSendMessage = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!chatInput.trim()) return;
+
+    // Stop mic if active (ensures mic stays active UNTIL send is clicked)
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+      recognitionRef.current = null;
+    }
 
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
@@ -1350,26 +1519,62 @@ const App = () => {
       return;
     }
 
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert("Browser does not support Speech Recognition");
-      return;
+    try {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        alert("Voice Input is not supported in this browser. Please try Google Chrome or Microsoft Edge.");
+        return;
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        setIsListening(true);
+      };
+
+      recognition.onend = () => {
+        if (recognitionRef.current) {
+          // Only stop if we meant to stop.
+          // If it stopped due to silence but we want continuous, we'd restart here,
+          // but for now we just reflect state.
+          setIsListening(false);
+          recognitionRef.current = null;
+        }
+      };
+
+      recognition.onresult = (event: any) => {
+        const currentContent = Array.from(event.results)
+          .map((result: any) => result[0].transcript)
+          .join('');
+        setChatInput(currentContent);
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error("Speech error", event.error);
+        if (event.error === 'no-speech') {
+          // Ignore
+          return;
+        }
+        setIsListening(false);
+        recognitionRef.current = null;
+
+        if (event.error === 'not-allowed') {
+          alert("Microphone access blocked. Please enable permissions in your browser settings.");
+        } else {
+          // Silent fail for other minor errors to avoid spamming alerts
+          console.warn("Speech recognition failed:", event.error);
+        }
+      };
+
+      recognition.start();
+      recognitionRef.current = recognition;
+    } catch (e) {
+      console.error("Speech init error", e);
+      alert("Could not start voice input.");
     }
-
-    const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = 'en-US';
-
-    recognition.onstart = () => setIsListening(true);
-    recognition.onend = () => setIsListening(false);
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      setChatInput(transcript);
-    };
-
-    recognitionRef.current = recognition;
-    recognition.start();
   };
 
 
@@ -1377,6 +1582,15 @@ const App = () => {
   if (view === AppView.LANDING) {
     return (
       <>
+        {/* Navigation Loading Overlay */}
+        {isNavigating && (
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[9999] flex items-center justify-center">
+            <div className="bg-slate-900/90 backdrop-blur-xl rounded-2xl p-6 border border-white/10 shadow-2xl">
+              <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mx-auto" />
+            </div>
+          </div>
+        )}
+
         <LandingPage
           onGetStarted={() => {
             if (isLoggedIn) {
@@ -1504,7 +1718,7 @@ const App = () => {
                 <button
                   type="submit"
                   disabled={isAuthLoading}
-                  className="w-full bg-indigo-600 hover:bg-indigo-500 hover:shadow-indigo-500/40 hover:scale-[1.02] active:scale-[0.98] text-white font-bold py-3 rounded-xl transition-all duration-200 shadow-lg shadow-indigo-500/20 flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100"
+                  className="w-full bg-indigo-600 hover:bg-indigo-500 hover:shadow-indigo-500/40 text-white font-bold py-3 rounded-xl transition-all duration-200 shadow-lg shadow-indigo-500/20 flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed"
                 >
                   {isAuthLoading ? (
                     <>
@@ -1575,519 +1789,750 @@ const App = () => {
 
   // --- Onboarding View ---
   if (view === AppView.ONBOARDING) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-        <div className="bg-slate-900 max-w-2xl w-full rounded-2xl shadow-2xl shadow-black/50 p-8 border border-slate-800 relative">
-          {/* Back to Login if stuck */}
-          <button
-            onClick={handleLogout}
-            className="absolute top-6 right-6 text-slate-500 hover:text-white flex items-center text-sm"
-          >
-            <User className="w-4 h-4 mr-2" /> {userProfile.name} (Logout)
-          </button>
-
-          <div className="flex items-center space-x-3 mb-8">
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
-              <TrendingUp className="w-6 h-6 text-white" />
+    // Premium Full-Screen Loading State during Analysis
+    if (isAnalyzing) {
+      return (
+        <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
+          <div className="flex flex-col items-center text-center space-y-8">
+            {/* Logo Container */}
+            <div className="w-24 h-24 bg-slate-900 rounded-3xl border border-slate-700 flex items-center justify-center shadow-xl">
+              <TrendingUp className="w-12 h-12 text-indigo-400" />
             </div>
-            <h1 className="text-3xl font-bold text-slate-100">Setup your Pilot</h1>
+
+            <div className="space-y-3 max-w-md">
+              <h2 className="text-3xl font-bold text-white tracking-tight">
+                Initializing Pilot...
+              </h2>
+              <p className="text-slate-400 text-lg">
+                Analyzing your resume and building your custom roadmap.
+              </p>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="w-64 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 w-1/2 rounded-full"></div>
+            </div>
           </div>
+        </div>
+      );
+    }
 
-          <form onSubmit={handleOnboardingSubmit} className="space-y-6">
-            {/* Career Stage Section */}
-            <div className="bg-slate-800/30 p-6 rounded-xl border border-slate-700/50">
-              <h3 className="text-lg font-bold text-white mb-4 flex items-center">
-                <Compass className="w-5 h-5 mr-2 text-indigo-400" />
-                Where are you in your journey?
-              </h3>
+    return (
+      <>
+        {/* Navigation Loading Overlay */}
+        {isNavigating && (
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[9999] flex items-center justify-center">
+            <div className="bg-slate-900/90 backdrop-blur-xl rounded-2xl p-6 border border-white/10 shadow-2xl">
+              <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mx-auto" />
+            </div>
+          </div>
+        )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Experience Level */}
-                <div>
-                  <label className="block text-sm font-semibold text-slate-300 mb-2">Experience Level</label>
-                  <select
-                    required
-                    className="w-full p-3 bg-slate-950 border border-slate-800 text-slate-100 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none"
-                    value={userProfile.experienceLevel || ''}
-                    onChange={e => setUserProfile(prev => ({ ...prev, experienceLevel: e.target.value }))}
-                  >
-                    <option value="">Select...</option>
-                    <option value="student">Student (Still Studying)</option>
-                    <option value="fresher">Fresher (0-1 year)</option>
-                    <option value="junior">Junior (1-3 years)</option>
-                    <option value="mid">Mid-Level (3-5 years)</option>
-                    <option value="senior">Senior (5+ years)</option>
-                  </select>
-                </div>
+        <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+          <div className="bg-slate-900 max-w-2xl w-full rounded-2xl shadow-2xl shadow-black/50 p-8 border border-slate-800 relative">
+            {/* Back to Login if stuck */}
+            <button
+              onClick={handleLogout}
+              className="absolute top-6 right-6 text-slate-500 hover:text-white flex items-center text-sm"
+            >
+              <User className="w-4 h-4 mr-2" /> {userProfile.name} (Logout)
+            </button>
 
-                {/* Graduation Year */}
-                <div>
-                  <label className="block text-sm font-semibold text-slate-300 mb-2">Graduation Year</label>
-                  <input
-                    type="number"
-                    required
-                    min="2020"
-                    max="2030"
-                    className="w-full p-3 bg-slate-950 border border-slate-800 text-slate-100 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none placeholder-slate-600"
-                    placeholder="e.g. 2024, 2025..."
-                    value={userProfile.graduationYear || ''}
-                    onChange={e => setUserProfile(prev => ({ ...prev, graduationYear: e.target.value }))}
-                  />
-                </div>
+            <div className="flex items-center space-x-3 mb-8">
+              <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                <TrendingUp className="w-6 h-6 text-white" />
               </div>
+              <h1 className="text-3xl font-bold text-slate-100">Setup your Pilot</h1>
             </div>
 
-            {/* Career Goals Section */}
-            <div className="bg-slate-800/30 p-6 rounded-xl border border-slate-700/50">
-              <h3 className="text-lg font-bold text-white mb-4 flex items-center">
-                <Target className="w-5 h-5 mr-2 text-emerald-400" />
-                What's your career goal?
-              </h3>
+            <form onSubmit={handleOnboardingSubmit} className="space-y-6">
+              {/* Career Stage Section */}
+              <div className="bg-slate-800/30 p-6 rounded-xl border border-slate-700/50">
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center">
+                  <Compass className="w-5 h-5 mr-2 text-indigo-400" />
+                  Where are you in your journey?
+                </h3>
 
-              {/* Target Role */}
-              <div className="mb-4">
-                <label className="block text-sm font-semibold text-slate-300 mb-2">
-                  Target Role <span className="text-slate-500 font-normal">(What job do you want?)</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  className="w-full p-3 bg-slate-950 border border-slate-800 text-slate-100 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none placeholder-slate-600"
-                  placeholder="e.g. Software Engineer, Data Analyst, Product Manager..."
-                  value={userProfile.targetRole}
-                  onChange={e => setUserProfile(prev => ({ ...prev, targetRole: e.target.value }))}
-                />
-                <p className="text-xs text-slate-500 mt-1">
-                  Not sure? Try: "Software Developer", "Frontend Engineer", "Data Scientist"
-                </p>
-              </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Experience Level */}
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-300 mb-2">Experience Level</label>
+                    <select
+                      required
+                      className="w-full p-3 bg-slate-950 border border-slate-800 text-slate-100 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none"
+                      value={userProfile.experienceLevel || ''}
+                      onChange={e => setUserProfile(prev => ({ ...prev, experienceLevel: e.target.value }))}
+                    >
+                      <option value="">Select...</option>
+                      <option value="student">Student (Still Studying)</option>
+                      <option value="fresher">Fresher (0-1 year)</option>
+                      <option value="junior">Junior (1-3 years)</option>
+                      <option value="mid">Mid-Level (3-5 years)</option>
+                      <option value="senior">Senior (5+ years)</option>
+                    </select>
+                  </div>
 
-              {/* Target Companies */}
-              <div>
-                <label className="block text-sm font-semibold text-slate-300 mb-2">
-                  Dream Companies <span className="text-slate-500 font-normal">(Optional - helps us tailor advice)</span>
-                </label>
-                <input
-                  type="text"
-                  className="w-full p-3 bg-slate-950 border border-slate-800 text-slate-100 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none placeholder-slate-600"
-                  placeholder="e.g. Google, Microsoft, Amazon, Startup..."
-                  value={userProfile.targetCompanies || ''}
-                  onChange={e => setUserProfile(prev => ({ ...prev, targetCompanies: e.target.value }))}
-                />
-                <p className="text-xs text-slate-500 mt-1">
-                  We'll optimize your resume and learning path for these companies
-                </p>
-              </div>
-            </div>
-
-            {/* Resume Upload Section */}
-            <div className="bg-slate-800/30 p-6 rounded-xl border border-slate-700/50">
-              <h3 className="text-lg font-bold text-white mb-4 flex items-center">
-                <FileText className="w-5 h-5 mr-2 text-amber-400" />
-                Upload Your Resume
-              </h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* File Upload Option */}
-                <div className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all ${userProfile.resumeFile ? 'border-emerald-500 bg-emerald-500/10' : 'border-slate-700 hover:border-indigo-500 hover:bg-slate-800'}`}>
-                  <input
-                    type="file"
-                    accept=".pdf,.txt,.md"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                    id="resume-upload"
-                  />
-                  <label htmlFor="resume-upload" className="cursor-pointer w-full h-full flex flex-col items-center justify-center">
-                    {userProfile.resumeFile ? (
-                      <>
-                        <FileText className="w-8 h-8 text-emerald-400 mb-2" />
-                        <span className="text-sm font-medium text-emerald-300">Resume Uploaded ✓</span>
-                        <span className="text-xs text-emerald-500/70 mt-1">Ready to analyze</span>
-                      </>
-                    ) : (
-                      <>
-                        <UploadCloud className="w-8 h-8 text-indigo-400 mb-2" />
-                        <span className="text-sm font-medium text-slate-300">Upload PDF / TXT</span>
-                        <span className="text-xs text-slate-500 mt-1">Drag & drop or click</span>
-                      </>
-                    )}
-                  </label>
-                </div>
-
-                {/* Or Text Paste Option */}
-                <div className="relative">
-                  <textarea
-                    className="w-full h-full min-h-[140px] p-4 bg-slate-950 border border-slate-800 text-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none resize-none font-mono text-xs placeholder-slate-600"
-                    placeholder="Or paste resume text here..."
-                    value={userProfile.resumeText || ''}
-                    onChange={e => setUserProfile(prev => ({ ...prev, resumeText: e.target.value }))}
-                  />
-                  <div className="absolute bottom-2 right-2 text-[10px] text-slate-600">
-                    {userProfile.resumeText?.length || 0} chars
+                  {/* Graduation Year */}
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-300 mb-2">Graduation Year</label>
+                    <input
+                      type="number"
+                      required
+                      min="2020"
+                      max="2030"
+                      className="w-full p-3 bg-slate-950 border border-slate-800 text-slate-100 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none placeholder-slate-600"
+                      placeholder="e.g. 2024, 2025..."
+                      value={userProfile.graduationYear || ''}
+                      onChange={e => setUserProfile(prev => ({ ...prev, graduationYear: e.target.value }))}
+                    />
                   </div>
                 </div>
               </div>
 
+              {/* Career Goals Section */}
+              <div className="bg-slate-800/30 p-6 rounded-xl border border-slate-700/50">
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center">
+                  <Target className="w-5 h-5 mr-2 text-emerald-400" />
+                  Career Target
+                </h3>
 
-            </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Target Role */}
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-300 mb-2">
+                      Target Role <span className="text-red-400">*</span>
+                    </label>
+                    <div className="relative group">
+                      <Briefcase className="absolute left-3 top-3.5 w-4 h-4 text-slate-500 group-focus-within:text-emerald-400 transition-colors" />
+                      <input
+                        type="text"
+                        required
+                        className="w-full p-3 pl-10 bg-slate-950 border border-slate-800 text-slate-100 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none placeholder-slate-600"
+                        placeholder="e.g. Software Engineer"
+                        value={userProfile.targetRole}
+                        onChange={e => setUserProfile(prev => ({ ...prev, targetRole: e.target.value }))}
+                      />
+                    </div>
+                  </div>
 
-            {/* Validation Error Message */}
-            {validationError && (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-center space-x-3">
-                <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
-                <span className="text-red-400 font-medium">{validationError}</span>
+                  {/* Target Companies */}
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-300 mb-2">
+                      Target Company <span className="text-slate-500 font-normal text-xs">(Optional)</span>
+                    </label>
+                    <div className="relative group">
+                      <div className="absolute left-3 top-3.5 w-4 h-4 flex items-center justify-center text-slate-500 group-focus-within:text-emerald-400 transition-colors font-bold text-xs">
+                        @
+                      </div>
+                      <input
+                        type="text"
+                        className="w-full p-3 pl-10 bg-slate-950 border border-slate-800 text-slate-100 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none placeholder-slate-600"
+                        placeholder="e.g. Google, TCS, Startup..."
+                        value={userProfile.targetCompanies || ''}
+                        onChange={e => setUserProfile(prev => ({ ...prev, targetCompanies: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-500 mt-3 flex items-center">
+                  <span className="bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold mr-2">Tip</span>
+                  We'll auto-tailor your resume and interview questions for this specific role.
+                </p>
               </div>
-            )}
 
-            <button
-              type="submit"
-              disabled={isAnalyzing}
-              className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold py-4 rounded-xl shadow-lg hover:shadow-indigo-500/25 transition-all flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {isAnalyzing ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Analyzing Profile...</span>
-                </>
-              ) : (
-                <>
-                  <span>Launch Career Analysis</span>
-                  <ArrowRight className="w-5 h-5" />
-                </>
+              {/* Resume Upload Section */}
+              <div className="bg-slate-800/30 p-6 rounded-xl border border-slate-700/50">
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center">
+                  <FileText className="w-5 h-5 mr-2 text-amber-400" />
+                  Upload Your Resume <span className="text-red-400 ml-1">*</span>
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* File Upload Option */}
+                  <div className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all ${userProfile.resumeFile ? 'border-emerald-500 bg-emerald-500/10' : 'border-slate-700 hover:border-indigo-500 hover:bg-slate-800'}`}>
+                    <input
+                      type="file"
+                      accept=".pdf,.txt,.md"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                      id="resume-upload"
+                    />
+                    <label htmlFor="resume-upload" className="cursor-pointer w-full h-full flex flex-col items-center justify-center">
+                      {isUploadingResume ? (
+                        <>
+                          <Loader2 className="w-8 h-8 text-indigo-400 mb-2 animate-spin" />
+                          <span className="text-sm font-medium text-indigo-300">Processing...</span>
+                          <span className="text-xs text-slate-500 mt-1">Reading your resume</span>
+                        </>
+                      ) : userProfile.resumeFile ? (
+                        <>
+                          <FileText className="w-8 h-8 text-emerald-400 mb-2" />
+                          <span className="text-sm font-medium text-emerald-300">Resume Uploaded ✓</span>
+                          <span className="text-xs text-emerald-500/70 mt-1">Ready to analyze</span>
+                        </>
+                      ) : (
+                        <>
+                          <UploadCloud className="w-8 h-8 text-indigo-400 mb-2" />
+                          <span className="text-sm font-medium text-slate-300">Upload PDF / TXT</span>
+                          <span className="text-xs text-slate-500 mt-1">Drag & drop or click</span>
+                        </>
+                      )}
+                    </label>
+                  </div>
+
+                  {/* Or Text Paste Option */}
+                  <div className="relative">
+                    <textarea
+                      className="w-full h-full min-h-[140px] p-4 bg-slate-950 border border-slate-800 text-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none resize-none font-mono text-xs placeholder-slate-600"
+                      placeholder="Or paste resume text here..."
+                      value={userProfile.resumeText || ''}
+                      onChange={e => setUserProfile(prev => ({ ...prev, resumeText: e.target.value }))}
+                    />
+                    <div className="absolute bottom-2 right-2 text-[10px] text-slate-600">
+                      {userProfile.resumeText?.length || 0} chars
+                    </div>
+                  </div>
+                </div>
+
+
+              </div>
+
+              {/* Validation Error Message */}
+              {validationError && (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-center space-x-3">
+                  <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
+                  <span className="text-red-400 font-medium">{validationError}</span>
+                </div>
               )}
-            </button>
-          </form>
+
+              <button
+                type="submit"
+                disabled={isAnalyzing || (!userProfile.resumeFile && !userProfile.resumeText) || !userProfile.targetRole}
+                className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold py-4 rounded-xl shadow-lg hover:shadow-indigo-500/25 transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
+              >
+                {isAnalyzing ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Analyzing Profile...</span>
+                  </>
+                ) : (!userProfile.resumeFile && !userProfile.resumeText) || !userProfile.targetRole ? (
+                  <span>Select Resume & Role to Launch</span>
+                ) : (
+                  <>
+                    <span>Launch Career Analysis</span>
+                    <ArrowRight className="w-5 h-5" />
+                  </>
+                )}
+              </button>
+
+              {/* Save Draft & Exit Button */}
+              {(userProfile.resumeFile || userProfile.resumeText || userProfile.targetRole) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Data is already auto-saved via localStorage
+                    setView(isLoggedIn ? AppView.DASHBOARD : AppView.LANDING);
+                  }}
+                  className="w-full mt-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium py-3 rounded-xl border border-slate-700 transition-all flex items-center justify-center space-x-2"
+                >
+                  <span>Save Draft & Exit</span>
+                </button>
+              )}
+            </form>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   // --- Main App Layout ---
   return (
-    <div className="min-h-screen bg-slate-950 flex text-slate-100 font-sans">
-      <Sidebar
-        currentView={view}
-        onChangeView={setView}
-        onLogout={handleLogout}
-        onSwitchTrack={handleSwitchTrack}
-        onResetData={handleResetData}
-      />
-
-      <main className="flex-1 md:ml-64 p-6 md:p-10 pt-20 md:pt-10 bg-slate-950 relative">
-        {/* Background Gradients */}
-        <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
-          <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-indigo-900/20 blur-[100px] rounded-full"></div>
-          <div className="absolute bottom-[-10%] left-[10%] w-[400px] h-[400px] bg-purple-900/10 blur-[100px] rounded-full"></div>
+    <>
+      {/* Navigation Loading Overlay */}
+      {isNavigating && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[9999] flex items-center justify-center">
+          <div className="bg-slate-900/90 backdrop-blur-xl rounded-2xl p-6 border border-white/10 shadow-2xl">
+            <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mx-auto" />
+          </div>
         </div>
+      )}
 
-        <div className="relative z-10 max-w-5xl mx-auto">
-          {/* Header */}
-          <header className="flex justify-between items-center mb-10">
-            <div>
-              <h2 className="text-3xl font-bold text-white tracking-tight">
-                {view === AppView.DASHBOARD && 'Dashboard'}
-                {view === AppView.PLAN && 'Learning Plan'}
-                {view === AppView.INTERVIEW && 'Interview Simulator'}
-              </h2>
-              <p className="text-slate-400 text-sm mt-1">Target Role: <span className="text-indigo-400 font-medium">{userProfile.targetRole}</span></p>
-            </div>
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={() => setShowProfileModal(true)}
-                className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-500/20 hover:scale-110 transition-transform cursor-pointer"
-              >
-                {userProfile.name?.[0]?.toUpperCase() || 'U'}
-              </button>
-            </div>
-          </header>
+      <div className="min-h-screen bg-slate-950 flex text-slate-100 font-sans">
+        {showShareModal && analysis && (
+          <ShareSuccessModal
+            score={analysis.readinessScore}
+            role={userProfile.targetRole}
+            onClose={() => setShowShareModal(false)}
+            streak={userProfile.streak || 1}
+          />
+        )}
 
-          {/* Dashboard View */}
-          {view === AppView.DASHBOARD && analysis && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Score Card */}
-                <div className="bg-white/5 backdrop-blur-xl p-8 rounded-3xl border border-white/10 col-span-1 shadow-xl">
-                  <h3 className="text-xs font-bold text-slate-400 mb-6 uppercase tracking-widest">Match Potential</h3>
-                  <ScoreGauge score={analysis.readinessScore} />
-                  <p className="text-center text-sm text-slate-300 mt-4 leading-relaxed">
-                    {analysis.readinessScore > 75
-                      ? "You're a strong candidate! Focus on polishing your advanced skills."
-                      : "Great foundation. Completing your plan can boost this significantly."}
-                  </p>
-                </div>
+        <Sidebar
+          currentView={view}
+          onChangeView={setView}
+          onLogout={handleLogout}
+          onSwitchTrack={handleSwitchTrack}
+          onResetData={handleResetData}
+          onOpenFeedback={() => setShowFeedbackModal(true)}
+        />
 
-                {/* Strengths & Weaknesses */}
-                <div className="bg-white/5 backdrop-blur-xl p-8 rounded-3xl border border-white/10 col-span-2 flex flex-col justify-between shadow-xl">
-                  <div className="mb-6">
-                    <h3 className="text-xs font-bold text-emerald-400 mb-4 uppercase tracking-widest flex items-center">
-                      <TrendingUp className="w-4 h-4 mr-2" /> Top Strengths
-                    </h3>
-                    <div className="space-y-3">
-                      {analysis.strengths?.map((s, i) => (
-                        <div key={i} className="flex items-start text-sm text-slate-200 bg-emerald-500/10 p-3 rounded-lg border border-emerald-500/20">
-                          <span className="mr-2 text-emerald-500 font-bold">•</span> {s}
-                        </div>
-                      ))}
-                      {(!analysis.strengths || analysis.strengths.length === 0) && <div className="text-slate-500 text-sm">No strengths detected yet.</div>}
-                    </div>
-                  </div>
-                  <div className="pt-6 border-t border-white/5">
-                    <h3 className="text-xs font-bold text-amber-400 mb-4 uppercase tracking-widest flex items-center">
-                      <Target className="w-4 h-4 mr-2" /> Key Gaps
-                    </h3>
-                    <div className="space-y-3">
-                      {analysis.weaknesses?.map((w, i) => (
-                        <div key={i} className="flex items-start text-sm text-slate-200 bg-amber-500/10 p-3 rounded-lg border border-amber-500/20">
-                          <span className="mr-2 text-amber-500 font-bold">•</span> {w}
-                        </div>
-                      ))}
-                      {(!analysis.weaknesses || analysis.weaknesses.length === 0) && <div className="text-slate-500 text-sm">No gaps detected yet.</div>}
-                    </div>
-                  </div>
-                </div>
+        <MobileBottomNav
+          currentView={view}
+          onChangeView={setView}
+          onLogout={handleLogout}
+          onSwitchTrack={handleSwitchTrack}
+          onResetData={handleResetData}
+          onOpenFeedback={() => setShowFeedbackModal(true)}
+          onOpenProfile={() => setShowProfileModal(true)}
+        />
+
+        <main className="flex-1 md:ml-64 p-6 md:p-10 pb-24 md:pb-10 pt-6 md:pt-10 bg-slate-950 relative">
+          {/* Background Gradients */}
+          <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
+            <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-indigo-900/20 blur-[100px] rounded-full"></div>
+            <div className="absolute bottom-[-10%] left-[10%] w-[400px] h-[400px] bg-purple-900/10 blur-[100px] rounded-full"></div>
+          </div>
+
+          <div className="relative z-10 max-w-5xl mx-auto">
+            {/* Header */}
+            <header className="flex justify-between items-center mb-10">
+              <div>
+                <h2 className="text-3xl font-bold text-white tracking-tight">
+                  {view === AppView.DASHBOARD && 'Dashboard'}
+                  {view === AppView.PLAN && 'Learning Plan'}
+                  {view === AppView.INTERVIEW && 'Interview Simulator'}
+                </h2>
+                <p className="text-slate-400 text-sm mt-1">Target Role: <span className="text-indigo-400 font-medium">{userProfile.targetRole}</span></p>
               </div>
-
-              {/* Skills Matrix */}
-              <div className="bg-white/5 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-xl">
-                <div className="flex justify-between items-center mb-8">
-                  <h3 className="text-xl font-bold text-white">Skills Breakdown</h3>
-                  <span className="text-xs font-bold px-3 py-1 bg-white/10 border border-white/10 rounded-full text-slate-300">
-                    {analysis.skills?.length || 0} skills tracked
-                  </span>
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-8">
-                  <div>
-                    <h4 className="text-sm text-slate-400 mb-4 font-bold uppercase tracking-wider">Acquired</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {analysis.skills?.filter(s => s.status === 'acquired').map(s => <SkillCard key={s.name} skill={s} />)}
-                      {analysis.skills?.filter(s => s.status === 'acquired').length === 0 && <span className="text-sm text-slate-500 italic">No exact matches found yet.</span>}
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className="text-sm text-slate-400 mb-4 font-bold uppercase tracking-wider">Missing / To Learn</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {analysis.skills?.filter(s => s.status === 'missing').map(s => <SkillCard key={s.name} skill={s} />)}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-10 flex justify-end">
-                  <button
-                    onClick={handleGeneratePlan}
-                    disabled={isGeneratingPlan}
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-3 rounded-xl shadow-[0_0_20px_rgba(79,70,229,0.3)] hover:shadow-[0_0_30px_rgba(79,70,229,0.5)] transition-all flex items-center space-x-2 text-sm font-bold disabled:opacity-70"
-                  >
-                    {isGeneratingPlan ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
-                    <span>{plan ? 'Regenerate Roadmap' : 'Generate Career Roadmap'}</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Learning Plan View */}
-          {view === AppView.PLAN && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              {!plan && !isGeneratingPlan && (
-                <div className="text-center py-24 bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10">
-                  <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <BookOpen className="w-8 h-8 text-slate-400" />
-                  </div>
-                  <h3 className="text-xl font-bold text-white mb-2">No Plan Generated Yet</h3>
-                  <p className="text-slate-400 mb-8 max-w-md mx-auto">Create a personalized curriculum based on your skill gaps using our AI architect.</p>
-                  <button
-                    onClick={handleGeneratePlan}
-                    className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-500/20"
-                  >
-                    Generate Plan Now
-                  </button>
-                </div>
-              )}
-
-              {isGeneratingPlan && (
-                <div className="flex flex-col items-center justify-center py-32 space-y-6">
-                  <Loader2 className="w-12 h-12 text-indigo-500 animate-spin" />
-                  <p className="text-slate-300 font-medium text-lg">Designing your curriculum...</p>
-                </div>
-              )}
-
-              {plan && (
-                <div className="space-y-8">
-                  {plan?.map((week, idx) => (
-                    <div key={idx} className="bg-white/5 backdrop-blur-md rounded-3xl border border-white/10 overflow-hidden">
-                      <div className="bg-white/5 px-8 py-5 border-b border-white/5 flex justify-between items-center">
-                        <div>
-                          <h3 className="text-xl font-bold text-white">Week {idx + 1}</h3>
-                          <p className="text-sm text-indigo-300 mt-1 font-medium">{week.theme}</p>
-                        </div>
-                      </div>
-                      <div className="divide-y divide-white/5">
-                        {week.tasks?.map((task) => (
-                          <div key={task.id} className="p-8 hover:bg-white/5 transition-colors group relative">
-                            <div className="flex items-start space-x-6">
-                              <div className={`p-3 rounded-xl shrink-0 ${task.type === 'project' ? 'bg-purple-500/20 text-purple-300' :
-                                task.type === 'course' ? 'bg-blue-500/20 text-blue-300' :
-                                  'bg-amber-500/20 text-amber-300'
-                                }`}>
-                                {task.type === 'project' ? <Briefcase className="w-6 h-6" /> :
-                                  task.type === 'course' ? <PlayCircle className="w-6 h-6" /> :
-                                    <BookOpen className="w-6 h-6" />}
-                              </div>
-                              <div className="flex-1">
-                                <div className="flex justify-between items-start pr-8">
-                                  <h4 className={`text-lg font-bold mb-2 transition-all ${task.completed ? 'text-slate-500 line-through' : 'text-white'}`}>
-                                    {task.title}
-                                  </h4>
-                                  <span className="text-xs font-bold px-2 py-1 bg-white/10 rounded text-slate-400 flex items-center shrink-0">
-                                    <Clock className="w-3 h-3 mr-1.5" />
-                                    {task.estimatedHours}h
-                                  </span>
-                                </div>
-                                <p className="text-sm text-slate-400 mb-4 leading-relaxed">{task.description}</p>
-
-                                <div className="flex items-center space-x-4 mt-2">
-                                  {/* Video Resource Link */}
-                                  {task.videoQuery && (
-                                    <a
-                                      href={`https://www.youtube.com/results?search_query=${encodeURIComponent(task.videoQuery)}`}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="inline-flex items-center text-xs font-bold text-red-400 hover:text-red-300 bg-red-500/10 px-3 py-1.5 rounded-lg border border-red-500/20 transition-colors"
-                                    >
-                                      <Youtube className="w-3 h-3 mr-2" /> Watch Tutorial
-                                    </a>
-                                  )}
-
-                                  <button
-                                    onClick={() => handleToggleTask(idx, task.id)}
-                                    className={`text-xs font-bold transition-all inline-flex items-center ${task.completed
-                                      ? 'text-emerald-400'
-                                      : 'text-indigo-400 opacity-0 group-hover:opacity-100'
-                                      } hover:text-indigo-300`}
-                                  >
-                                    {task.completed ? (
-                                      <><Check className="w-3 h-3 mr-1" /> Done</>
-                                    ) : (
-                                      <>Mark Done <ChevronRight className="w-3 h-3 ml-1" /></>
-                                    )}
-                                  </button>
-                                </div>
-                              </div>
-                              <button
-                                onClick={() => handleDeleteTask(idx, task.id)}
-                                className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 p-2 text-slate-600 hover:text-red-400 transition-all"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-
-                        {/* Add Task UI */}
-                        <div className="p-4 bg-white/5">
-                          {addingTaskWeek === idx ? (
-                            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-700 animate-in fade-in slide-in-from-top-2">
-                              <div className="space-y-4">
-                                <input
-                                  type="text"
-                                  value={newTaskTitle}
-                                  onChange={(e) => setNewTaskTitle(e.target.value)}
-                                  placeholder="Task title..."
-                                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white focus:ring-1 focus:ring-indigo-500 outline-none"
-                                />
-                                <div className="flex space-x-3">
-                                  <select
-                                    value={newTaskType}
-                                    onChange={(e) => setNewTaskType(e.target.value as any)}
-                                    className="bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-slate-300 outline-none"
-                                  >
-                                    <option value="reading">Reading</option>
-                                    <option value="course">Course</option>
-                                    <option value="project">Project</option>
-                                  </select>
-                                  <input
-                                    type="number"
-                                    value={newTaskHours}
-                                    onChange={(e) => setNewTaskHours(Number(e.target.value))}
-                                    min={0.5}
-                                    step={0.5}
-                                    className="w-24 bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white outline-none"
-                                  />
-                                  <div className="flex-1"></div>
-                                  <button
-                                    onClick={() => setAddingTaskWeek(null)}
-                                    className="p-3 text-slate-400 hover:text-white"
-                                  >
-                                    <X className="w-5 h-5" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleAddTask(idx)}
-                                    className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-xl"
-                                  >
-                                    Add Task
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => setAddingTaskWeek(idx)}
-                              className="w-full py-3 flex items-center justify-center text-sm font-medium text-slate-500 hover:text-indigo-400 border border-dashed border-white/10 hover:border-indigo-500/50 rounded-xl transition-all"
-                            >
-                              <Plus className="w-4 h-4 mr-2" /> Add Custom Task
-                            </button>
-                          )}
-                        </div>
+              <div className="flex items-center space-x-4">
+                {/* Daily Streak Badge */}
+                {isLoggedIn && (
+                  <div className="flex items-center space-x-4 mr-2">
+                    <div className="hidden md:flex flex-col items-end">
+                      <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Daily Streak</span>
+                      <div className="flex items-center space-x-1.5 text-amber-400">
+                        <Zap className="w-4 h-4 fill-current" />
+                        <span className="font-bold">{userProfile.streak || 1} Days</span>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+                  </div>
+                )}
 
-          {/* Projects Hub View */}
-          {view === AppView.PROJECTS && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              {/* Header Section with Gradient */}
-              <div className="relative overflow-hidden bg-gradient-to-br from-indigo-900/40 via-purple-900/30 to-slate-900/40 rounded-3xl border border-indigo-500/20 p-8 backdrop-blur-xl">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.1),transparent_50%)]" />
-                <div className="relative flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                  <div>
-                    <h3 className="text-3xl font-bold text-white mb-2 flex items-center">
-                      <Code className="w-8 h-8 mr-3 text-indigo-400" />
-                      Portfolio Builder
-                    </h3>
-                    <p className="text-slate-300 text-sm max-w-2xl">
-                      AI-powered project ideas tailored to <span className="text-indigo-400 font-semibold">{userProfile.targetRole}</span> at your target companies
+                <button
+                  onClick={() => setShowProfileModal(true)}
+                  className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-500/20 hover:scale-110 transition-transform cursor-pointer"
+                >
+                  {userProfile.name?.[0]?.toUpperCase() || 'U'}
+                </button>
+              </div>
+            </header>
+
+            {/* Dashboard View */}
+            {view === AppView.DASHBOARD && analysis && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Score Card */}
+                  <div className="bg-white/5 backdrop-blur-xl p-8 rounded-3xl border border-white/10 col-span-1 shadow-xl relative">
+                    <button
+                      onClick={() => setShowShareModal(true)}
+                      className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-indigo-300 transition-colors"
+                    >
+                      <Share2 className="w-4 h-4" />
+                    </button>
+                    <h3 className="text-xs font-bold text-slate-400 mb-6 uppercase tracking-widest">Match Potential</h3>
+                    <ScoreGauge score={analysis.readinessScore} />
+                    <p className="text-center text-sm text-slate-300 mt-4 leading-relaxed">
+                      {analysis.readinessScore > 75
+                        ? "You're a strong candidate! Focus on polishing your advanced skills."
+                        : "Great foundation. Completing your plan can boost this significantly."}
                     </p>
                   </div>
-                  <button
-                    onClick={handleGenerateProjects}
-                    disabled={isGeneratingProjects}
-                    className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center transition-all shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isGeneratingProjects ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw className="w-5 h-5 mr-2" />
-                        Generate New Ideas
-                      </>
-                    )}
-                  </button>
+
+                  {/* Strengths & Weaknesses */}
+                  <div className="bg-white/5 backdrop-blur-xl p-8 rounded-3xl border border-white/10 col-span-2 flex flex-col justify-between shadow-xl">
+                    <div className="mb-6">
+                      <h3 className="text-xs font-bold text-emerald-400 mb-4 uppercase tracking-widest flex items-center">
+                        <TrendingUp className="w-4 h-4 mr-2" /> Top Strengths
+                      </h3>
+                      <div className="space-y-3">
+                        {analysis.strengths?.map((s, i) => (
+                          <div key={i} className="flex items-start text-sm text-slate-200 bg-emerald-500/10 p-3 rounded-lg border border-emerald-500/20">
+                            <span className="mr-2 text-emerald-500 font-bold">•</span> {s}
+                          </div>
+                        ))}
+                        {(!analysis.strengths || analysis.strengths.length === 0) && <div className="text-slate-500 text-sm">No strengths detected yet.</div>}
+                      </div>
+                    </div>
+                    <div className="pt-6 border-t border-white/5">
+                      <h3 className="text-xs font-bold text-amber-400 mb-4 uppercase tracking-widest flex items-center">
+                        <Target className="w-4 h-4 mr-2" /> Key Gaps
+                      </h3>
+                      <div className="space-y-3">
+                        {analysis.weaknesses?.map((w, i) => (
+                          <div key={i} className="flex items-start text-sm text-slate-200 bg-amber-500/10 p-3 rounded-lg border border-amber-500/20">
+                            <span className="mr-2 text-amber-500 font-bold">•</span> {w}
+                          </div>
+                        ))}
+                        {(!analysis.weaknesses || analysis.weaknesses.length === 0) && <div className="text-slate-500 text-sm">No gaps detected yet.</div>}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Skills Matrix */}
+                <div className="bg-white/5 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-xl">
+                  <div className="flex justify-between items-center mb-8">
+                    <h3 className="text-xl font-bold text-white">Skills Breakdown</h3>
+                    <span className="text-xs font-bold px-3 py-1 bg-white/10 border border-white/10 rounded-full text-slate-300">
+                      {analysis.skills?.length || 0} skills tracked
+                    </span>
+                  </div>
+
+                  <div className="grid md:grid-cols-2 gap-8">
+                    <div>
+                      <h4 className="text-sm text-slate-400 mb-4 font-bold uppercase tracking-wider">Acquired</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {analysis.skills?.filter(s => s.status === 'acquired').map(s => <SkillCard key={s.name} skill={s} />)}
+                        {analysis.skills?.filter(s => s.status === 'acquired').length === 0 && <span className="text-sm text-slate-500 italic">No exact matches found yet.</span>}
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-sm text-slate-400 mb-4 font-bold uppercase tracking-wider">Missing / To Learn</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {analysis.skills?.filter(s => s.status === 'missing').map(s => <SkillCard key={s.name} skill={s} />)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-10 flex justify-end">
+                    <button
+                      onClick={handleGeneratePlan}
+                      disabled={isGeneratingPlan}
+                      className="bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-3 rounded-xl shadow-[0_0_20px_rgba(79,70,229,0.3)] hover:shadow-[0_0_30px_rgba(79,70,229,0.5)] transition-all flex items-center space-x-2 text-sm font-bold disabled:opacity-70"
+                    >
+                      {isGeneratingPlan ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
+                      <span>{plan ? 'Regenerate Roadmap' : 'Generate Career Roadmap'}</span>
+                    </button>
+                  </div>
                 </div>
               </div>
+            )}
 
-              {/* Loading State - Full page centered (same as initial page load) */}
-              {isGeneratingProjects && projects?.length === 0 && (
-                <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-slate-500">
-                  {/* CSS Animation */}
-                  <style>{`
+            {/* Learning Plan View */}
+            {view === AppView.PLAN && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                {!plan && !isGeneratingPlan && (
+                  <EmptyState
+                    icon={BookOpen}
+                    title="No Learning Plan Yet"
+                    description="Create a personalized curriculum based on your skill gaps. Our AI architect will build a week-by-week roadmap for you."
+                    actionLabel="Generate Plan Now"
+                    onAction={handleGeneratePlan}
+                    color="indigo"
+                  />
+                )}
+
+                {isGeneratingPlan && (
+                  <div className="flex flex-col items-center justify-center py-32 space-y-6">
+                    <Loader2 className="w-12 h-12 text-indigo-500 animate-spin" />
+                    <p className="text-slate-300 font-medium text-lg">Designing your curriculum...</p>
+                  </div>
+                )}
+
+                {plan && (
+                  <div className="space-y-8">
+                    {/* Statistics Panel */}
+                    {(() => {
+                      const stats = calculatePlanStatistics(plan, 2); // 2 hours/day default
+                      const currentWeek = getCurrentWeek(plan);
+                      const progressMessage = getProgressMessage(stats.progressPercentage);
+
+                      return (
+                        <div className="bg-indigo-500/5 backdrop-blur-xl rounded-3xl border border-white/10 p-8 shadow-xl">
+                          {/* Header */}
+                          <div className="flex items-start justify-between mb-6">
+                            <div>
+                              <h3 className="text-2xl font-bold text-white mb-2">Your Learning Journey</h3>
+                              <p className="text-indigo-300 text-sm font-medium">{progressMessage}</p>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-3xl font-bold text-white mb-1">{stats.progressPercentage}%</div>
+                              <div className="text-xs text-slate-400">Complete</div>
+                            </div>
+                          </div>
+
+                          {/* Progress Bar */}
+                          <div className="mb-6">
+                            <div className="h-3 bg-slate-800/50 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500 ease-out"
+                                style={{ width: `${stats.progressPercentage}%` }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Stats Grid */}
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {/* Current Week */}
+                            <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                              <div className="flex items-center space-x-2 mb-2">
+                                <Target className="w-4 h-4 text-indigo-400" />
+                                <span className="text-xs font-bold text-slate-400 uppercase">Current Week</span>
+                              </div>
+                              <div className="text-2xl font-bold text-white">Week {currentWeek}</div>
+                              <div className="text-xs text-slate-500 mt-1">of {stats.totalWeeks}</div>
+                            </div>
+
+                            {/* Tasks Progress */}
+                            <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                              <div className="flex items-center space-x-2 mb-2">
+                                <CheckCircle className="w-4 h-4 text-emerald-400" />
+                                <span className="text-xs font-bold text-slate-400 uppercase">Tasks</span>
+                              </div>
+                              <div className="text-2xl font-bold text-white">{stats.completedTasks}/{stats.totalTasks}</div>
+                              <div className="text-xs text-slate-500 mt-1">completed</div>
+                            </div>
+
+                            {/* Hours Progress */}
+                            <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                              <div className="flex items-center space-x-2 mb-2">
+                                <Clock className="w-4 h-4 text-amber-400" />
+                                <span className="text-xs font-bold text-slate-400 uppercase">Hours</span>
+                              </div>
+                              <div className="text-2xl font-bold text-white">{stats.completedHours}/{stats.totalHours}</div>
+                              <div className="text-xs text-slate-500 mt-1">invested</div>
+                            </div>
+
+                            {/* Completion Date */}
+                            <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                              <div className="flex items-center space-x-2 mb-2">
+                                <TrendingUp className="w-4 h-4 text-purple-400" />
+                                <span className="text-xs font-bold text-slate-400 uppercase">Est. Done</span>
+                              </div>
+                              <div className="text-lg font-bold text-white leading-tight">{stats.estimatedCompletionDate}</div>
+                              <div className="text-xs text-slate-500 mt-1">at 2h/day</div>
+                            </div>
+                          </div>
+
+                          {/* Task Type Breakdown */}
+                          <div className="mt-6 pt-6 border-t border-white/10">
+                            <div className="flex items-center justify-between text-xs">
+                              <div className="flex items-center space-x-2">
+                                <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                                <span className="text-slate-400">Courses: <span className="text-white font-bold">{stats.taskBreakdown.course}</span></span>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                                <span className="text-slate-400">Projects: <span className="text-white font-bold">{stats.taskBreakdown.project}</span></span>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <div className="w-3 h-3 rounded-full bg-amber-500"></div>
+                                <span className="text-slate-400">Reading: <span className="text-white font-bold">{stats.taskBreakdown.reading}</span></span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Weekly Plan */}
+                    {plan?.map((week, idx) => {
+                      const completedCount = week.tasks.filter(t => t.completed).length;
+                      const totalCount = week.tasks.length;
+                      const weekProgress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
+                      return (
+                        <div key={idx} className="bg-white/5 backdrop-blur-md rounded-3xl border border-white/10 overflow-hidden">
+                          <div className="bg-white/5 px-8 py-5 border-b border-white/5 flex justify-between items-center">
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <h3 className="text-xl font-bold text-white">Week {idx + 1}</h3>
+                                  <p className="text-sm text-indigo-300 mt-1 font-medium">{week.theme}</p>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-sm font-bold text-white mb-1">{completedCount}/{totalCount} Tasks</div>
+                                  <div className="flex items-center space-x-2">
+                                    <div className="w-24 h-2 bg-slate-800 rounded-full overflow-hidden">
+                                      <div
+                                        className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-300"
+                                        style={{ width: `${weekProgress}%` }}
+                                      />
+                                    </div>
+                                    <span className="text-xs font-bold text-slate-400">{weekProgress}%</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="divide-y divide-white/5">
+                            {week.tasks?.map((task) => (
+                              <div key={task.id} className="p-8 hover:bg-white/5 transition-colors group relative">
+                                <div className="flex items-start space-x-6">
+                                  <div className={`p-3 rounded-xl shrink-0 ${task.type === 'project' ? 'bg-purple-500/20 text-purple-300' :
+                                    task.type === 'course' ? 'bg-blue-500/20 text-blue-300' :
+                                      'bg-amber-500/20 text-amber-300'
+                                    }`}>
+                                    {task.type === 'project' ? <Briefcase className="w-6 h-6" /> :
+                                      task.type === 'course' ? <PlayCircle className="w-6 h-6" /> :
+                                        <BookOpen className="w-6 h-6" />}
+                                  </div>
+                                  <div className="flex-1">
+                                    <div className="flex justify-between items-start pr-8">
+                                      <h4 className={`text-lg font-bold mb-2 transition-all ${task.completed ? 'text-slate-500 line-through' : 'text-white'}`}>
+                                        {task.title}
+                                      </h4>
+                                      <span className="text-xs font-bold px-2 py-1 bg-white/10 rounded text-slate-400 flex items-center shrink-0">
+                                        <Clock className="w-3 h-3 mr-1.5" />
+                                        {task.estimatedHours}h
+                                      </span>
+                                    </div>
+                                    <p className="text-sm text-slate-400 mb-4 leading-relaxed">{task.description}</p>
+
+                                    <div className="flex items-center space-x-4 mt-2">
+                                      {/* Video Resource Link */}
+                                      {task.videoQuery && (
+                                        <a
+                                          href={`https://www.youtube.com/results?search_query=${encodeURIComponent(task.videoQuery)}`}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="inline-flex items-center text-xs font-bold text-red-400 hover:text-red-300 bg-red-500/10 px-3 py-1.5 rounded-lg border border-red-500/20 transition-colors"
+                                        >
+                                          <Youtube className="w-3 h-3 mr-2" /> Watch Tutorial
+                                        </a>
+                                      )}
+
+                                      <button
+                                        onClick={() => handleToggleTask(idx, task.id)}
+                                        className={`text-xs font-bold transition-all inline-flex items-center ${task.completed
+                                          ? 'text-emerald-400'
+                                          : 'text-indigo-400 opacity-0 group-hover:opacity-100'
+                                          } hover:text-indigo-300`}
+                                      >
+                                        {task.completed ? (
+                                          <><Check className="w-3 h-3 mr-1" /> Done</>
+                                        ) : (
+                                          <>Mark Done <ChevronRight className="w-3 h-3 ml-1" /></>
+                                        )}
+                                      </button>
+                                    </div>
+                                  </div>
+                                  <button
+                                    onClick={() => handleDeleteTask(idx, task.id)}
+                                    className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 p-2 text-slate-600 hover:text-red-400 transition-all"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+
+                            {/* Add Task UI */}
+                            <div className="p-4 bg-white/5">
+                              {addingTaskWeek === idx ? (
+                                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-700 animate-in fade-in slide-in-from-top-2">
+                                  <div className="space-y-4">
+                                    <input
+                                      type="text"
+                                      value={newTaskTitle}
+                                      onChange={(e) => setNewTaskTitle(e.target.value)}
+                                      placeholder="Task title..."
+                                      className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white focus:ring-1 focus:ring-indigo-500 outline-none"
+                                    />
+                                    <div className="flex space-x-3">
+                                      <select
+                                        value={newTaskType}
+                                        onChange={(e) => setNewTaskType(e.target.value as any)}
+                                        className="bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-slate-300 outline-none"
+                                      >
+                                        <option value="reading">Reading</option>
+                                        <option value="course">Course</option>
+                                        <option value="project">Project</option>
+                                      </select>
+                                      <input
+                                        type="number"
+                                        value={newTaskHours}
+                                        onChange={(e) => setNewTaskHours(Number(e.target.value))}
+                                        min={0.5}
+                                        step={0.5}
+                                        className="w-24 bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white outline-none"
+                                      />
+                                      <div className="flex-1"></div>
+                                      <button
+                                        onClick={() => setAddingTaskWeek(null)}
+                                        className="p-3 text-slate-400 hover:text-white"
+                                      >
+                                        <X className="w-5 h-5" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleAddTask(idx)}
+                                        className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-xl"
+                                      >
+                                        Add Task
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setAddingTaskWeek(idx)}
+                                  className="w-full py-3 flex items-center justify-center text-sm font-medium text-slate-500 hover:text-indigo-400 border border-dashed border-white/10 hover:border-indigo-500/50 rounded-xl transition-all"
+                                >
+                                  <Plus className="w-4 h-4 mr-2" /> Add Custom Task
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Projects Hub View */}
+            {view === AppView.PROJECTS && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                {/* Header Section with Gradient */}
+                <div className="relative overflow-hidden bg-gradient-to-br from-indigo-900/40 via-purple-900/30 to-slate-900/40 rounded-3xl border border-indigo-500/20 p-8 backdrop-blur-xl">
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.1),transparent_50%)]" />
+                  <div className="relative flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                      <h3 className="text-3xl font-bold text-white mb-2 flex items-center">
+                        <Code className="w-8 h-8 mr-3 text-indigo-400" />
+                        Portfolio Builder
+                      </h3>
+                      <p className="text-slate-300 text-sm max-w-2xl">
+                        AI-powered project ideas tailored to <span className="text-indigo-400 font-semibold">{userProfile.targetRole}</span> at your target companies
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleGenerateProjects}
+                      disabled={isGeneratingProjects}
+                      className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center transition-all shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isGeneratingProjects ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-5 h-5 mr-2" />
+                          Generate New Ideas
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Loading State - Full page centered (same as initial page load) */}
+                {isGeneratingProjects && projects?.length === 0 && (
+                  <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-slate-500">
+                    {/* CSS Animation */}
+                    <style>{`
                     @keyframes iconPulse {
                       0%, 100% { opacity: 0.3; transform: scale(1); color: #64748b; }
                       50% { opacity: 1; transform: scale(1.15); color: #818cf8; }
@@ -2104,426 +2549,439 @@ const App = () => {
                     }
                   `}</style>
 
-                  {/* Career Icons Animation */}
-                  <div className="flex items-center gap-6 mb-8">
-                    {/* Resume/FileText icon */}
-                    <svg className="portfolio-loader-icon" style={{ animationDelay: '0s' }} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M15 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7z"></path>
-                      <polyline points="14 2 14 8 20 8"></polyline>
-                      <line x1="16" y1="13" x2="8" y2="13"></line>
-                      <line x1="16" y1="17" x2="8" y2="17"></line>
-                      <line x1="10" y1="9" x2="8" y2="9"></line>
-                    </svg>
-                    {/* Code icon */}
-                    <svg className="portfolio-loader-icon" style={{ animationDelay: '0.15s' }} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="16 18 22 12 16 6"></polyline>
-                      <polyline points="8 6 2 12 8 18"></polyline>
-                    </svg>
-                    {/* Layers icon */}
-                    <svg className="portfolio-loader-icon" style={{ animationDelay: '0.3s' }} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
-                      <polyline points="2 17 12 22 22 17"></polyline>
-                      <polyline points="2 12 12 17 22 12"></polyline>
-                    </svg>
-                    {/* Briefcase icon */}
-                    <svg className="portfolio-loader-icon" style={{ animationDelay: '0.45s' }} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
-                      <path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"></path>
-                    </svg>
-                    {/* MessageSquare icon */}
-                    <svg className="portfolio-loader-icon" style={{ animationDelay: '0.6s' }} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"></path>
-                    </svg>
+                    {/* Career Icons Animation */}
+                    <div className="flex items-center gap-6 mb-8">
+                      {/* Resume/FileText icon */}
+                      <svg className="portfolio-loader-icon" style={{ animationDelay: '0s' }} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M15 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                        <line x1="10" y1="9" x2="8" y2="9"></line>
+                      </svg>
+                      {/* Code icon */}
+                      <svg className="portfolio-loader-icon" style={{ animationDelay: '0.15s' }} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="16 18 22 12 16 6"></polyline>
+                        <polyline points="8 6 2 12 8 18"></polyline>
+                      </svg>
+                      {/* Layers icon */}
+                      <svg className="portfolio-loader-icon" style={{ animationDelay: '0.3s' }} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                        <polyline points="2 17 12 22 22 17"></polyline>
+                        <polyline points="2 12 12 17 22 12"></polyline>
+                      </svg>
+                      {/* Briefcase icon */}
+                      <svg className="portfolio-loader-icon" style={{ animationDelay: '0.45s' }} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                        <path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"></path>
+                      </svg>
+                      {/* MessageSquare icon */}
+                      <svg className="portfolio-loader-icon" style={{ animationDelay: '0.6s' }} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"></path>
+                      </svg>
+                    </div>
+
+                    {/* Loading Text */}
+                    <p className="text-slate-400 text-sm tracking-wide">
+                      Crafting Your Perfect Projects
+                      <span className="inline-flex gap-1 ml-1">
+                        <span className="w-1 h-1 bg-indigo-400 rounded-full" style={{ animation: 'dotBounce 1.2s ease-in-out infinite', animationDelay: '0s' }}></span>
+                        <span className="w-1 h-1 bg-indigo-400 rounded-full" style={{ animation: 'dotBounce 1.2s ease-in-out infinite', animationDelay: '0.15s' }}></span>
+                        <span className="w-1 h-1 bg-indigo-400 rounded-full" style={{ animation: 'dotBounce 1.2s ease-in-out infinite', animationDelay: '0.3s' }}></span>
+                      </span>
+                    </p>
                   </div>
+                )}
 
-                  {/* Loading Text */}
-                  <p className="text-slate-400 text-sm tracking-wide">
-                    Crafting Your Perfect Projects
-                    <span className="inline-flex gap-1 ml-1">
-                      <span className="w-1 h-1 bg-indigo-400 rounded-full" style={{ animation: 'dotBounce 1.2s ease-in-out infinite', animationDelay: '0s' }}></span>
-                      <span className="w-1 h-1 bg-indigo-400 rounded-full" style={{ animation: 'dotBounce 1.2s ease-in-out infinite', animationDelay: '0.15s' }}></span>
-                      <span className="w-1 h-1 bg-indigo-400 rounded-full" style={{ animation: 'dotBounce 1.2s ease-in-out infinite', animationDelay: '0.3s' }}></span>
-                    </span>
-                  </p>
-                </div>
-              )}
+                {/* Projects Grid */}
+                {/* Empty State */}
+                {!isGeneratingProjects && (!projects || projects.length === 0) && (
+                  <EmptyState
+                    icon={Code}
+                    title="No Projects Yet"
+                    description="Generate your first portfolio project tailored to your target role. We'll give you the tech stack, features, and difficulty level."
+                    actionLabel="Generate New Ideas"
+                    onAction={handleGenerateProjects}
+                    color="indigo"
+                  />
+                )}
 
-              {/* Projects Grid */}
-              {projects?.length > 0 && (
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {projects?.map((project, idx) => (
-                    <div
-                      key={idx}
-                      className="group relative bg-gradient-to-br from-white/5 to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden hover:border-indigo-500/50 transition-all duration-300 hover:shadow-2xl hover:shadow-indigo-500/20 hover:-translate-y-1"
-                    >
-                      {/* Gradient Overlay on Hover */}
-                      <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/0 to-purple-500/0 group-hover:from-indigo-500/10 group-hover:to-purple-500/10 transition-all duration-300" />
+                {/* Projects Grid */}
+                {projects?.length > 0 && (
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {projects?.map((project, idx) => (
+                      <div
+                        key={idx}
+                        className="group relative bg-gradient-to-br from-white/5 to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden hover:border-indigo-500/50 transition-all duration-300 hover:shadow-2xl hover:shadow-indigo-500/20 hover:-translate-y-1"
+                      >
+                        {/* Gradient Overlay on Hover */}
+                        <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/0 to-purple-500/0 group-hover:from-indigo-500/10 group-hover:to-purple-500/10 transition-all duration-300" />
 
-                      {/* Card Content */}
-                      <div className="relative p-6 flex flex-col h-full">
-                        {/* Header with Difficulty Badge */}
-                        <div className="flex justify-between items-start mb-4">
-                          <div className={`px-3 py-1.5 rounded-lg text-xs font-bold border shadow-lg ${project.difficulty === 'Beginner'
-                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30 shadow-emerald-500/20'
-                            : project.difficulty === 'Intermediate'
-                              ? 'bg-blue-500/20 text-blue-300 border-blue-500/30 shadow-blue-500/20'
-                              : 'bg-purple-500/20 text-purple-300 border-purple-500/30 shadow-purple-500/20'
-                            }`}>
-                            {project.difficulty}
-                          </div>
-                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center border border-slate-700 group-hover:border-indigo-500/50 transition-all">
-                            <Layers className="w-5 h-5 text-slate-400 group-hover:text-indigo-400 transition-colors" />
-                          </div>
-                        </div>
-
-                        {/* Project Title */}
-                        <h4 className="text-xl font-bold text-white mb-3 group-hover:text-indigo-400 transition-colors leading-tight">
-                          {project.title}
-                        </h4>
-
-                        {/* Description */}
-                        <p className="text-slate-400 text-sm mb-4 flex-1 leading-relaxed line-clamp-3">
-                          {project.description}
-                        </p>
-
-                        {/* Tech Stack */}
-                        <div className="mb-4">
-                          <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center">
-                            <Code className="w-3 h-3 mr-1.5" />
-                            Tech Stack
-                          </h5>
-                          <div className="flex flex-wrap gap-2">
-                            {project.techStack?.slice(0, 4).map(t => (
-                              <span
-                                key={t}
-                                className="text-xs bg-slate-800/80 text-slate-300 px-2.5 py-1 rounded-lg border border-slate-700 hover:border-indigo-500/50 transition-colors"
-                              >
-                                {t}
-                              </span>
-                            ))}
-                            {project.techStack?.length > 4 && (
-                              <span className="text-xs bg-slate-800/80 text-slate-400 px-2.5 py-1 rounded-lg border border-slate-700">
-                                +{project.techStack.length - 4} more
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Key Features - Collapsible */}
-                        {project.keyFeatures && project.keyFeatures.length > 0 && (
-                          <div className="mb-4">
-                            <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center">
-                              <CheckCircle className="w-3 h-3 mr-1.5" />
-                              Key Features
-                            </h5>
-                            <ul className="space-y-1.5">
-                              {project.keyFeatures.slice(0, 3).map((feature, fIdx) => (
-                                <li key={fIdx} className="text-xs text-slate-400 flex items-start">
-                                  <ChevronRight className="w-3 h-3 mr-1 mt-0.5 text-indigo-400 shrink-0" />
-                                  <span className="line-clamp-1">{feature}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-
-                        {/* Resume Value Highlight */}
-                        <div className="bg-gradient-to-br from-indigo-900/30 to-purple-900/20 p-4 rounded-xl border border-indigo-500/30 mb-4 relative overflow-hidden">
-                          <div className="absolute top-0 right-0 w-20 h-20 bg-indigo-500/10 rounded-full blur-2xl" />
-                          <div className="relative flex items-start space-x-2">
-                            <TrendingUp className="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" />
-                            <div>
-                              <p className="text-xs font-bold text-indigo-300 mb-1">Resume Impact</p>
-                              <p className="text-xs text-indigo-200/90 italic leading-relaxed">"{project.resumeValue}"</p>
+                        {/* Card Content */}
+                        <div className="relative p-6 flex flex-col h-full">
+                          {/* Header with Difficulty Badge */}
+                          <div className="flex justify-between items-start mb-4">
+                            <div className={`px-3 py-1.5 rounded-lg text-xs font-bold border shadow-lg ${project.difficulty === 'Beginner'
+                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30 shadow-emerald-500/20'
+                              : project.difficulty === 'Intermediate'
+                                ? 'bg-blue-500/20 text-blue-300 border-blue-500/30 shadow-blue-500/20'
+                                : 'bg-purple-500/20 text-purple-300 border-purple-500/30 shadow-purple-500/20'
+                              }`}>
+                              {project.difficulty}
+                            </div>
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center border border-slate-700 group-hover:border-indigo-500/50 transition-all">
+                              <Layers className="w-5 h-5 text-slate-400 group-hover:text-indigo-400 transition-colors" />
                             </div>
                           </div>
-                        </div>
 
-                        {/* Learning Outcomes */}
-                        {project.learningOutcomes && project.learningOutcomes.length > 0 && (
-                          <div className="mb-4 pb-4 border-b border-slate-700/50">
+                          {/* Project Title */}
+                          <h4 className="text-xl font-bold text-white mb-3 group-hover:text-indigo-400 transition-colors leading-tight">
+                            {project.title}
+                          </h4>
+
+                          {/* Description */}
+                          <p className="text-slate-400 text-sm mb-4 flex-1 leading-relaxed line-clamp-3">
+                            {project.description}
+                          </p>
+
+                          {/* Tech Stack */}
+                          <div className="mb-4">
                             <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center">
-                              <Award className="w-3 h-3 mr-1.5" />
-                              You'll Learn
+                              <Code className="w-3 h-3 mr-1.5" />
+                              Tech Stack
                             </h5>
-                            <div className="flex flex-wrap gap-1.5">
-                              {project.learningOutcomes.slice(0, 3).map((outcome, oIdx) => (
+                            <div className="flex flex-wrap gap-2">
+                              {project.techStack?.slice(0, 4).map(t => (
                                 <span
-                                  key={oIdx}
-                                  className="text-xs bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded border border-emerald-500/20"
+                                  key={t}
+                                  className="text-xs bg-slate-800/80 text-slate-300 px-2.5 py-1 rounded-lg border border-slate-700 hover:border-indigo-500/50 transition-colors"
                                 >
-                                  {outcome}
+                                  {t}
                                 </span>
                               ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Implementation Steps Preview */}
-                        {project.implementationFlow && project.implementationFlow.length > 0 && (
-                          <div className="mb-4">
-                            <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center">
-                              <List className="w-3 h-3 mr-1.5" />
-                              Implementation Steps
-                            </h5>
-                            <div className="space-y-1.5">
-                              {project.implementationFlow.slice(0, 2).map((step, sIdx) => (
-                                <div key={sIdx} className="flex items-start text-xs text-slate-400">
-                                  <span className="text-indigo-400 font-bold mr-2 shrink-0">{sIdx + 1}.</span>
-                                  <span className="line-clamp-1">{step}</span>
-                                </div>
-                              ))}
-                              {project.implementationFlow.length > 2 && (
-                                <p className="text-xs text-slate-500 italic ml-5">+{project.implementationFlow.length - 2} more steps...</p>
+                              {project.techStack?.length > 4 && (
+                                <span className="text-xs bg-slate-800/80 text-slate-400 px-2.5 py-1 rounded-lg border border-slate-700">
+                                  +{project.techStack.length - 4} more
+                                </span>
                               )}
                             </div>
                           </div>
-                        )}
 
-                        {/* Action Button */}
-                        <button
-                          onClick={() => setSelectedProject(project)}
-                          className="w-full mt-auto bg-gradient-to-r from-indigo-600/80 to-purple-600/80 hover:from-indigo-600 hover:to-purple-600 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center transition-all shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40 group-hover:scale-[1.02]"
-                        >
-                          <ExternalLink className="w-4 h-4 mr-2" />
-                          View Full Details
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Empty State */}
-              {!isGeneratingProjects && projects?.length === 0 && (
-                <div className="text-center py-24 bg-gradient-to-br from-white/5 to-indigo-500/5 rounded-3xl border border-white/10 relative overflow-hidden">
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(99,102,241,0.1),transparent_70%)]" />
-                  <div className="relative">
-                    <div className="w-20 h-20 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-indigo-500/30">
-                      <Code className="w-10 h-10 text-indigo-400" />
-                    </div>
-                    <h3 className="text-2xl font-bold text-white mb-3">Build Your Portfolio</h3>
-                    <p className="text-slate-400 mb-8 max-w-md mx-auto leading-relaxed">
-                      Stuck on what to build? Get 3 tailored project ideas (Beginner to Advanced) designed to impress recruiters at <span className="text-indigo-400 font-semibold">{userProfile.targetCompanies || 'top companies'}</span>.
-                    </p>
-                    <button
-                      onClick={handleGenerateProjects}
-                      className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-8 py-4 rounded-xl font-bold text-base flex items-center mx-auto transition-all shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:scale-105"
-                    >
-                      <Code className="w-5 h-5 mr-2" />
-                      Generate Projects Now
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Project Details Modal */}
-          {selectedProject && (
-            <div
-              className="fixed inset-0 md:left-64 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300"
-              onClick={() => setSelectedProject(null)}
-            >
-              <div
-                className="bg-gradient-to-br from-slate-900 to-slate-950 rounded-3xl border border-indigo-500/30 max-w-4xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl shadow-indigo-500/20"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Blueprint Header */}
-                <div className="sticky top-0 bg-gradient-to-r from-indigo-900/60 to-purple-900/40 backdrop-blur-xl border-b border-indigo-500/30 p-6 z-10">
-                  <div className="flex flex-col items-center text-center relative">
-                    <button
-                      onClick={() => setSelectedProject(null)}
-                      className="absolute right-0 top-0 w-10 h-10 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-indigo-500/50 flex items-center justify-center transition-all"
-                    >
-                      <X className="w-5 h-5 text-slate-400 hover:text-white" />
-                    </button>
-
-                    <div className="text-xs font-bold text-indigo-400 tracking-widest uppercase mb-2">
-                      CareerPilot AI Project Blueprint
-                    </div>
-                    <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">{selectedProject.title}</h2>
-                    <div className="flex flex-wrap items-center justify-center gap-3 mb-4">
-                      <span className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${selectedProject.difficulty === 'Beginner'
-                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                        : selectedProject.difficulty === 'Intermediate'
-                          ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
-                          : 'bg-purple-500/20 text-purple-300 border-purple-500/30'
-                        }`}>
-                        {selectedProject.difficulty}
-                      </span>
-                      <span className="text-slate-400">|</span>
-                      <span className="text-slate-300 text-sm">{selectedProject.techStack?.join(', ')}</span>
-                    </div>
-                    <p className="text-slate-300 leading-relaxed max-w-2xl mx-auto">{selectedProject.description}</p>
-                  </div>
-                </div>
-
-                {/* Blueprint Content */}
-                <div className="p-6 space-y-8">
-                  {/* User Stories Section - Only show if explicit user stories exist */}
-                  {selectedProject.userStories && selectedProject.userStories.length > 0 && (
-                    <div>
-                      <h3 className="text-xl font-bold text-white mb-4 flex items-center">
-                        <Users className="w-5 h-5 mr-3 text-indigo-400" />
-                        User Stories
-                      </h3>
-                      <ul className="space-y-3">
-                        {selectedProject.userStories.map((story, idx) => (
-                          <li key={idx} className="flex items-start text-slate-300">
-                            <span className="text-indigo-400 mr-3 mt-1">•</span>
-                            <span className="leading-relaxed">{story}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {/* Key Features Section */}
-                  {selectedProject.keyFeatures && selectedProject.keyFeatures.length > 0 && (
-                    <div>
-                      <h3 className="text-xl font-bold text-white mb-4 flex items-center">
-                        <CheckCircle className="w-5 h-5 mr-3 text-emerald-400" />
-                        Key Features
-                      </h3>
-                      <ul className="space-y-3">
-                        {selectedProject.keyFeatures.map((feature, idx) => (
-                          <li key={idx} className="flex items-start text-slate-300">
-                            <span className="text-emerald-400 mr-3 mt-1">•</span>
-                            <span className="leading-relaxed">{feature}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {/* Implementation Steps Section */}
-                  {selectedProject.implementationFlow && selectedProject.implementationFlow.length > 0 && (
-                    <div>
-                      <h3 className="text-xl font-bold text-white mb-4 flex items-center">
-                        <List className="w-5 h-5 mr-3 text-indigo-400" />
-                        Implementation Steps
-                      </h3>
-                      <div className="space-y-4">
-                        {selectedProject.implementationFlow.map((step, idx) => (
-                          <div key={idx} className="flex items-start">
-                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 font-bold text-sm mr-4 mt-0.5">
-                              {idx + 1}
+                          {/* Key Features - Collapsible */}
+                          {project.keyFeatures && project.keyFeatures.length > 0 && (
+                            <div className="mb-4">
+                              <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center">
+                                <CheckCircle className="w-3 h-3 mr-1.5" />
+                                Key Features
+                              </h5>
+                              <ul className="space-y-1.5">
+                                {project.keyFeatures.slice(0, 3).map((feature, fIdx) => (
+                                  <li key={fIdx} className="text-xs text-slate-400 flex items-start">
+                                    <ChevronRight className="w-3 h-3 mr-1 mt-0.5 text-indigo-400 shrink-0" />
+                                    <span className="line-clamp-1">{feature}</span>
+                                  </li>
+                                ))}
+                              </ul>
                             </div>
-                            <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50 flex-1">
-                              <p className="text-slate-300 leading-relaxed">{step.replace(/^\d+\.\s*/, '')}</p>
+                          )}
+
+                          {/* Resume Value Highlight */}
+                          <div className="bg-gradient-to-br from-indigo-900/30 to-purple-900/20 p-4 rounded-xl border border-indigo-500/30 mb-4 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-20 h-20 bg-indigo-500/10 rounded-full blur-2xl" />
+                            <div className="relative flex items-start space-x-2">
+                              <TrendingUp className="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" />
+                              <div>
+                                <p className="text-xs font-bold text-indigo-300 mb-1">Resume Impact</p>
+                                <p className="text-xs text-indigo-200/90 italic leading-relaxed">"{project.resumeValue}"</p>
+                              </div>
                             </div>
                           </div>
-                        ))}
+
+                          {/* Learning Outcomes */}
+                          {project.learningOutcomes && project.learningOutcomes.length > 0 && (
+                            <div className="mb-4 pb-4 border-b border-slate-700/50">
+                              <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center">
+                                <Award className="w-3 h-3 mr-1.5" />
+                                You'll Learn
+                              </h5>
+                              <div className="flex flex-wrap gap-1.5">
+                                {project.learningOutcomes.slice(0, 3).map((outcome, oIdx) => (
+                                  <span
+                                    key={oIdx}
+                                    className="text-xs bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded border border-emerald-500/20"
+                                  >
+                                    {outcome}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Implementation Steps Preview */}
+                          {project.implementationFlow && project.implementationFlow.length > 0 && (
+                            <div className="mb-4">
+                              <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center">
+                                <List className="w-3 h-3 mr-1.5" />
+                                Implementation Steps
+                              </h5>
+                              <div className="space-y-1.5">
+                                {project.implementationFlow.slice(0, 2).map((step, sIdx) => (
+                                  <div key={sIdx} className="flex items-start text-xs text-slate-400">
+                                    <span className="text-indigo-400 font-bold mr-2 shrink-0">{sIdx + 1}.</span>
+                                    <span className="line-clamp-1">{step}</span>
+                                  </div>
+                                ))}
+                                {project.implementationFlow.length > 2 && (
+                                  <p className="text-xs text-slate-500 italic ml-5">+{project.implementationFlow.length - 2} more steps...</p>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Action Button */}
+                          <button
+                            onClick={() => setSelectedProject(project)}
+                            className="w-full mt-auto bg-gradient-to-r from-indigo-600/80 to-purple-600/80 hover:from-indigo-600 hover:to-purple-600 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center transition-all shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40 group-hover:scale-[1.02]"
+                          >
+                            <ExternalLink className="w-4 h-4 mr-2" />
+                            View Full Details
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    ))}
+                  </div>
+                )}
 
-                  {/* You'll Learn Section */}
-                  {selectedProject.learningOutcomes && selectedProject.learningOutcomes.length > 0 && (
-                    <div>
-                      <h3 className="text-xl font-bold text-white mb-4 flex items-center">
-                        <Award className="w-5 h-5 mr-3 text-amber-400" />
-                        You'll Learn
-                      </h3>
-                      <ul className="space-y-3">
-                        {selectedProject.learningOutcomes.map((outcome, idx) => (
-                          <li key={idx} className="flex items-start text-slate-300">
-                            <span className="text-amber-400 mr-3 mt-1">•</span>
-                            <span className="leading-relaxed">{outcome}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {/* Resume Value */}
-                  <div className="bg-gradient-to-br from-indigo-900/30 to-purple-900/20 p-6 rounded-2xl border border-indigo-500/30 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl" />
+                {/* Empty State */}
+                {!isGeneratingProjects && projects?.length === 0 && (
+                  <div className="text-center py-24 bg-gradient-to-br from-white/5 to-indigo-500/5 rounded-3xl border border-white/10 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(99,102,241,0.1),transparent_70%)]" />
                     <div className="relative">
-                      <h3 className="text-lg font-bold text-indigo-300 mb-2 flex items-center">
-                        <TrendingUp className="w-5 h-5 mr-2" />
-                        Resume Impact
-                      </h3>
-                      <p className="text-indigo-200 italic leading-relaxed">"{selectedProject.resumeValue}"</p>
+                      <div className="w-20 h-20 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-indigo-500/30">
+                        <Code className="w-10 h-10 text-indigo-400" />
+                      </div>
+                      <h3 className="text-2xl font-bold text-white mb-3">Build Your Portfolio</h3>
+                      <p className="text-slate-400 mb-8 max-w-md mx-auto leading-relaxed">
+                        Stuck on what to build? Get 3 tailored project ideas (Beginner to Advanced) designed to impress recruiters at <span className="text-indigo-400 font-semibold">{userProfile.targetCompanies || 'top companies'}</span>.
+                      </p>
+                      <button
+                        onClick={handleGenerateProjects}
+                        className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-8 py-4 rounded-xl font-bold text-base flex items-center mx-auto transition-all shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:scale-105"
+                      >
+                        <Code className="w-5 h-5 mr-2" />
+                        Generate Projects Now
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Project Details Modal */}
+            {selectedProject && (
+              <div
+                className="fixed inset-0 md:left-64 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300"
+                onClick={() => setSelectedProject(null)}
+              >
+                <div
+                  className="bg-gradient-to-br from-slate-900 to-slate-950 rounded-3xl border border-indigo-500/30 max-w-4xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl shadow-indigo-500/20"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Blueprint Header */}
+                  <div className="sticky top-0 bg-gradient-to-r from-indigo-900/60 to-purple-900/40 backdrop-blur-xl border-b border-indigo-500/30 p-6 z-10">
+                    <div className="flex flex-col items-center text-center relative">
+                      <button
+                        onClick={() => setSelectedProject(null)}
+                        className="absolute right-0 top-0 w-10 h-10 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-indigo-500/50 flex items-center justify-center transition-all"
+                      >
+                        <X className="w-5 h-5 text-slate-400 hover:text-white" />
+                      </button>
+
+                      <div className="text-xs font-bold text-indigo-400 tracking-widest uppercase mb-2">
+                        CareerPilot AI Project Blueprint
+                      </div>
+                      <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">{selectedProject.title}</h2>
+                      <div className="flex flex-wrap items-center justify-center gap-3 mb-4">
+                        <span className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${selectedProject.difficulty === 'Beginner'
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                          : selectedProject.difficulty === 'Intermediate'
+                            ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
+                            : 'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                          }`}>
+                          {selectedProject.difficulty}
+                        </span>
+                        <span className="text-slate-400">|</span>
+                        <span className="text-slate-300 text-sm">{selectedProject.techStack?.join(', ')}</span>
+                      </div>
+                      <p className="text-slate-300 leading-relaxed max-w-2xl mx-auto">{selectedProject.description}</p>
                     </div>
                   </div>
 
-                  {/* Implementation Resources */}
-                  {selectedProject.implementationResources && selectedProject.implementationResources.length > 0 && (
-                    <div>
-                      <h3 className="text-lg font-bold text-white mb-3 flex items-center">
-                        <ExternalLink className="w-5 h-5 mr-2 text-blue-400" />
-                        Helpful Resources
-                      </h3>
-                      <div className="space-y-2">
-                        {selectedProject.implementationResources.map((resource, idx) => (
+                  {/* Blueprint Content */}
+                  <div className="p-6 space-y-8">
+                    {/* User Stories Section - Only show if explicit user stories exist */}
+                    {selectedProject.userStories && selectedProject.userStories.length > 0 && (
+                      <div>
+                        <h3 className="text-xl font-bold text-white mb-4 flex items-center">
+                          <Users className="w-5 h-5 mr-3 text-indigo-400" />
+                          User Stories
+                        </h3>
+                        <ul className="space-y-3">
+                          {selectedProject.userStories.map((story, idx) => (
+                            <li key={idx} className="flex items-start text-slate-300">
+                              <span className="text-indigo-400 mr-3 mt-1">•</span>
+                              <span className="leading-relaxed">{story}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Key Features Section */}
+                    {selectedProject.keyFeatures && selectedProject.keyFeatures.length > 0 && (
+                      <div>
+                        <h3 className="text-xl font-bold text-white mb-4 flex items-center">
+                          <CheckCircle className="w-5 h-5 mr-3 text-emerald-400" />
+                          Key Features
+                        </h3>
+                        <ul className="space-y-3">
+                          {selectedProject.keyFeatures.map((feature, idx) => (
+                            <li key={idx} className="flex items-start text-slate-300">
+                              <span className="text-emerald-400 mr-3 mt-1">•</span>
+                              <span className="leading-relaxed">{feature}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Implementation Steps Section */}
+                    {selectedProject.implementationFlow && selectedProject.implementationFlow.length > 0 && (
+                      <div>
+                        <h3 className="text-xl font-bold text-white mb-4 flex items-center">
+                          <List className="w-5 h-5 mr-3 text-indigo-400" />
+                          Implementation Steps
+                        </h3>
+                        <div className="space-y-4">
+                          {selectedProject.implementationFlow.map((step, idx) => (
+                            <div key={idx} className="flex items-start">
+                              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 font-bold text-sm mr-4 mt-0.5">
+                                {idx + 1}
+                              </div>
+                              <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50 flex-1">
+                                <p className="text-slate-300 leading-relaxed">{step.replace(/^\d+\.\s*/, '')}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* You'll Learn Section */}
+                    {selectedProject.learningOutcomes && selectedProject.learningOutcomes.length > 0 && (
+                      <div>
+                        <h3 className="text-xl font-bold text-white mb-4 flex items-center">
+                          <Award className="w-5 h-5 mr-3 text-amber-400" />
+                          You'll Learn
+                        </h3>
+                        <ul className="space-y-3">
+                          {selectedProject.learningOutcomes.map((outcome, idx) => (
+                            <li key={idx} className="flex items-start text-slate-300">
+                              <span className="text-amber-400 mr-3 mt-1">•</span>
+                              <span className="leading-relaxed">{outcome}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Resume Value */}
+                    <div className="bg-gradient-to-br from-indigo-900/30 to-purple-900/20 p-6 rounded-2xl border border-indigo-500/30 relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl" />
+                      <div className="relative">
+                        <h3 className="text-lg font-bold text-indigo-300 mb-2 flex items-center">
+                          <TrendingUp className="w-5 h-5 mr-2" />
+                          Resume Impact
+                        </h3>
+                        <p className="text-indigo-200 italic leading-relaxed">"{selectedProject.resumeValue}"</p>
+                      </div>
+                    </div>
+
+                    {/* Implementation Resources */}
+                    {selectedProject.implementationResources && selectedProject.implementationResources.length > 0 && (
+                      <div>
+                        <h3 className="text-lg font-bold text-white mb-3 flex items-center">
+                          <ExternalLink className="w-5 h-5 mr-2 text-blue-400" />
+                          Helpful Resources
+                        </h3>
+                        <div className="space-y-2">
+                          {selectedProject.implementationResources.map((resource, idx) => (
+                            <a
+                              key={idx}
+                              href={resource.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 hover:border-indigo-500/50 transition-all group"
+                            >
+                              <span className="text-slate-300 group-hover:text-white transition-colors">{resource.name}</span>
+                              <ExternalLink className="w-4 h-4 text-slate-500 group-hover:text-indigo-400 transition-colors" />
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Source Paper (if available) */}
+                    {selectedProject.sourcePaper && (
+                      <div className="bg-amber-900/20 p-6 rounded-2xl border border-amber-500/20">
+                        <h3 className="text-lg font-bold text-amber-300 mb-3 flex items-center">
+                          <FileText className="w-5 h-5 mr-2" />
+                          Research Paper Source
+                        </h3>
+                        <div className="space-y-2">
+                          <p className="text-white font-semibold">{selectedProject.sourcePaper.title}</p>
+                          <p className="text-slate-400 text-sm">{selectedProject.sourcePaper.authors.join(', ')}</p>
+                          <p className="text-slate-500 text-xs mb-3">{selectedProject.sourcePaper.publishedDate}</p>
+                          <p className="text-slate-300 text-sm mb-4">{selectedProject.sourcePaper.abstractSummary}</p>
                           <a
-                            key={idx}
-                            href={resource.url}
+                            href={selectedProject.sourcePaper.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 hover:border-indigo-500/50 transition-all group"
+                            className="inline-flex items-center text-amber-400 hover:text-amber-300 text-sm font-medium"
                           >
-                            <span className="text-slate-300 group-hover:text-white transition-colors">{resource.name}</span>
-                            <ExternalLink className="w-4 h-4 text-slate-500 group-hover:text-indigo-400 transition-colors" />
+                            Read Full Paper <ExternalLink className="w-3 h-3 ml-1" />
                           </a>
-                        ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Source Paper (if available) */}
-                  {selectedProject.sourcePaper && (
-                    <div className="bg-amber-900/20 p-6 rounded-2xl border border-amber-500/20">
-                      <h3 className="text-lg font-bold text-amber-300 mb-3 flex items-center">
-                        <FileText className="w-5 h-5 mr-2" />
-                        Research Paper Source
-                      </h3>
-                      <div className="space-y-2">
-                        <p className="text-white font-semibold">{selectedProject.sourcePaper.title}</p>
-                        <p className="text-slate-400 text-sm">{selectedProject.sourcePaper.authors.join(', ')}</p>
-                        <p className="text-slate-500 text-xs mb-3">{selectedProject.sourcePaper.publishedDate}</p>
-                        <p className="text-slate-300 text-sm mb-4">{selectedProject.sourcePaper.abstractSummary}</p>
-                        <a
-                          href={selectedProject.sourcePaper.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center text-amber-400 hover:text-amber-300 text-sm font-medium"
-                        >
-                          Read Full Paper <ExternalLink className="w-3 h-3 ml-1" />
-                        </a>
-                      </div>
+                    {/* Action Buttons */}
+                    <div className="flex gap-3 pt-4">
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(`${selectedProject.title}\n\n${selectedProject.description}\n\nTech Stack: ${selectedProject.techStack?.join(', ')}`);
+                          alert('Project details copied to clipboard!');
+                        }}
+                        className="flex-1 bg-slate-800 hover:bg-slate-700 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center transition-all border border-slate-700 hover:border-indigo-500/50"
+                      >
+                        <Copy className="w-4 h-4 mr-2" />
+                        Copy Details
+                      </button>
+                      <button
+                        onClick={() => setSelectedProject(null)}
+                        className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center transition-all shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50"
+                      >
+                        Got It!
+                      </button>
                     </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-3 pt-4">
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(`${selectedProject.title}\n\n${selectedProject.description}\n\nTech Stack: ${selectedProject.techStack?.join(', ')}`);
-                        alert('Project details copied to clipboard!');
-                      }}
-                      className="flex-1 bg-slate-800 hover:bg-slate-700 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center transition-all border border-slate-700 hover:border-indigo-500/50"
-                    >
-                      <Copy className="w-4 h-4 mr-2" />
-                      Copy Details
-                    </button>
-                    <button
-                      onClick={() => setSelectedProject(null)}
-                      className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center transition-all shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50"
-                    >
-                      Got It!
-                    </button>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Resume View - Payment Gate */}
-          {/* {view === AppView.RESUME && !userProfile.isResumePremium && (
-            <div className="h-[calc(100vh-140px)] min-h-[600px] flex flex-col items-center justify-center bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-300 relative text-center px-4">
+            {/* Resume View - Payment Gate */}
+            {/* {view === AppView.RESUME && !userProfile.isResumePremium && (
+            <div className="h-[calc(100vh-140px)] min-h-[600px] flex flex-col items-center justify-center bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 overflow-hidden shadow-2xl relative text-center px-4">
               <div className="w-24 h-24 bg-emerald-600/20 rounded-full flex items-center justify-center mb-6 ring-4 ring-emerald-600/10">
                 <FileText className="w-10 h-10 text-emerald-400" />
               </div>
@@ -2573,298 +3031,298 @@ const App = () => {
             </div>
           )} */}
 
-          {/* Resume View */}
-          {view === AppView.RESUME && /*userProfile.isResumePremium &&*/ (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="bg-white/5 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-xl">
-                <div className="flex justify-between items-center mb-8">
-                  <div>
-                    <h2 className="text-2xl font-bold text-white mb-2">Resume Architect</h2>
-                    <p className="text-slate-400">Transform your resume into an ATS-beating machine for {userProfile.targetRole}.</p>
-                  </div>
-                </div>
-
-                {/* Profile URLs Section - REQUIRED BEFORE OPTIMIZATION */}
-                <div className="bg-gradient-to-br from-indigo-900/20 to-purple-900/20 p-6 rounded-2xl border border-indigo-500/30 mb-8">
-                  <div className="flex items-start mb-4">
-                    <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center mr-4 shrink-0">
-                      <Link className="w-5 h-5 text-indigo-400" />
-                    </div>
+            {/* Resume View */}
+            {view === AppView.RESUME && /*userProfile.isResumePremium &&*/ (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="bg-white/5 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-xl">
+                  <div className="flex justify-between items-center mb-8">
                     <div>
-                      <h3 className="text-lg font-bold text-white mb-1">Profile Links (Required)</h3>
-                      <p className="text-slate-400 text-sm">Add your professional profile URLs to include them in your optimized resume.</p>
+                      <h2 className="text-2xl font-bold text-white mb-2">Resume Architect</h2>
+                      <p className="text-slate-400">Transform your resume into an ATS-beating machine for {userProfile.targetRole}.</p>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* GitHub - Syncs with Profile */}
-                    <div>
-                      <label className="block text-xs font-bold text-slate-400 mb-2 ml-1">
-                        <Github className="w-3 h-3 inline mr-1" />
-                        GitHub Profile
-                      </label>
-                      <input
-                        type="url"
-                        placeholder="https://github.com/yourname"
-                        value={userProfile.githubProfile || ''}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setUserProfile(prev => ({ ...prev, githubProfile: val }));
-                        }}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder-slate-600"
-                      />
-                    </div>
-
-                    {/* LinkedIn - Syncs with Profile */}
-                    <div>
-                      <label className="block text-xs font-bold text-slate-400 mb-2 ml-1">
-                        <Linkedin className="w-3 h-3 inline mr-1" />
-                        LinkedIn Profile
-                      </label>
-                      <input
-                        type="url"
-                        placeholder="https://linkedin.com/in/yourname"
-                        value={userProfile.linkedinProfile || ''}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setUserProfile(prev => ({ ...prev, linkedinProfile: val }));
-                        }}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder-slate-600"
-                      />
-                    </div>
-
-                    {/* LeetCode - Syncs with Profile */}
-                    <div>
-                      <label className="block text-xs font-bold text-slate-400 mb-2 ml-1">
-                        <Code className="w-3 h-3 inline mr-1" />
-                        LeetCode Profile (Optional)
-                      </label>
-                      <input
-                        type="url"
-                        placeholder="https://leetcode.com/yourname"
-                        value={userProfile.leetcodeProfile || ''}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setUserProfile(prev => ({ ...prev, leetcodeProfile: val }));
-                        }}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder-slate-600"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Warning if URLs missing */}
-                  {(!userProfile.githubProfile || !userProfile.linkedinProfile) && (
-                    <div className="mt-4 flex items-start space-x-2 text-amber-400 text-sm bg-amber-500/10 p-3 rounded-lg border border-amber-500/20">
-                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                      <p>Please add at least GitHub and LinkedIn URLs for a complete professional resume.</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Optimize Button */}
-                <div className="flex justify-end mb-8">
-                  <button
-                    onClick={handleOptimizeResume}
-                    disabled={isOptimizingResume || !userProfile.githubProfile || !userProfile.linkedinProfile}
-                    className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-8 py-4 rounded-xl font-bold hover:shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isOptimizingResume ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <RefreshCw className="w-5 h-5 mr-2" />}
-                    {optimizedResume ? 'Regenerate Version' : 'Polish My Resume'}
-                  </button>
-                </div>
-
-                {/* New Feature: ATS Score & Improvements Dashboard */}
-                {resumeAnalysisResult && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 animate-in fade-in slide-in-from-top-4 duration-700">
-                    {/* Score Card */}
-                    <div className="bg-gradient-to-br from-indigo-900/50 to-purple-900/50 p-6 rounded-2xl border border-indigo-500/30 flex items-center justify-between relative overflow-hidden group">
-                      <div className="absolute inset-0 bg-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  {/* Profile URLs Section - REQUIRED BEFORE OPTIMIZATION */}
+                  <div className="bg-gradient-to-br from-indigo-900/20 to-purple-900/20 p-6 rounded-2xl border border-indigo-500/30 mb-8">
+                    <div className="flex items-start mb-4">
+                      <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center mr-4 shrink-0">
+                        <Link className="w-5 h-5 text-indigo-400" />
+                      </div>
                       <div>
-                        <p className="text-indigo-300 text-xs font-bold uppercase tracking-wider mb-1">ATS Score Impact</p>
-                        <div className="flex items-baseline space-x-3">
-                          <span className="text-slate-400 text-2xl font-bold line-through opacity-50">{resumeAnalysisResult.atsScore.before}</span>
-                          <ArrowRight className="w-5 h-5 text-indigo-400" />
-                          <span className="text-4xl font-bold text-white text-shadow-glow">{resumeAnalysisResult.atsScore.after}</span>
+                        <h3 className="text-lg font-bold text-white mb-1">Profile Links (Required)</h3>
+                        <p className="text-slate-400 text-sm">Add your professional profile URLs to include them in your optimized resume.</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* GitHub - Syncs with Profile */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-400 mb-2 ml-1">
+                          <Github className="w-3 h-3 inline mr-1" />
+                          GitHub Profile
+                        </label>
+                        <input
+                          type="url"
+                          placeholder="https://github.com/yourname"
+                          value={userProfile.githubProfile || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setUserProfile(prev => ({ ...prev, githubProfile: val }));
+                          }}
+                          className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder-slate-600"
+                        />
+                      </div>
+
+                      {/* LinkedIn - Syncs with Profile */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-400 mb-2 ml-1">
+                          <Linkedin className="w-3 h-3 inline mr-1" />
+                          LinkedIn Profile
+                        </label>
+                        <input
+                          type="url"
+                          placeholder="https://linkedin.com/in/yourname"
+                          value={userProfile.linkedinProfile || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setUserProfile(prev => ({ ...prev, linkedinProfile: val }));
+                          }}
+                          className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder-slate-600"
+                        />
+                      </div>
+
+                      {/* LeetCode - Syncs with Profile */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-400 mb-2 ml-1">
+                          <Code className="w-3 h-3 inline mr-1" />
+                          LeetCode Profile (Optional)
+                        </label>
+                        <input
+                          type="url"
+                          placeholder="https://leetcode.com/yourname"
+                          value={userProfile.leetcodeProfile || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setUserProfile(prev => ({ ...prev, leetcodeProfile: val }));
+                          }}
+                          className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder-slate-600"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Warning if URLs missing */}
+                    {(!userProfile.githubProfile || !userProfile.linkedinProfile) && (
+                      <div className="mt-4 flex items-start space-x-2 text-amber-400 text-sm bg-amber-500/10 p-3 rounded-lg border border-amber-500/20">
+                        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                        <p>Please add at least GitHub and LinkedIn URLs for a complete professional resume.</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Optimize Button */}
+                  <div className="flex justify-end mb-8">
+                    <button
+                      onClick={handleOptimizeResume}
+                      disabled={isOptimizingResume || !userProfile.githubProfile || !userProfile.linkedinProfile}
+                      className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-8 py-4 rounded-xl font-bold hover:shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isOptimizingResume ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <RefreshCw className="w-5 h-5 mr-2" />}
+                      {optimizedResume ? 'Regenerate Version' : 'Polish My Resume'}
+                    </button>
+                  </div>
+
+                  {/* New Feature: ATS Score & Improvements Dashboard */}
+                  {resumeAnalysisResult && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 animate-in fade-in slide-in-from-top-4 duration-700">
+                      {/* Score Card */}
+                      <div className="bg-gradient-to-br from-indigo-900/50 to-purple-900/50 p-6 rounded-2xl border border-indigo-500/30 flex items-center justify-between relative overflow-hidden group">
+                        <div className="absolute inset-0 bg-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <div>
+                          <p className="text-indigo-300 text-xs font-bold uppercase tracking-wider mb-1">ATS Score Impact</p>
+                          <div className="flex items-baseline space-x-3">
+                            <span className="text-slate-400 text-2xl font-bold line-through opacity-50">{resumeAnalysisResult.atsScore.before}</span>
+                            <ArrowRight className="w-5 h-5 text-indigo-400" />
+                            <span className="text-4xl font-bold text-white text-shadow-glow">{resumeAnalysisResult.atsScore.after}</span>
+                          </div>
+                        </div>
+                        <div className="h-12 w-12 rounded-full bg-indigo-500/20 flex items-center justify-center border border-indigo-500/40">
+                          <TrendingUp className="w-6 h-6 text-indigo-400" />
                         </div>
                       </div>
-                      <div className="h-12 w-12 rounded-full bg-indigo-500/20 flex items-center justify-center border border-indigo-500/40">
-                        <TrendingUp className="w-6 h-6 text-indigo-400" />
+
+                      {/* Quick Stats */}
+                      <div className="bg-white/5 p-6 rounded-2xl border border-white/10 flex flex-col justify-center">
+                        <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Keywords Added</p>
+                        <div className="flex flex-wrap gap-2">
+                          {resumeAnalysisResult.missingKeywordsAdded.slice(0, 4).map(k => (
+                            <span key={k} className="px-2 py-1 rounded bg-emerald-500/10 text-emerald-400 text-xs border border-emerald-500/20">{k}</span>
+                          ))}
+                          {resumeAnalysisResult.missingKeywordsAdded.length > 4 && (
+                            <span className="px-2 py-1 rounded bg-slate-800 text-slate-400 text-xs border border-slate-700">+{resumeAnalysisResult.missingKeywordsAdded.length - 4} more</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Summary */}
+                      <div className="bg-white/5 p-6 rounded-2xl border border-white/10 flex flex-col justify-center">
+                        <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Optimization Focus</p>
+                        <p className="text-sm text-slate-300 leading-relaxed">
+                          Enhanced impact metrics, standardized formatting, and injected {resumeAnalysisResult.missingKeywordsAdded.length} missing keywords for {userProfile.targetRole}.
+                        </p>
                       </div>
                     </div>
+                  )}
 
-                    {/* Quick Stats */}
-                    <div className="bg-white/5 p-6 rounded-2xl border border-white/10 flex flex-col justify-center">
-                      <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Keywords Added</p>
-                      <div className="flex flex-wrap gap-2">
-                        {resumeAnalysisResult.missingKeywordsAdded.slice(0, 4).map(k => (
-                          <span key={k} className="px-2 py-1 rounded bg-emerald-500/10 text-emerald-400 text-xs border border-emerald-500/20">{k}</span>
-                        ))}
-                        {resumeAnalysisResult.missingKeywordsAdded.length > 4 && (
-                          <span className="px-2 py-1 rounded bg-slate-800 text-slate-400 text-xs border border-slate-700">+{resumeAnalysisResult.missingKeywordsAdded.length - 4} more</span>
+                  <div className="grid md:grid-cols-2 gap-8 h-[600px]">
+                    {/* Original / Source */}
+                    <div className="bg-slate-900/50 p-6 rounded-2xl border border-white/5 flex flex-col">
+                      <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">Original Content</h3>
+                      <div className="flex-1 overflow-y-auto custom-scrollbar text-sm text-slate-300 font-mono whitespace-pre-wrap leading-relaxed opacity-70">
+                        {userProfile.resumeText ? (
+                          userProfile.resumeText
+                        ) : userProfile.resumeFile ? (
+                          <div className="flex flex-col items-center justify-center h-full text-slate-500">
+                            <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mb-4 border border-slate-700">
+                              <FileText className="w-8 h-8 text-emerald-500" />
+                            </div>
+                            <p className="font-medium text-slate-300">Resume File Uploaded</p>
+                            <p className="text-xs text-slate-500 mt-1">PDF / DOCX ready for analysis</p>
+                            <p className="text-xs text-slate-600 mt-4 max-w-[200px] text-center">
+                              Click "Polish My Resume" to extract text and optimize.
+                            </p>
+                          </div>
+                        ) : (
+                          <label className="flex flex-col items-center justify-center h-full text-slate-500 cursor-pointer hover:bg-white/5 rounded-xl transition-all border-2 border-dashed border-slate-700 hover:border-indigo-500">
+                            <input
+                              type="file"
+                              accept=".pdf"
+                              className="hidden"
+                              onChange={handleResumeUpload}
+                            />
+                            <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mb-4 border border-slate-700">
+                              <Download className="w-8 h-8 text-indigo-500 rotate-180" />
+                            </div>
+                            <p className="font-medium text-slate-300">Upload Resume (PDF)</p>
+                            <p className="text-xs text-slate-500 mt-1">We will extract the text automatically.</p>
+                          </label>
                         )}
                       </div>
                     </div>
 
-                    {/* Summary */}
-                    <div className="bg-white/5 p-6 rounded-2xl border border-white/10 flex flex-col justify-center">
-                      <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Optimization Focus</p>
-                      <p className="text-sm text-slate-300 leading-relaxed">
-                        Enhanced impact metrics, standardized formatting, and injected {resumeAnalysisResult.missingKeywordsAdded.length} missing keywords for {userProfile.targetRole}.
-                      </p>
-                    </div>
-                  </div>
-                )}
+                    {/* Optimized Result */}
+                    <div className="bg-indigo-900/10 p-6 rounded-2xl border border-indigo-500/20 flex flex-col relative overflow-hidden">
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-widest flex items-center">
+                          <Award className="w-4 h-4 mr-2" /> AI Optimized Version
+                        </h3>
+                        {optimizedResume && (
+                          <div className="flex gap-3 items-center">
+                            {/* Format Toggle */}
+                            <div className="flex bg-slate-700/50 rounded-lg border border-slate-600 p-1">
+                              <button
+                                onClick={() => setResumeFormat('text')}
+                                className={`px-3 py-1.5 text-xs font-medium rounded transition-all ${resumeFormat === 'text'
+                                  ? 'bg-indigo-600 text-white'
+                                  : 'text-slate-300 hover:text-white'
+                                  }`}
+                              >
+                                Text
+                              </button>
+                              <button
+                                onClick={() => setResumeFormat('latex')}
+                                className={`px-3 py-1.5 text-xs font-medium rounded transition-all ${resumeFormat === 'latex'
+                                  ? 'bg-indigo-600 text-white'
+                                  : 'text-slate-300 hover:text-white'
+                                  }`}
+                              >
+                                LaTeX
+                              </button>
+                            </div>
 
-                <div className="grid md:grid-cols-2 gap-8 h-[600px]">
-                  {/* Original / Source */}
-                  <div className="bg-slate-900/50 p-6 rounded-2xl border border-white/5 flex flex-col">
-                    <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">Original Content</h3>
-                    <div className="flex-1 overflow-y-auto custom-scrollbar text-sm text-slate-300 font-mono whitespace-pre-wrap leading-relaxed opacity-70">
-                      {userProfile.resumeText ? (
-                        userProfile.resumeText
-                      ) : userProfile.resumeFile ? (
-                        <div className="flex flex-col items-center justify-center h-full text-slate-500">
-                          <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mb-4 border border-slate-700">
-                            <FileText className="w-8 h-8 text-emerald-500" />
+                            {/* Copy Button - Symbol Only */}
+                            <button
+                              onClick={() => {
+                                const contentToCopy = resumeFormat === 'latex' ? latexResume : optimizedResume;
+                                navigator.clipboard.writeText(contentToCopy);
+                                setIsCopied(true);
+                                setTimeout(() => setIsCopied(false), 2000);
+                              }}
+                              className="p-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors border border-slate-600"
+                              title={resumeFormat === 'latex' ? 'Copy LaTeX code' : 'Copy resume text'}
+                            >
+                              {isCopied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                            </button>
+
+                            {/* Download Button - Symbol Only */}
+                            <button
+                              onClick={() => {
+                                // Always prefer the professional LaTeX format if available
+                                if (latexData) {
+                                  downloadLatexPdf(latexData);
+                                } else if (resumeAnalysisResult) {
+                                  downloadResumeAsPdf(resumeAnalysisResult, userProfile.name);
+                                }
+                              }}
+                              className="p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors"
+                              title="Download as PDF"
+                            >
+                              <Download className="w-4 h-4" />
+                            </button>
                           </div>
-                          <p className="font-medium text-slate-300">Resume File Uploaded</p>
-                          <p className="text-xs text-slate-500 mt-1">PDF / DOCX ready for analysis</p>
-                          <p className="text-xs text-slate-600 mt-4 max-w-[200px] text-center">
-                            Click "Polish My Resume" to extract text and optimize.
-                          </p>
+                        )}
+                      </div>
+
+                      {optimizedResume ? (
+                        <div className="flex-1 overflow-y-auto custom-scrollbar text-sm text-slate-200 font-mono whitespace-pre-wrap leading-relaxed">
+                          {resumeFormat === 'latex' ? latexResume : optimizedResume}
                         </div>
                       ) : (
-                        <label className="flex flex-col items-center justify-center h-full text-slate-500 cursor-pointer hover:bg-white/5 rounded-xl transition-all border-2 border-dashed border-slate-700 hover:border-indigo-500">
-                          <input
-                            type="file"
-                            accept=".pdf"
-                            className="hidden"
-                            onChange={handleResumeUpload}
-                          />
-                          <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mb-4 border border-slate-700">
-                            <Download className="w-8 h-8 text-indigo-500 rotate-180" />
-                          </div>
-                          <p className="font-medium text-slate-300">Upload Resume (PDF)</p>
-                          <p className="text-xs text-slate-500 mt-1">We will extract the text automatically.</p>
-                        </label>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Optimized Result */}
-                  <div className="bg-indigo-900/10 p-6 rounded-2xl border border-indigo-500/20 flex flex-col relative overflow-hidden">
-                    <div className="flex justify-between items-center mb-4">
-                      <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-widest flex items-center">
-                        <Award className="w-4 h-4 mr-2" /> AI Optimized Version
-                      </h3>
-                      {optimizedResume && (
-                        <div className="flex gap-3 items-center">
-                          {/* Format Toggle */}
-                          <div className="flex bg-slate-700/50 rounded-lg border border-slate-600 p-1">
-                            <button
-                              onClick={() => setResumeFormat('text')}
-                              className={`px-3 py-1.5 text-xs font-medium rounded transition-all ${resumeFormat === 'text'
-                                ? 'bg-indigo-600 text-white'
-                                : 'text-slate-300 hover:text-white'
-                                }`}
-                            >
-                              Text
-                            </button>
-                            <button
-                              onClick={() => setResumeFormat('latex')}
-                              className={`px-3 py-1.5 text-xs font-medium rounded transition-all ${resumeFormat === 'latex'
-                                ? 'bg-indigo-600 text-white'
-                                : 'text-slate-300 hover:text-white'
-                                }`}
-                            >
-                              LaTeX
-                            </button>
-                          </div>
-
-                          {/* Copy Button - Symbol Only */}
-                          <button
-                            onClick={() => {
-                              const contentToCopy = resumeFormat === 'latex' ? latexResume : optimizedResume;
-                              navigator.clipboard.writeText(contentToCopy);
-                              setIsCopied(true);
-                              setTimeout(() => setIsCopied(false), 2000);
-                            }}
-                            className="p-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors border border-slate-600"
-                            title={resumeFormat === 'latex' ? 'Copy LaTeX code' : 'Copy resume text'}
-                          >
-                            {isCopied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                          </button>
-
-                          {/* Download Button - Symbol Only */}
-                          <button
-                            onClick={() => {
-                              // Always prefer the professional LaTeX format if available
-                              if (latexData) {
-                                downloadLatexPdf(latexData);
-                              } else if (resumeAnalysisResult) {
-                                downloadResumeAsPdf(resumeAnalysisResult, userProfile.name);
-                              }
-                            }}
-                            className="p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors"
-                            title="Download as PDF"
-                          >
-                            <Download className="w-4 h-4" />
-                          </button>
+                        <div className="flex-1 flex flex-col items-center justify-center text-center opacity-40">
+                          <FileText className="w-16 h-16 mb-4" />
+                          <p>Click "Polish My Resume" to generate the improved version.</p>
                         </div>
                       )}
                     </div>
-
-                    {optimizedResume ? (
-                      <div className="flex-1 overflow-y-auto custom-scrollbar text-sm text-slate-200 font-mono whitespace-pre-wrap leading-relaxed">
-                        {resumeFormat === 'latex' ? latexResume : optimizedResume}
-                      </div>
-                    ) : (
-                      <div className="flex-1 flex flex-col items-center justify-center text-center opacity-40">
-                        <FileText className="w-16 h-16 mb-4" />
-                        <p>Click "Polish My Resume" to generate the improved version.</p>
-                      </div>
-                    )}
                   </div>
+
+                  {/* Improvements List */}
+                  {resumeAnalysisResult && resumeAnalysisResult.keyImprovements && (
+                    <div className="mt-8 bg-white/5 rounded-2xl border border-white/10 p-6">
+                      <h3 className="text-lg font-bold text-white mb-4">Detailed Improvements</h3>
+                      <div className="grid gap-4">
+                        {resumeAnalysisResult.keyImprovements.map((imp, idx) => (
+                          <div key={idx} className="bg-slate-900/50 p-4 rounded-xl border border-white/5">
+                            <div className="flex items-center mb-2">
+                              <span className={`text-xs font-bold px-2 py-1 rounded mr-3 uppercase tracking-wider ${imp.category === 'Impact' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                                imp.category === 'Keywords' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                                  'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                                }`}>
+                                {imp.category}
+                              </span>
+                              <p className="text-slate-200 font-medium text-sm">{imp.suggestion}</p>
+                            </div>
+                            <div className="grid md:grid-cols-2 gap-4 text-xs font-mono mt-3">
+                              <div className="bg-red-900/10 p-3 rounded text-red-300 border border-red-500/10">
+                                <p className="mb-1 text-[10px] uppercase opacity-50">Before</p>
+                                "{imp.originalSnippet}"
+                              </div>
+                              <div className="bg-emerald-900/10 p-3 rounded text-emerald-300 border border-emerald-500/10">
+                                <p className="mb-1 text-[10px] uppercase opacity-50">After</p>
+                                "{imp.improvedSnippet}"
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-
-                {/* Improvements List */}
-                {resumeAnalysisResult && resumeAnalysisResult.keyImprovements && (
-                  <div className="mt-8 bg-white/5 rounded-2xl border border-white/10 p-6">
-                    <h3 className="text-lg font-bold text-white mb-4">Detailed Improvements</h3>
-                    <div className="grid gap-4">
-                      {resumeAnalysisResult.keyImprovements.map((imp, idx) => (
-                        <div key={idx} className="bg-slate-900/50 p-4 rounded-xl border border-white/5">
-                          <div className="flex items-center mb-2">
-                            <span className={`text-xs font-bold px-2 py-1 rounded mr-3 uppercase tracking-wider ${imp.category === 'Impact' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                              imp.category === 'Keywords' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                                'bg-purple-500/10 text-purple-400 border-purple-500/20'
-                              }`}>
-                              {imp.category}
-                            </span>
-                            <p className="text-slate-200 font-medium text-sm">{imp.suggestion}</p>
-                          </div>
-                          <div className="grid md:grid-cols-2 gap-4 text-xs font-mono mt-3">
-                            <div className="bg-red-900/10 p-3 rounded text-red-300 border border-red-500/10">
-                              <p className="mb-1 text-[10px] uppercase opacity-50">Before</p>
-                              "{imp.originalSnippet}"
-                            </div>
-                            <div className="bg-emerald-900/10 p-3 rounded text-emerald-300 border border-emerald-500/10">
-                              <p className="mb-1 text-[10px] uppercase opacity-50">After</p>
-                              "{imp.improvedSnippet}"
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Interview View - Payment Gate */}
-          {/* {view === AppView.INTERVIEW && !userProfile.isPremium && (
-            <div className="h-[calc(100vh-140px)] min-h-[600px] flex flex-col items-center justify-center bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-300 relative text-center px-4">
+            {/* Interview View - Payment Gate */}
+            {/* {view === AppView.INTERVIEW && !userProfile.isPremium && (
+            <div className="h-[calc(100vh-140px)] min-h-[600px] flex flex-col items-center justify-center bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 overflow-hidden shadow-2xl relative text-center px-4">
               <div className="w-24 h-24 bg-indigo-600/20 rounded-full flex items-center justify-center mb-6 ring-4 ring-indigo-600/10">
                 <Lock className="w-10 h-10 text-indigo-400" />
               </div>
@@ -2914,528 +3372,196 @@ const App = () => {
             </div>
           )} */}
 
-          {/* Interview View */}
-          {view === AppView.INTERVIEW && /*userProfile.isPremium &&*/ (
-            <div className="h-[calc(100vh-140px)] min-h-[600px] flex flex-col bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-300 relative">
+            {/* Interview View */}
+            {view === AppView.INTERVIEW && /*userProfile.isPremium &&*/ (
+              <div className="h-[calc(100dvh-160px)] md:h-[calc(100vh-140px)] md:min-h-[600px] flex flex-col bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 overflow-hidden shadow-2xl relative">
 
-              {isGeneratingFeedback ? (
-                /* Feedback Loading State */
-                <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-                  <Loader2 className="w-12 h-12 text-indigo-500 animate-spin mb-6" />
-                  <h3 className="text-2xl font-bold text-white mb-2">Analyzing Performance</h3>
-                  <p className="text-slate-400 max-w-md">Our AI is reviewing your answers, tone, and technical accuracy to generate a personalized report.</p>
-                </div>
-              ) : interviewFeedback ? (
-                /* Feedback Report */
-                <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-                  <div className="max-w-3xl mx-auto space-y-8">
-                    <div className="text-center mb-8">
-                      <div className="inline-block p-4 rounded-full bg-indigo-500/10 mb-4">
-                        <Award className="w-8 h-8 text-indigo-400" />
+                {isGeneratingFeedback ? (
+                  /* Feedback Loading State */
+                  <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+                    <Loader2 className="w-12 h-12 text-indigo-500 animate-spin mb-6" />
+                    <h3 className="text-2xl font-bold text-white mb-2">Analyzing Performance</h3>
+                    <p className="text-slate-400 max-w-md">Our AI is reviewing your answers, tone, and technical accuracy to generate a personalized report.</p>
+                  </div>
+                ) : interviewFeedback ? (
+                  /* Feedback Report */
+                  /* Feedback Report */
+                  <InterviewAnalysisView
+                    feedback={interviewFeedback}
+                    onClose={() => {
+                      setInterviewFeedback(null);
+                      setChatMessages([]);
+                    }}
+                  />
+                ) : !isInterviewStarted ? (
+                  /* Start Screen */
+                  <div className="flex-1 flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-indigo-900/20 to-slate-900/50 z-0"></div>
+                    <div className="relative z-10 max-w-lg">
+                      <div className="w-20 h-20 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-8 shadow-[0_0_40px_rgba(79,70,229,0.4)] transform rotate-3">
+                        <MessageSquare className="w-10 h-10 text-white" />
                       </div>
-                      <h2 className="text-3xl font-bold text-white mb-2">Interview Summary</h2>
-                      <p className="text-slate-400">Here is how you performed in your mock session.</p>
+                      <h3 className="text-3xl font-bold text-white mb-4">Mock Interview Simulator</h3>
+                      <p className="text-slate-300 text-lg mb-8 leading-relaxed">
+                        Ready to practice? I'll act as a hiring manager for the <span className="text-indigo-400 font-semibold">{userProfile.targetRole}</span> role. I'll ask questions and provide feedback on your answers.
+                      </p>
+                      <button
+                        onClick={startInterview}
+                        className="bg-white text-indigo-900 px-8 py-4 rounded-xl font-bold text-lg hover:bg-slate-200 transition-all transform hover:scale-105 shadow-xl flex items-center mx-auto"
+                      >
+                        <Play className="w-5 h-5 mr-2 fill-indigo-900" /> Start Session
+                      </button>
                     </div>
-
-                    {/* Score & Summary */}
-                    <div className="grid md:grid-cols-3 gap-6">
-                      <div className="bg-white/5 rounded-2xl p-6 border border-white/10 flex flex-col items-center justify-center text-center">
-                        <span className="text-sm text-slate-400 font-bold uppercase tracking-wider mb-2">Overall Score</span>
-                        <div className={`text-5xl font-bold mb-2 ${interviewFeedback.score >= 8 ? 'text-emerald-400' :
-                          interviewFeedback.score >= 6 ? 'text-amber-400' : 'text-rose-400'
-                          }`}>
-                          {interviewFeedback.score}<span className="text-2xl text-slate-600">/10</span>
+                  </div>
+                ) : (
+                  /* Chat Interface */
+                  <>
+                    <div className="bg-white/5 p-5 border-b border-white/5 flex justify-between items-center">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_#10b981]"></div>
+                        <span className="font-bold text-slate-200">AI Interviewer <span className="text-slate-500 font-normal">| {userProfile.targetRole}</span></span>
+                      </div>
+                      <div className="flex items-center space-x-2 sm:space-x-4">
+                        {/* Timer - Always visible, responsive sizing */}
+                        <div className="flex items-center space-x-1 sm:space-x-2 bg-slate-800 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg border border-slate-700">
+                          <Clock className={`w-3 h-3 sm:w-4 sm:h-4 ${((2100 - interviewElapsedSeconds) < 300) ? 'text-amber-400' : 'text-slate-400'}`} />
+                          <span className={`font-mono font-bold text-xs sm:text-sm ${((2100 - interviewElapsedSeconds) < 60) ? 'text-red-400 animate-pulse' : 'text-slate-300'}`}>
+                            {Math.floor((2100 - interviewElapsedSeconds) / 60).toString().padStart(2, '0')}:
+                            {((2100 - interviewElapsedSeconds) % 60).toString().padStart(2, '0')}
+                          </span>
                         </div>
-                      </div>
-                      <div className="md:col-span-2 bg-white/5 rounded-2xl p-6 border border-white/10">
-                        <span className="text-sm text-slate-400 font-bold uppercase tracking-wider mb-2 block">Executive Summary</span>
-                        <p className="text-slate-200 leading-relaxed">{interviewFeedback.feedbackSummary}</p>
-                      </div>
-                    </div>
 
-                    <div className="grid md:grid-cols-2 gap-6">
-                      {/* Strengths */}
-                      <div className="bg-emerald-900/10 rounded-2xl p-6 border border-emerald-500/20">
-                        <h4 className="text-lg font-bold text-white mb-4 flex items-center">
-                          <TrendingUp className="w-5 h-5 mr-2 text-emerald-400" /> Key Strengths
-                        </h4>
-                        <ul className="space-y-3">
-                          {interviewFeedback.strengths?.map((s, i) => (
-                            <li key={i} className="flex items-start text-sm text-emerald-100/80">
-                              <span className="mr-2 text-emerald-500">•</span> {s}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      {/* Improvements */}
-                      <div className="bg-amber-900/10 rounded-2xl p-6 border border-amber-500/20">
-                        <h4 className="text-lg font-bold text-white mb-4 flex items-center">
-                          <Target className="w-5 h-5 mr-2 text-amber-400" /> Areas to Improve
-                        </h4>
-                        <ul className="space-y-3">
-                          {interviewFeedback.improvements?.map((s, i) => (
-                            <li key={i} className="flex items-start text-sm text-amber-100/80">
-                              <span className="mr-2 text-amber-500">•</span> {s}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-
-                    {/* Recommendation */}
-                    <div className="bg-indigo-900/20 rounded-2xl p-6 border border-indigo-500/20 flex items-start space-x-4">
-                      <div className="p-3 bg-indigo-500/20 rounded-xl shrink-0">
-                        <BookOpen className="w-6 h-6 text-indigo-400" />
-                      </div>
-                      <div>
-                        <h4 className="text-lg font-bold text-white mb-1">Recommended Focus</h4>
-                        <p className="text-indigo-200 text-sm">{interviewFeedback.recommendedFocus}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex justify-center pt-4">
-                      <button
-                        onClick={() => {
-                          setInterviewFeedback(null);
-                          setChatMessages([]);
-                        }}
-                        className="bg-white text-slate-900 px-8 py-3 rounded-xl font-bold hover:bg-slate-200 transition-colors shadow-lg"
-                      >
-                        Done & Return to Menu
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : !isInterviewStarted ? (
-                /* Start Screen */
-                <div className="flex-1 flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-indigo-900/20 to-slate-900/50 z-0"></div>
-                  <div className="relative z-10 max-w-lg">
-                    <div className="w-20 h-20 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-8 shadow-[0_0_40px_rgba(79,70,229,0.4)] transform rotate-3">
-                      <MessageSquare className="w-10 h-10 text-white" />
-                    </div>
-                    <h3 className="text-3xl font-bold text-white mb-4">Mock Interview Simulator</h3>
-                    <p className="text-slate-300 text-lg mb-8 leading-relaxed">
-                      Ready to practice? I'll act as a hiring manager for the <span className="text-indigo-400 font-semibold">{userProfile.targetRole}</span> role. I'll ask questions and provide feedback on your answers.
-                    </p>
-                    <button
-                      onClick={startInterview}
-                      className="bg-white text-indigo-900 px-8 py-4 rounded-xl font-bold text-lg hover:bg-slate-200 transition-all transform hover:scale-105 shadow-xl flex items-center mx-auto"
-                    >
-                      <Play className="w-5 h-5 mr-2 fill-indigo-900" /> Start Session
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                /* Chat Interface */
-                <>
-                  <div className="bg-white/5 p-5 border-b border-white/5 flex justify-between items-center">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_#10b981]"></div>
-                      <span className="font-bold text-slate-200">AI Interviewer <span className="text-slate-500 font-normal">| {userProfile.targetRole}</span></span>
-                    </div>
-                    <div className="flex items-center space-x-4">
-                      <button
-                        onClick={() => setIsSpeakingEnabled(!isSpeakingEnabled)}
-                        className={`transition-colors ${isSpeakingEnabled ? 'text-indigo-400' : 'text-slate-600 hover:text-slate-400'}`}
-                        title="Toggle Text-to-Speech"
-                      >
-                        {isSpeakingEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
-                      </button>
-                      <button
-                        onClick={handleEndInterview}
-                        className="text-xs text-red-400 hover:text-red-300 font-bold uppercase tracking-wider border border-red-500/30 px-3 py-1 rounded-full hover:bg-red-500/10 transition-all"
-                      >
-                        End Session
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
-                    {/* Only show 'Connecting' if truly loading and no messages yet */}
-                    {chatMessages?.length === 0 && isChatLoading && (
-                      <div className="flex flex-col items-center justify-center h-64 text-slate-500">
-                        <Loader2 className="w-8 h-8 animate-spin mb-4 text-indigo-500" />
-                        <p>Initializing interview session...</p>
-                      </div>
-                    )}
-
-                    {chatMessages?.map((msg) => (
-                      <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[80%] rounded-2xl p-6 shadow-lg backdrop-blur-sm ${msg.role === 'user'
-                          ? 'bg-indigo-600 text-white rounded-br-none'
-                          : 'bg-slate-800/80 border border-white/10 text-slate-200 rounded-bl-none'
-                          }`}>
-                          <div className="flex items-center space-x-2 mb-2 opacity-60">
-                            {msg.role === 'user' ? <User className="w-3 h-3" /> : <Bot className="w-3 h-3" />}
-                            <span className="text-xs font-bold uppercase tracking-wider">{msg.role === 'user' ? 'You' : 'Interviewer'}</span>
-                          </div>
-                          <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
-                        </div>
-                      </div>
-                    ))}
-                    {isChatLoading && chatMessages.length > 0 && (
-                      <div className="flex justify-start">
-                        <div className="bg-slate-800/80 border border-white/10 rounded-2xl rounded-bl-none p-6 shadow-lg flex items-center space-x-3">
-                          <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
-                          <span className="text-xs font-medium text-slate-400">Interviewer is typing...</span>
-                        </div>
-                      </div>
-                    )}
-                    <div ref={messagesEndRef} />
-                  </div>
-
-                  <div className="p-6 bg-white/5 border-t border-white/5">
-                    <form onSubmit={handleSendMessage} className="flex space-x-3">
-                      <input
-                        type="text"
-                        value={chatInput}
-                        onChange={(e) => setChatInput(e.target.value)}
-                        placeholder="Type your answer here..."
-                        className="flex-1 p-4 bg-slate-900 border border-slate-700 text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all placeholder-slate-600"
-                        disabled={isChatLoading}
-                      />
-                      <button
-                        type="button"
-                        onClick={toggleListening}
-                        className={`p-4 rounded-xl transition-all ${isListening ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/30' : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'}`}
-                      >
-                        <Mic className="w-5 h-5" />
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={!chatInput.trim() || isChatLoading}
-                        className="bg-indigo-600 text-white p-4 rounded-xl hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-indigo-500/20"
-                      >
-                        <Send className="w-5 h-5" />
-                      </button>
-                    </form>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-
-        </div>
-      </main >
-      {isLoggedIn && currentUserEmail && <FeedbackFloating userEmail={currentUserEmail} />}
-
-      {showProfileModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300" onClick={() => setShowProfileModal(false)}>
-          <div
-            className="bg-slate-900 border border-white/10 rounded-[2.5rem] max-w-2xl w-full shadow-2xl relative overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Glass Background Decor */}
-            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/10 blur-[80px] rounded-full -mr-20 -mt-20 pointer-events-none" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-600/10 blur-[80px] rounded-full -ml-20 -mb-20 pointer-events-none" />
-
-            <button
-              onClick={() => setShowProfileModal(false)}
-              className="absolute top-6 right-6 text-slate-500 hover:text-white bg-white/5 p-2 rounded-full transition-all z-10"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="p-10 custom-scrollbar max-h-[85vh] overflow-y-auto">
-              <div className="flex flex-col md:flex-row items-center md:items-start gap-8 mb-10">
-                <div className="relative group">
-                  <div className="absolute inset-0 bg-indigo-500 blur-xl opacity-20 group-hover:opacity-40 transition-opacity" />
-                  <div className="w-32 h-32 rounded-3xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center text-white text-5xl font-bold shadow-2xl relative border border-white/20">
-                    {userProfile.name?.[0]?.toUpperCase() || 'U'}
-                  </div>
-                </div>
-
-                <div className="flex-1 text-center md:text-left">
-                  <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-2">
-                    {isEditingProfile ? (
-                      <input
-                        type="text"
-                        value={userProfile.name}
-                        onChange={(e) => setUserProfile(prev => ({ ...prev, name: e.target.value }))}
-                        className="bg-white/10 border border-white/20 rounded-lg px-3 py-1 text-2xl font-black text-white w-full md:w-auto"
-                        placeholder="Your Name"
-                      />
-                    ) : (
-                      <h2 className="text-4xl font-black text-white">{userProfile.name}</h2>
-                    )}
-
-                    {userProfile.isPremium && (
-                      <span className="px-3 py-1 bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 text-[10px] font-black uppercase tracking-widest rounded-full flex items-center">
-                        <Award className="w-3 h-3 mr-1" /> Premium Pilot
-                      </span>
-                    )}
-
-                    <button
-                      onClick={() => setIsEditingProfile(!isEditingProfile)}
-                      className="ml-2 text-slate-500 hover:text-white transition-colors p-2 rounded-full hover:bg-white/5"
-                    >
-                      {isEditingProfile ? <Save className="w-5 h-5 text-emerald-400" /> : <Edit2 className="w-5 h-5" />}
-                    </button>
-                  </div>
-                  <p className="text-xl text-indigo-400 font-medium mb-4">{userProfile.targetRole}</p>
-
-                  <div className="space-y-4">
-                    {/* Row 1: Read-Only Info */}
-                    <div className="flex flex-wrap justify-center md:justify-start gap-4">
-                      <div className="flex items-center text-slate-400 text-sm bg-white/5 px-4 py-2 rounded-xl border border-white/5">
-                        <Mail className="w-4 h-4 mr-2 text-indigo-400" /> {currentUserEmail}
-                      </div>
-                      <div className="flex items-center text-slate-400 text-sm bg-white/5 px-4 py-2 rounded-xl border border-white/5">
-                        <Target className="w-4 h-4 mr-2 text-emerald-400" /> {userProfile.experienceLevel}
-                      </div>
-                    </div>
-
-                    {/* Row 2: Editable Socials & Contact */}
-                    <div className="flex flex-wrap justify-center md:justify-start gap-4">
-                      {isEditingProfile ? (
-                        <>
-                          <div className="flex items-center bg-white/5 px-4 py-2 rounded-xl border border-white/5">
-                            <Smartphone className="w-4 h-4 mr-2 text-blue-400" />
-                            <input
-                              className="bg-transparent border-none outline-none text-slate-300 text-sm w-32 placeholder:text-slate-600"
-                              placeholder="Mobile Number"
-                              value={userProfile.mobileNumber || ''}
-                              onChange={(e) => setUserProfile(prev => ({ ...prev, mobileNumber: e.target.value }))}
-                            />
-                          </div>
-                          <div className="flex items-center bg-white/5 px-4 py-2 rounded-xl border border-white/5">
-                            <MapPin className="w-4 h-4 mr-2 text-rose-400" />
-                            <input
-                              className="bg-transparent border-none outline-none text-slate-300 text-sm w-32 placeholder:text-slate-600"
-                              placeholder="Location"
-                              value={userProfile.location || ''}
-                              onChange={(e) => setUserProfile(prev => ({ ...prev, location: e.target.value }))}
-                            />
-                          </div>
-                          <div className="flex items-center bg-white/5 px-4 py-2 rounded-xl border border-white/5">
-                            <Github className="w-4 h-4 mr-2 text-white" />
-                            <input
-                              className="bg-transparent border-none outline-none text-slate-300 text-sm w-48 placeholder:text-slate-600"
-                              placeholder="github.com/username"
-                              value={userProfile.githubProfile || ''}
-                              onChange={(e) => setUserProfile(prev => ({ ...prev, githubProfile: e.target.value }))}
-                            />
-                          </div>
-                          <div className="flex items-center bg-white/5 px-4 py-2 rounded-xl border border-white/5">
-                            <Linkedin className="w-4 h-4 mr-2 text-blue-500" />
-                            <input
-                              className="bg-transparent border-none outline-none text-slate-300 text-sm w-48 placeholder:text-slate-600"
-                              placeholder="linkedin.com/in/user"
-                              value={(!userProfile.linkedinProfile || userProfile.linkedinProfile === 'https://www.linkedin.com' || userProfile.linkedinProfile === 'www.linkedin.com' || userProfile.linkedinProfile === 'linkedin.com') ? '' : userProfile.linkedinProfile}
-                              onChange={(e) => setUserProfile(prev => ({ ...prev, linkedinProfile: e.target.value }))}
-                            />
-                          </div>
-                          <div className="flex items-center bg-white/5 px-4 py-2 rounded-xl border border-white/5">
-                            <Code className="w-4 h-4 mr-2 text-amber-500" />
-                            <input
-                              className="bg-transparent border-none outline-none text-slate-300 text-sm w-48 placeholder:text-slate-600"
-                              placeholder="leetcode.com/username"
-                              value={(!userProfile.leetcodeProfile || userProfile.leetcodeProfile === 'https://leetcode.com' || userProfile.leetcodeProfile === 'leetcode.com') ? '' : userProfile.leetcodeProfile}
-                              onChange={(e) => setUserProfile(prev => ({ ...prev, leetcodeProfile: e.target.value }))}
-                            />
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          {userProfile.mobileNumber && (
-                            <div className="flex items-center text-slate-400 text-sm bg-white/5 px-4 py-2 rounded-xl border border-white/5">
-                              <Smartphone className="w-4 h-4 mr-2 text-blue-400" /> {userProfile.mobileNumber}
-                            </div>
-                          )}
-                          {userProfile.location && (
-                            <div className="flex items-center text-slate-400 text-sm bg-white/5 px-4 py-2 rounded-xl border border-white/5">
-                              <MapPin className="w-4 h-4 mr-2 text-rose-400" /> {userProfile.location}
-                            </div>
-                          )}
-                          {userProfile.githubProfile && (
-                            <a href={userProfile.githubProfile.startsWith('http') ? userProfile.githubProfile : `https://${userProfile.githubProfile}`} target="_blank" rel="noreferrer" className="flex items-center text-slate-400 text-sm bg-white/5 px-4 py-2 rounded-xl border border-white/5 hover:bg-white/10 hover:text-white transition-colors cursor-pointer">
-                              <Github className="w-4 h-4 mr-2 text-white" /> GitHub
-                            </a>
-                          )}
-                          {userProfile.linkedinProfile && (
-                            <a href={userProfile.linkedinProfile.startsWith('http') ? userProfile.linkedinProfile : `https://${userProfile.linkedinProfile}`} target="_blank" rel="noreferrer" className="flex items-center text-slate-400 text-sm bg-white/5 px-4 py-2 rounded-xl border border-white/5 hover:bg-white/10 hover:text-white transition-colors cursor-pointer">
-                              <Linkedin className="w-4 h-4 mr-2 text-blue-500" /> LinkedIn
-                            </a>
-                          )}
-                          {userProfile.leetcodeProfile && (
-                            <a href={userProfile.leetcodeProfile.startsWith('http') ? userProfile.leetcodeProfile : `https://${userProfile.leetcodeProfile}`} target="_blank" rel="noreferrer" className="flex items-center text-slate-400 text-sm bg-white/5 px-4 py-2 rounded-xl border border-white/5 hover:bg-white/10 hover:text-white transition-colors cursor-pointer">
-                              <Code className="w-4 h-4 mr-2 text-amber-500" /> LeetCode
-                            </a>
-                          )}
-                        </>
-                      )}
-
-                      {/* Add Details Prompt if fields missing and not editing */}
-                      {!isEditingProfile && (!userProfile.githubProfile || !userProfile.linkedinProfile || !userProfile.mobileNumber) && (
                         <button
-                          onClick={() => setIsEditingProfile(true)}
-                          className="flex items-center text-indigo-400 text-sm bg-indigo-500/10 px-4 py-2 rounded-xl border border-indigo-500/20 hover:bg-indigo-500/20 transition-all cursor-pointer"
+                          onClick={() => setIsSpeakingEnabled(!isSpeakingEnabled)}
+                          className={`transition-colors ${isSpeakingEnabled ? 'text-indigo-400' : 'text-slate-600 hover:text-slate-400'}`}
+                          title="Toggle Text-to-Speech"
                         >
-                          <Plus className="w-4 h-4 mr-2" /> Add Missing Details
+                          {isSpeakingEnabled ? <Volume2 className="w-4 h-4 sm:w-5 sm:h-5" /> : <VolumeX className="w-4 h-4 sm:w-5 sm:h-5" />}
                         </button>
-                      )}
+                        <button
+                          onClick={handleEndInterview}
+                          className="text-[10px] sm:text-xs text-red-400 hover:text-red-300 font-bold uppercase tracking-wider border border-red-500/30 px-2 sm:px-3 py-1 rounded-full hover:bg-red-500/10 transition-all"
+                        >
+                          End
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              </div>
 
-              {/* Tab Navigation */}
-              <div className="flex space-x-4 mb-8 border-b border-white/10 padding-b-4">
-                <button
-                  onClick={() => setProfileTab('profile')}
-                  className={`pb-4 text-sm font-bold uppercase tracking-wider transition-all relative ${profileTab === 'profile' ? 'text-white' : 'text-slate-500 hover:text-slate-300'}`}
-                >
-                  Profile Overview
-                  {profileTab === 'profile' && <div className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-indigo-500 shadow-[0_0_10px_#6366f1]" />}
-                </button>
-                {/* <button
-                  onClick={() => setProfileTab('payments')}
-                  className={`pb-4 text-sm font-bold uppercase tracking-wider transition-all relative ${profileTab === 'payments' ? 'text-white' : 'text-slate-500 hover:text-slate-300'}`}
-                >
-                  Payment History
-                  {profileTab === 'payments' && <div className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-indigo-500 shadow-[0_0_10px_#6366f1]" />}
-                </button> */}
-              </div>
-
-              {profileTab === 'profile' ? (
-                /* Profile Tab Content */
-                <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                    {/* Impact / Validation Section */}
-                    <div className="bg-gradient-to-br from-indigo-900/20 via-slate-900/50 to-purple-900/20 p-8 rounded-3xl border border-white/10 md:col-span-2 relative overflow-hidden">
-                      {/* Background Glow */}
-                      <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 blur-3xl rounded-full translate-x-1/3 -translate-y-1/3" />
-
-                      <h3 className="text-sm font-black text-white uppercase tracking-widest mb-6 flex items-center relative z-10">
-                        <TrendingUp className="w-4 h-4 mr-2 text-indigo-400" /> CareerPilot Impact Report
-                      </h3>
-
-                      {resumeAnalysisResult?.atsScore ? (
-                        <div className="relative z-10">
-                          <p className="text-slate-400 text-sm mb-6">Measuring your validation progress from initial resume upload.</p>
-
-                          <div className="grid grid-cols-2 gap-8 items-center">
-                            {/* Before */}
-                            <div className="relative p-6 bg-slate-950/50 rounded-2xl border border-white/5 group transition-all hover:border-red-500/30">
-                              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Initial Standing</p>
-                              <div className="text-4xl font-black text-slate-300 group-hover:text-red-400 transition-colors">
-                                {resumeAnalysisResult.atsScore.before}
-                                <span className="text-lg text-slate-600 ml-1">/100</span>
-                              </div>
-                              <p className="text-xs text-slate-500 mt-2">Baseline Score</p>
-                            </div>
-
-                            {/* Arrow */}
-                            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 hidden md:flex items-center justify-center w-12 h-12 bg-indigo-500/20 rounded-full border border-indigo-500/30 shadow-lg shadow-indigo-500/20 z-20">
-                              <ArrowRight className="w-5 h-5 text-indigo-400" />
-                            </div>
-
-                            {/* After */}
-                            <div className="relative p-6 bg-indigo-500/10 rounded-2xl border border-indigo-500/30 group transition-all hover:bg-indigo-500/20 ring-1 ring-transparent hover:ring-indigo-400/50">
-                              <div className="absolute -top-3 -right-3 bg-emerald-500 text-slate-950 text-[10px] font-black uppercase py-1 px-3 rounded-full shadow-lg">
-                                +{resumeAnalysisResult.atsScore.after - resumeAnalysisResult.atsScore.before} Points
-                              </div>
-                              <p className="text-xs font-bold text-indigo-300 uppercase tracking-wider mb-2">Current Potential</p>
-                              <div className="text-4xl font-black text-white text-shadow-glow">
-                                {resumeAnalysisResult.atsScore.after}
-                                <span className="text-lg text-indigo-300/60 ml-1">/100</span>
-                              </div>
-                              <p className="text-xs text-indigo-300/80 mt-2">Optimized by AI</p>
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-center py-8 relative z-10">
-                          <div className="w-16 h-16 mx-auto bg-slate-800 rounded-2xl flex items-center justify-center mb-4 border border-slate-700">
-                            <TrendingUp className="w-8 h-8 text-slate-500" />
-                          </div>
-                          <p className="text-slate-300 font-medium mb-2">No Impact Data Yet</p>
-                          <p className="text-slate-500 text-sm max-w-sm mx-auto mb-6">
-                            Run the "Resume Architect" to measure your profile's improvement score.
-                          </p>
-                          <button
-                            onClick={() => {
-                              setShowProfileModal(false);
-                              setView(AppView.RESUME);
-                            }}
-                            className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-xl transition-all"
-                          >
-                            Start Optimization
-                          </button>
+                    <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
+                      {/* Only show 'Connecting' if truly loading and no messages yet */}
+                      {chatMessages?.length === 0 && isChatLoading && (
+                        <div className="flex flex-col items-center justify-center h-64 text-slate-500">
+                          <Loader2 className="w-8 h-8 animate-spin mb-4 text-indigo-500" />
+                          <p>Initializing interview session...</p>
                         </div>
                       )}
-                    </div>
-                  </div>
 
-                  <div className="flex gap-4">
-                    <button
-                      onClick={() => {
-                        setShowProfileModal(false);
-                        setView(AppView.ONBOARDING);
-                      }}
-                      className="flex-1 bg-white text-black py-4 rounded-2xl font-black text-sm transition-all hover:bg-slate-200 shadow-xl"
-                    >
-                      Edit Profile
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowProfileModal(false);
-                        handleLogout();
-                      }}
-                      className="flex-1 bg-red-500/10 hover:bg-500/20 text-red-500 py-4 rounded-2xl font-black text-sm transition-all border border-red-500/20"
-                    >
-                      Logout Session
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                /* Payments Tab Content */
-                <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300 min-h-[400px]">
-                  <h3 className="text-sm font-black text-white uppercase tracking-widest mb-4 flex items-center">
-                    <Receipt className="w-4 h-4 mr-2 text-indigo-400" /> Transaction History
-                  </h3>
-
-                  {userProfile.paymentHistory && userProfile.paymentHistory.length > 0 ? (
-                    <div className="space-y-3">
-                      {userProfile.paymentHistory.map((tx) => (
-                        <div key={tx.id} className="bg-slate-950/50 p-4 rounded-2xl border border-white/5 flex items-center justify-between hover:border-indigo-500/30 transition-all">
-                          <div className="flex items-center space-x-4">
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tx.status === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
-                              <CreditCard className="w-5 h-5" />
+                      {chatMessages?.map((msg) => (
+                        <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                          <div className={`max-w-[80%] rounded-2xl p-6 shadow-lg backdrop-blur-sm ${msg.role === 'user'
+                            ? 'bg-indigo-600 text-white rounded-br-none'
+                            : 'bg-slate-800/80 border border-white/10 text-slate-200 rounded-bl-none'
+                            }`}>
+                            <div className="flex items-center space-x-2 mb-2 opacity-60">
+                              {msg.role === 'user' ? <User className="w-3 h-3" /> : <Bot className="w-3 h-3" />}
+                              <span className="text-xs font-bold uppercase tracking-wider">{msg.role === 'user' ? 'You' : 'Interviewer'}</span>
                             </div>
-                            <div>
-                              <p className="text-white font-bold text-sm bg-transparent">{tx.item}</p>
-                              <p className="text-slate-500 text-xs">{new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString()}</p>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-white font-bold">₹{tx.amount}</p>
-                            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${tx.status === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
-                              {tx.status}
-                            </span>
+                            <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
                           </div>
                         </div>
                       ))}
+                      {isChatLoading && chatMessages.length > 0 && (
+                        <div className="flex justify-start">
+                          <div className="bg-slate-800/80 border border-white/10 rounded-2xl rounded-bl-none p-6 shadow-lg flex items-center space-x-3">
+                            <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+                            <span className="text-xs font-medium text-slate-400">Interviewer is typing...</span>
+                          </div>
+                        </div>
+                      )}
+                      <div ref={messagesEndRef} />
                     </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-slate-800 rounded-3xl bg-slate-900/30">
-                      <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mb-4 text-slate-600">
-                        <Receipt className="w-8 h-8" />
-                      </div>
-                      <p className="text-slate-300 font-bold mb-1">No Transactions Found</p>
-                      <p className="text-slate-500 text-sm">You haven't made any purchases yet.</p>
+
+                    <div className="p-6 bg-white/5 border-t border-white/5">
+                      <form onSubmit={handleSendMessage} className="flex space-x-3">
+                        <input
+                          type="text"
+                          value={chatInput}
+                          onChange={(e) => setChatInput(e.target.value)}
+                          placeholder="Type your answer here..."
+                          className="flex-1 p-4 bg-slate-900 border border-slate-700 text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all placeholder-slate-600"
+                          disabled={isChatLoading}
+                        />
+                        {isSpeechRecognitionSupported && (
+                          <button
+                            type="button"
+                            onClick={toggleListening}
+                            className={`p-4 rounded-xl transition-all ${isListening ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/30' : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'}`}
+                          >
+                            <Mic className="w-5 h-5" />
+                          </button>
+                        )}
+                        <button
+                          type="submit"
+                          disabled={!chatInput.trim() || isChatLoading}
+                          className="bg-indigo-600 text-white p-4 rounded-xl hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-indigo-500/20"
+                        >
+                          <Send className="w-5 h-5" />
+                        </button>
+                      </form>
                     </div>
-                  )}
-                </div>
-              )}
-            </div>
+                  </>
+                )}
+              </div>
+            )}
+
+
           </div>
-        </div>
-      )}
-    </div>
+        </main >
+        {/* Render Feedback Modal */}
+        {showFeedbackModal && (
+          <FeedbackModal
+            userEmail={currentUserEmail || 'anonymous@user.com'}
+            onClose={() => setShowFeedbackModal(false)}
+          />
+        )}
+        {/* Profile Modal */}
+        <ProfileModal
+          isOpen={showProfileModal}
+          onClose={() => setShowProfileModal(false)}
+          userProfile={userProfile}
+          setUserProfile={setUserProfile}
+          currentUserEmail={currentUserEmail}
+          analysis={analysis}
+          resumeAnalysisResult={resumeAnalysisResult}
+          isEditingProfile={isEditingProfile}
+          setIsEditingProfile={setIsEditingProfile}
+          setView={setView}
+          handleLogout={handleLogout}
+        />
+
+        {/* Mobile Nav */}
+        {
+          isLoggedIn && (
+            <MobileBottomNav
+              currentView={view}
+              onChangeView={setView}
+              onLogout={handleLogout}
+              onSwitchTrack={() => setView(AppView.ONBOARDING)}
+              onResetData={handleResetData}
+              onOpenFeedback={() => setShowFeedbackModal(true)}
+              onOpenProfile={() => setShowProfileModal(true)}
+            />
+          )
+        }
+
+        {/* Confirm Reset Modal */}
+        <ConfirmResetModal
+          isOpen={showConfirmResetModal}
+          onClose={() => setShowConfirmResetModal(false)}
+          onConfirm={confirmResetData}
+        />
+      </div >
+    </>
   );
 };
 

@@ -95,7 +95,7 @@ const FeedbackFloating: React.FC<FeedbackFloatingProps> = ({ userEmail }) => {
 
                     <div className="p-6">
                         {isSuccess ? (
-                            <div className="py-8 text-center animate-in zoom-in duration-300">
+                            <div className="py-8 text-center">
                                 <div className="w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
                                     <CheckCircle className="w-8 h-8 text-emerald-500" />
                                 </div>
