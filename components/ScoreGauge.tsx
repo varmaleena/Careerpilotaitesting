@@ -53,11 +53,7 @@ export const ScoreGauge: React.FC<ScoreGaugeProps> = ({ score }) => {
         <div className="text-4xl font-bold text-white tracking-tight">{score}%</div>
         <div className="text-xs text-indigo-200 font-medium uppercase tracking-wide mt-1">Match Potential</div>
 
-        {score < 100 && (
-          <div className="inline-block mt-2 px-2 py-0.5 rounded bg-indigo-500/20 text-[10px] text-indigo-300 border border-indigo-500/30">
-            Aiming for {potential}%
-          </div>
-        )}
+        {/* Removed cluttering target badge */}
       </div>
     </div>
   );

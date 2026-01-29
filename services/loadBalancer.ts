@@ -26,9 +26,9 @@ export class RequestLoadBalancer {
     private queue: QueuedRequest[] = [];
     private isProcessing: boolean = false;
     private lastRequestTime: number = 0;
-    private readonly minInterval: number = 500; // 500ms between requests
-    private readonly maxRetries: number = 5;
-    private readonly keyBackoffMs: number = 60000; // 1 minute backoff per key when rate limited
+    private readonly minInterval: number = 1000; // 1 second between requests (more conservative)
+    private readonly maxRetries: number = 8; // More retries for quota recovery
+    private readonly keyBackoffMs: number = 120000; // 2 minute backoff per key when rate limited
 
     constructor(keys: string[]) {
         const validKeys = keys.filter(Boolean);
@@ -57,7 +57,7 @@ export class RequestLoadBalancer {
 
     private getAvailableKey(): string {
         const now = Date.now();
-        
+
         // Find a key that's not rate-limited
         for (let i = 0; i < this.keyStatuses.length; i++) {
             const index = (this.currentKeyIndex + i) % this.keyStatuses.length;
@@ -66,9 +66,9 @@ export class RequestLoadBalancer {
                 return this.keyStatuses[index].key;
             }
         }
-        
+
         // All keys are rate-limited, return the one that will be available soonest
-        const soonestAvailable = this.keyStatuses.reduce((min, status, index) => 
+        const soonestAvailable = this.keyStatuses.reduce((min, status, index) =>
             status.rateLimitedUntil < this.keyStatuses[min].rateLimitedUntil ? index : min, 0);
         this.currentKeyIndex = soonestAvailable;
         return this.keyStatuses[soonestAvailable].key;
@@ -123,30 +123,30 @@ export class RequestLoadBalancer {
 
                 if (status === 429 || error.message?.includes('quota') || error.message?.includes('RESOURCE_EXHAUSTED')) {
                     console.warn(`⚠️ Rate limit hit (429). Attempt ${request.retries + 1}/${this.maxRetries}`);
-                    
+
                     // Mark current key as rate-limited
                     this.markKeyAsRateLimited(this.currentKeyIndex);
-                    
+
                     request.keyRotations++;
-                    
+
                     // If we've rotated through all keys, increment retries
                     if (request.keyRotations >= this.keyStatuses.length) {
                         request.retries++;
                         request.keyRotations = 0;
-                        
+
                         if (request.retries >= this.maxRetries) {
                             console.error(`❌ All ${this.maxRetries} retries exhausted. Request failed.`);
                             request.reject(error);
                             continue;
                         }
                     }
-                    
+
                     // Rotate to next key
                     this.rotateKey();
-                    
+
                     // Re-queue the request
                     this.queue.unshift(request);
-                    
+
                 } else if (status === 404) {
                     console.error("❌ Model not found (404). This might be a version mismatch or model name issue.");
                     request.reject(error);

@@ -14,6 +14,7 @@ export interface UserProfile {
   experienceLevel?: string; // student, fresher, junior, mid, senior
   graduationYear?: string;
   targetCompanies?: string; // Comma-separated dream companies
+  pastInterviews?: PastInterview[]; // History of completed interviews
   resumeText?: string;
   resumeFile?: {
     data: string; // Base64
@@ -28,6 +29,9 @@ export interface UserProfile {
   linkedinProfile?: string;
   leetcodeProfile?: string;
   paymentHistory?: PaymentTransaction[];
+  streak?: number;
+  lastLoginDate?: string;
+  xp?: number;
 }
 
 export interface PaymentTransaction {
@@ -139,11 +143,35 @@ export interface InterviewSession {
 }
 
 export interface InterviewFeedback {
-  score: number; // 0-10
+  score: number; // 0-10 or 0-100
   feedbackSummary: string;
   strengths: string[];
   improvements: string[];
   recommendedFocus: string;
+  // Premium Fields
+  communication?: number;
+  technicalCompetence?: number;
+  problemSolving?: number;
+  confidenceUnderPressure?: number;
+  timeManagement?: number;
+  decision?: 'Strong Hire' | 'Hire' | 'Borderline' | 'No-Hire';
+  blockingGaps?: string[];
+  improvementRoadmap?: {
+    immediate: string[];
+    shortTerm: string[];
+    longTerm: string[];
+  };
+  comparisonToHiringBar?: string;
+  detailedFeedback?: string;
+}
+
+export interface PastInterview {
+  id: string;
+  date: string;
+  targetRole: string;
+  companyName: string;
+  score: number;
+  feedback: InterviewFeedback;
 }
 
 export interface ResumeImprovement {
