@@ -38,12 +38,28 @@
       align-items: center;
       justify-content: center;
       z-index: 9999;
-      transition: opacity 0.3s ease, visibility 0.3s ease;
+      transition: opacity 0.5s ease, visibility 0.5s ease;
+
+      /* START HIDDEN, FADE IN ONLY IF SLOW (Network Delay > 1s) */
+      opacity: 0;
+      animation: fadeInLoader 0.5s ease-out forwards 1.0s;
+    }
+
+    @keyframes fadeInLoader {
+      from {
+        opacity: 0;
+      }
+
+      to {
+        opacity: 1;
+      }
     }
 
     #app-loader.hidden {
-      opacity: 0;
+      opacity: 0 !important;
       visibility: hidden;
+      animation: none !important;
+      /* Cancel fade-in if we hide it */
     }
 
     .loader-logo {
