@@ -224,7 +224,14 @@ ${currentPhase === 4 ? '- Wrap up, ask if they have questions' : ''}
 CONVERSATION HISTORY:
 ${conversationHistory.map(msg => `${msg.role === 'interviewer' ? 'Interviewer' : 'Candidate'}: ${msg.content}`).join('\n')}
 
-Generate your next response (1-2 sentences, natural, conversational):`;
+INSTRUCTION:
+Review the conversation history above. 
+1. identifying what has ALREADY been asked.
+2. Formulate a NEW question or response.
+3. NEVER repeat a question that has been asked before.
+4. If the candidate ignored a previous question, you may re-ask it ONCE, then move on.
+
+Generate your next response (Keep it professional, concise, and moving forward):`;
 
     try {
         const response = await generateWithRetry(
