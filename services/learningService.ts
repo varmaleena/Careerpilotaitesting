@@ -73,7 +73,7 @@ export const generateLearningPlan = async (targetRole: string, missingSkills: st
                                             description: { type: Type.STRING },
                                             type: { type: Type.STRING, enum: ['course', 'project', 'reading'] },
                                             estimatedHours: { type: Type.NUMBER },
-                                            completed: { type: Type.BOOLEAN },
+                                            completed: { type: Type.BOOLEAN, description: "Must ALWAYS be false initially" },
                                             videoQuery: { type: Type.STRING }
                                         }
                                     }
@@ -121,7 +121,16 @@ export const generateLearningPlan = async (targetRole: string, missingSkills: st
             throw new Error(`Generated plan has only ${finalPlan.length} weeks, expected at least 4. Please try again.`);
         }
 
-        return finalPlan;
+        // Post-processing: Ensure all tasks are marked as NOT completed initially
+        const sanitizedPlan = finalPlan.map(week => ({
+            ...week,
+            tasks: week.tasks.map(task => ({
+                ...task,
+                completed: false
+            }))
+        }));
+
+        return sanitizedPlan;
     } catch (error) {
         console.error("Plan Generation Failed:", error);
         throw error;
