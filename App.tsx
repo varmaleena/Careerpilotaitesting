@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   AlertCircle,
   ArrowRight,
@@ -349,7 +350,58 @@ const loadScript = (src: string) => {
 
 const App = () => {
   // --- Global State ---
-  const [view, setView] = useState<AppView>(AppView.LANDING);
+  const [view, setView] = useState<AppView>(() => {
+    const path = window.location.pathname;
+    if (path.startsWith('/onboarding')) return AppView.ONBOARDING;
+    if (path.startsWith('/dashboard')) return AppView.DASHBOARD;
+    if (path.startsWith('/plan')) return AppView.PLAN;
+    if (path.startsWith('/projects')) return AppView.PROJECTS;
+    if (path.startsWith('/resumearchitect')) return AppView.RESUME;
+    if (path.startsWith('/mockinterview')) return AppView.INTERVIEW;
+    return AppView.LANDING;
+  });
+
+  // --- Routing Sync ---
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // 1. URL -> View Sync
+  useEffect(() => {
+    const path = location.pathname;
+    let newView = AppView.LANDING;
+
+    if (path === '/' || path === '') newView = AppView.LANDING;
+    else if (path.startsWith('/onboarding')) newView = AppView.ONBOARDING;
+    else if (path.startsWith('/dashboard')) newView = AppView.DASHBOARD;
+    else if (path.startsWith('/plan')) newView = AppView.PLAN;
+    else if (path.startsWith('/projects')) newView = AppView.PROJECTS;
+    else if (path.startsWith('/resumearchitect')) newView = AppView.RESUME;
+    else if (path.startsWith('/mockinterview')) newView = AppView.INTERVIEW;
+
+    // Only update if different to prevent loops
+    if (view !== newView) {
+      setView(newView);
+    }
+  }, [location.pathname]);
+
+  // 2. View -> URL Sync
+  useEffect(() => {
+    let targetPath = '/';
+    switch (view) {
+      case AppView.LANDING: targetPath = '/'; break;
+      case AppView.ONBOARDING: targetPath = '/onboarding'; break;
+      case AppView.DASHBOARD: targetPath = '/dashboard'; break;
+      case AppView.PLAN: targetPath = '/plan'; break;
+      case AppView.PROJECTS: targetPath = '/projects'; break;
+      case AppView.RESUME: targetPath = '/resumearchitect'; break;
+      case AppView.INTERVIEW: targetPath = '/mockinterview'; break;
+      default: targetPath = '/';
+    }
+
+    if (location.pathname !== targetPath) {
+      navigate(targetPath);
+    }
+  }, [view]);
 
   // Auth State
   const [isLoggedIn, setIsLoggedIn] = useState(false);
