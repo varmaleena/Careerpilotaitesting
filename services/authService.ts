@@ -2,14 +2,15 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  signInWithPopup
 } from 'firebase/auth';
 import {
   doc,
   getDoc,
   setDoc,
 } from 'firebase/firestore';
-import { auth, db } from './firebaseConfig';
+import { auth, db, googleProvider } from './firebaseConfig';
 import { UserProfile, CareerAnalysis, WeeklyPlan, ProjectIdea, ChatMessage, InterviewFeedback, ResumeOptimizationResult } from '../types';
 
 // Fallback for dev without keys
@@ -33,12 +34,25 @@ let userDataCache: { [email: string]: UserData } = {};
 export const AuthService = {
   // --- Validation Helpers ---
   isValidEmail: (email: string): boolean => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
+    // Standard email format: user@domain.extension
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return emailRegex.test(email.trim());
   },
 
   isValidPassword: (password: string): boolean => {
-    return password.length >= 6;
+    // Minimum 8 characters, at least one number, at least one special character
+    if (password.length < 8) return false;
+    const hasNumber = /\d/.test(password);
+    const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+    return hasNumber && hasSpecialChar;
+  },
+
+  getPasswordValidationErrors: (password: string): string[] => {
+    const errors: string[] = [];
+    if (password.length < 8) errors.push("At least 8 characters");
+    if (!/\d/.test(password)) errors.push("At least one number");
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) errors.push("At least one special character (!@#$%^&*...)");
+    return errors;
   },
 
   // --- Auth Actions ---
@@ -59,10 +73,14 @@ export const AuthService = {
     // Check if user exists in local storage to give a meaningful "simulated" response
     const users = JSON.parse(localStorage.getItem(USERS_DB_KEY) || '{}');
     if (users[email]) {
-      console.log(`[DEV MODE] Password Reset Requested for ${email}`);
+      // DEV HELPER: Actually reset the password so the user isn't locked out of their local test account
+      users[email].password = "12345678$"; // Simple default with special char to pass regex
+      localStorage.setItem(USERS_DB_KEY, JSON.stringify(users));
+
+      console.log(`[DEV MODE] Password Reset for ${email} to '12345678$'`);
       return {
         success: true,
-        message: "Dev Mode: Password reset email simulated. (Check Console)"
+        message: "Dev Mode: Local password reset to '12345678$'. Try logging in now."
       };
     }
 
@@ -90,7 +108,13 @@ export const AuthService = {
         return { success: true };
       }
     } catch (error: any) {
-      if (auth) return { success: false, message: error.message };
+      console.warn("Firebase signup error:", error.code, error.message);
+      // Only return specific validation errors. For backend/network issues, fall back to local storage.
+      const fatalErrors = ['auth/email-already-in-use', 'auth/invalid-email', 'auth/weak-password'];
+      if (auth && fatalErrors.includes(error.code)) {
+        return { success: false, message: error.message };
+      }
+      // Continue execution to fallback...
     }
 
     // 2. Fallback to LocalStorage (Dev Mode)
@@ -112,6 +136,8 @@ export const AuthService = {
   },
 
   login: async (email: string, password: string): Promise<{ success: boolean; message?: string; name?: string }> => {
+    let firebaseError = null;
+
     // 1. Try Firebase
     try {
       if (auth) {
@@ -120,16 +146,68 @@ export const AuthService = {
         return { success: true, name };
       }
     } catch (error: any) {
-      if (auth) return { success: false, message: error.message };
+      console.warn("Firebase login failed:", error.code);
+      firebaseError = error.message;
     }
 
-    // 2. Fallback
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // 2. Fallback to LocalStorage (Dev Mode / Legacy Users)
+    // We check this if Firebase failed OR if Firebase wasn't initialized
     const users = JSON.parse(localStorage.getItem(USERS_DB_KEY) || '{}');
     const user = users[email];
-    if (!user) return { success: false, message: 'User not found.' };
-    if (user.password !== password) return { success: false, message: 'Incorrect password.' };
-    return { success: true, name: user.name };
+
+    if (user) {
+      // User exists locally
+      if (user.password === password) {
+        return { success: true, name: user.name };
+      } else {
+        // Exists locally but wrong password. 
+        // If we also had a simplified Firebase "User not found" error, return this specific Local "Incorrect password"
+        // If Firebase said "Wrong password", they likely meant the Firebase account.
+        // Let's prioritize the specific local error if we found the user locally.
+        return { success: false, message: 'Incorrect password.' };
+      }
+    }
+
+    // 3. User not found locally either.
+    // If we had a Firebase error, return that. Otherwise "User not found".
+    if (firebaseError) {
+      return { success: false, message: firebaseError };
+    }
+
+    return { success: false, message: 'User not found.' };
+  },
+
+  loginWithGoogle: async (): Promise<{ success: boolean; message?: string; name?: string; email?: string }> => {
+    try {
+      if (auth) {
+        const result = await signInWithPopup(auth, googleProvider);
+        const user = result.user;
+        const name = user.displayName || user.email?.split('@')[0];
+
+        // Check if user data exists, if not create initial structure
+        if (user.email) {
+          const existingData = await AuthService.getUserData(user.email);
+          if (!existingData) {
+            const initialData: UserData = {
+              userProfile: { name: name || 'User', targetRole: '' },
+              analysis: null,
+              plan: null,
+              projects: [],
+              chatMessages: [],
+              interviewFeedback: null,
+              resumeAnalysisResult: null,
+              seenProjectTitles: []
+            };
+            await AuthService.saveUserData(user.email, initialData);
+          }
+        }
+
+        return { success: true, name: name, email: user.email! };
+      }
+      return { success: false, message: "Auth not initialized" };
+    } catch (error: any) {
+      return { success: false, message: error.message };
+    }
   },
 
   // --- Data Management ---

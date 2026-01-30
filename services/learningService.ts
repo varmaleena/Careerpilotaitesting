@@ -10,29 +10,41 @@ export const generateLearningPlan = async (targetRole: string, missingSkills: st
         ? missingSkills.slice(0, 5).join(', ')
         : `core modern competencies for ${targetRole}`;
 
+    // Determine plan duration based on skill gaps
+    const skillGapCount = missingSkills.length;
+    const weekCount = skillGapCount <= 3 ? 4 : skillGapCount <= 6 ? 6 : 8;
+    const tasksPerWeek = 4; // Increased from 3 to 4 for better coverage
+
     const prompt = `
-    Role: Senior Engineering Mentor (Specialist in guiding students/juniors).
-    Task: Design a structured 4-Week "Zero-to-Hero" Career Roadmap for a "${targetRole}".
+    Role: Senior Engineering Mentor & Career Coach (Specialist in guiding students/juniors to job-readiness).
+    Task: Design a structured ${weekCount}-Week "Zero-to-Hero" Career Roadmap for a "${targetRole}".
     Target Gaps/Focus: ${focusSkills}.
     
     Philosophy for Students:
-    - "Guidance over Content": Don't just say "Learn React". Say "Master React Hooks to manage state effectively."
+    - "Guidance over Content": Don't just say "Learn React". Say "Master React Hooks (useState, useEffect, useContext) to manage state effectively."
+    - "Progressive Difficulty": Start with fundamentals, build to advanced concepts, end with interview-ready skills.
     - "Pacing & Progression": 
-       * Week 1: Core Foundations & Setup (Mental Models & Why).
-       * Week 2: Applied Skills (Implementation patterns & Mini-projects).
-       * Week 3: The Build (One complex portfolio-ready module/project).
-       * Week 4: Market Readiness (Interview prep, Performance optimization, and Polish).
+       * Week 1-2: Core Foundations & Mental Models (Why before How).
+       * Week 3-${Math.ceil(weekCount / 2)}: Applied Skills (Implementation patterns, Mini-projects, Hands-on practice).
+       * Week ${Math.ceil(weekCount / 2) + 1}-${weekCount - 1}: The Build (One complex portfolio-ready project).
+       * Week ${weekCount}: Market Readiness (Interview prep, System design, Performance optimization, Resume polish).
     - "Variety & Specificity": EACH week MUST HAVE A UNIQUE THEME AND UNIQUE TASKS. 
-    - "No Placeholder Names": Do NOT use themes like "Week 1", "Foundations", "Learning", or "Untitled". Use descriptive titles like "Advanced State Management" or "Scalable Backend Architecture".
-    - "Strict Deliverables": EVERY week MUST contain EXACTLY 3 high-impact tasks. DO NOT leave any week empty.
-    - "Outcome-Based": Every task must have a clear "Definition of Done".
+    - "No Placeholder Names": Do NOT use themes like "Week 1", "Foundations", "Learning", or "Untitled". 
+      Use descriptive titles like "Advanced State Management with Redux" or "Scalable Microservices Architecture".
+    - "Strict Deliverables": EVERY week MUST contain EXACTLY ${tasksPerWeek} high-impact tasks. DO NOT leave any week empty.
+    - "Outcome-Based": Every task must have a clear "Definition of Done" (e.g., "Build a working authentication system").
+    - "Resource-Rich": Provide specific, actionable video queries that will find the BEST tutorials.
     
     Requirements:
-    - Generate EXACTLY 4 Weeks (Indices 1, 2, 3, 4).
-    - Each week must have **EXACTLY 3** high-impact tasks (no more, no less).
-    - **Description**: MAX 15 WORDS. Concise and actionable.
-    - Resources: strictly free and high-quality (YouTube/Docs).
-    - **Video Query**: Must be very specific (e.g., "React Hooks useReducer tutorial for beginners", "System Design centralized logging architecture").
+    - Generate EXACTLY ${weekCount} Weeks (Indices 1, 2, 3, ..., ${weekCount}).
+    - Each week must have **EXACTLY ${tasksPerWeek}** high-impact tasks (no more, no less).
+    - **Description**: MAX 20 WORDS. Concise, actionable, and outcome-focused.
+    - **Estimated Hours**: Be realistic. Courses: 3-8h, Projects: 8-20h, Reading: 1-5h.
+    - **Video Query**: Must be VERY specific with exact technology and concept (e.g., "React useReducer advanced patterns tutorial 2024", "System Design distributed caching Redis architecture").
+    - **Task Types**: Mix of 'course' (learning), 'project' (building), and 'reading' (documentation/articles).
+    - **Difficulty Progression**: Tasks should get progressively harder each week.
+    
+    CRITICAL: Return ONLY valid JSON. NO markdown, NO explanations, NO extra text.
   `;
 
     try {
@@ -68,37 +80,48 @@ export const generateLearningPlan = async (targetRole: string, missingSkills: st
                                 }
                             }
                         }
-                    }
+                    },
+                    temperature: 0.7, // Slightly creative but still focused
+                    maxOutputTokens: 4096 // Increased for longer plans
                 }
             }
         );
 
         const rawPlan = JSON.parse(cleanJson(response.text || "[]")) as WeeklyPlan[];
 
-        // Post-processing: 
-        // 1. Filter out weeks that have no tasks or generic titles
-        // 2. Ensure 4 weeks
-        // 3. Force correct numbering and ID safety
+        // Enhanced Post-processing
         const filteredPlan = rawPlan.filter(week =>
             week.tasks &&
             week.tasks.length > 0 &&
             week.theme &&
-            week.theme.trim().length > 3 &&
-            !week.theme.toLowerCase().includes('week')
+            week.theme.trim().length > 5 && // Increased from 3 to 5 for better quality
+            !week.theme.toLowerCase().includes('week') &&
+            !week.theme.toLowerCase().includes('untitled') &&
+            !week.theme.toLowerCase().includes('placeholder')
         );
 
         if (filteredPlan.length === 0) {
             throw new Error("The AI returned a low-quality plan with missing content. Please try regenerating.");
         }
 
-        return filteredPlan.slice(0, 4).map((week, idx) => ({
+        // Ensure we have the target number of weeks
+        const finalPlan = filteredPlan.slice(0, weekCount).map((week, idx) => ({
             ...week,
             weekNumber: idx + 1,
-            tasks: week.tasks.map(task => ({
+            tasks: week.tasks.slice(0, tasksPerWeek).map((task, taskIdx) => ({
                 ...task,
-                id: task.id || `task-${idx}-${Math.random().toString(36).substr(2, 9)}`
+                id: task.id || `task-${idx}-${taskIdx}-${Math.random().toString(36).substr(2, 9)}`,
+                // Ensure estimatedHours is reasonable
+                estimatedHours: Math.min(Math.max(task.estimatedHours || 5, 1), 40)
             }))
         }));
+
+        // Validate we have enough weeks
+        if (finalPlan.length < Math.min(4, weekCount)) {
+            throw new Error(`Generated plan has only ${finalPlan.length} weeks, expected at least 4. Please try again.`);
+        }
+
+        return finalPlan;
     } catch (error) {
         console.error("Plan Generation Failed:", error);
         throw error;
@@ -143,6 +166,8 @@ export const generateProjectIdeas = async (
         "difficulty": "Beginner/Intermediate/Advanced",
         "description": "2 sentences max. Highlight technical complexity.",
         "techStack": ["Tool1", "Tool2", "Tool3"],
+        "userStories": ["As a user, I want to...", "As a admin, I want to..."],
+        "keyFeatures": ["Feature 1", "Feature 2"],
         "resumeValue": "1 punchy sentence explaining why this impresses a recruiter.",
         "implementationFlow": ["Step 1", "Step 2", "Step 3"],
         "learningOutcomes": ["Skill 1", "Skill 2"]
@@ -157,8 +182,8 @@ export const generateProjectIdeas = async (
                 contents: prompt,
                 config: {
                     responseMimeType: "application/json",
-                    maxOutputTokens: 1024, // FORCE stop before 36k chars
-                    temperature: 0.8 // Slightly higher creativity to avoid repetition
+                    maxOutputTokens: 2048, // Increased for more details
+                    temperature: 0.8
                 }
             }
         );
@@ -189,10 +214,11 @@ export const generateProjectIdeas = async (
             description: p.description || "A technical project relevant to the role.",
             techStack: p.techStack || ["React", "Node.js"],
             difficulty: p.difficulty || "Intermediate",
+            userStories: p.userStories || [],
+            keyFeatures: p.keyFeatures || [],
             resumeValue: p.resumeValue || "Demonstrates core competencies.",
             implementationFlow: p.implementationFlow || ["Design", "Build", "Test"],
-            learningOutcomes: p.learningOutcomes || ["Full Stack Dev"],
-            keyFeatures: p.keyFeatures || []
+            learningOutcomes: p.learningOutcomes || ["Full Stack Dev"]
         }));
 
     } catch (error) {

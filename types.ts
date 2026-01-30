@@ -14,6 +14,7 @@ export interface UserProfile {
   experienceLevel?: string; // student, fresher, junior, mid, senior
   graduationYear?: string;
   targetCompanies?: string; // Comma-separated dream companies
+  pastInterviews?: PastInterview[]; // History of completed interviews
   resumeText?: string;
   resumeFile?: {
     data: string; // Base64
@@ -28,6 +29,9 @@ export interface UserProfile {
   linkedinProfile?: string;
   leetcodeProfile?: string;
   paymentHistory?: PaymentTransaction[];
+  streak?: number;
+  lastLoginDate?: string;
+  xp?: number;
 }
 
 export interface PaymentTransaction {
@@ -90,7 +94,8 @@ export interface ProjectIdea {
   difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
   description: string;
   techStack: string[];
-  keyFeatures: string[];
+  userStories?: string[]; // User stories in "As a user, I want..." format
+  keyFeatures: string[]; // Core Features
   resumeValue: string; // Why this helps on a resume
   implementationFlow: string[]; // Step-by-step guide
   learningOutcomes: string[]; // What the student learns
@@ -138,11 +143,35 @@ export interface InterviewSession {
 }
 
 export interface InterviewFeedback {
-  score: number; // 0-10
+  score: number; // 0-10 or 0-100
   feedbackSummary: string;
   strengths: string[];
   improvements: string[];
   recommendedFocus: string;
+  // Premium Fields
+  communication?: number;
+  technicalCompetence?: number;
+  problemSolving?: number;
+  confidenceUnderPressure?: number;
+  timeManagement?: number;
+  decision?: 'Strong Hire' | 'Hire' | 'Borderline' | 'No-Hire';
+  blockingGaps?: string[];
+  improvementRoadmap?: {
+    immediate: string[];
+    shortTerm: string[];
+    longTerm: string[];
+  };
+  comparisonToHiringBar?: string;
+  detailedFeedback?: string;
+}
+
+export interface PastInterview {
+  id: string;
+  date: string;
+  targetRole: string;
+  companyName: string;
+  score: number;
+  feedback: InterviewFeedback;
 }
 
 export interface ResumeImprovement {
@@ -217,4 +246,44 @@ export interface LatexResumeData {
     title: string;
     description?: string;
   }[];
+}
+
+// ATS Resume Analysis Types
+export interface ATSResumeAnalysis {
+  resumeOverview: {
+    resumeType: string;
+    experienceLevel: string;
+    domain: string;
+    overallATSScore: number;
+  };
+  extractedData: {
+    skills: string[];
+    education: string[];
+    experience: string[];
+    projects: string[];
+    certifications: string[];
+  };
+  strengths: string[];
+  weaknesses: string[];
+  criticalImprovements: string[];
+  atsKeywordOptimization: {
+    missingKeywords: string[];
+    suggestedKeywords: string[];
+    keywordDensityIssues: string[];
+  };
+  jobMatchAnalysis?: {
+    skillMatchPercent: number;
+    missingSkills: string[];
+    roleFitScore: number;
+  };
+  optimizationSuggestions: {
+    rewrittenLines: { original: string; improved: string }[];
+    betterActionVerbs: string[];
+    quantifiableMetrics: string[];
+  };
+  finalVerdict: {
+    isReady: boolean;
+    reason: string;
+    priorityImprovements: string[];
+  };
 }

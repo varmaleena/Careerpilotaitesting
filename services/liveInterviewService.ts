@@ -128,6 +128,7 @@ NEXT RESPONSE RULES:
 - Keep responses concise (2-3 sentences max)
 - Sound human, not robotic
 - NO explanations, NO coaching, NO hints
+- CRITICAL: CHECK HISTORY. DO NOT REPEAT QUESTIONS.
 
 ENDING RULE:
 - Do NOT give feedback immediately.
