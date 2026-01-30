@@ -41,6 +41,8 @@ export const calculatePlanStatistics = (
         0
     );
 
+    console.log(`[PlanStats] Completed Hours: ${completedHours}/${totalHours}`);
+
     const progressPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
     const remainingHours = totalHours - completedHours;

@@ -876,7 +876,9 @@ const App = () => {
       // Step 2: Only proceed with analysis if validation passed
       const result = await analyzeProfile(
         { text: userProfile.resumeText, file: userProfile.resumeFile },
-        userProfile.targetRole
+        userProfile.targetRole,
+        userProfile.targetCompanies,
+        userProfile.experienceLevel
       );
       setAnalysis(result.analysis);
       setUserProfile(prev => ({
@@ -2311,6 +2313,8 @@ const App = () => {
                         const stats = calculatePlanStatistics(plan, 2);
                         const currentWeek = getCurrentWeek(plan);
                         const progressMessage = getProgressMessage(stats.progressPercentage);
+
+                        console.log(`[UI] Plan Stats Updated - Hours: ${stats.completedHours}/${stats.totalHours}`);
 
                         return (
                           <div className="bg-slate-900/50 rounded-xl border border-white/5 p-6">
