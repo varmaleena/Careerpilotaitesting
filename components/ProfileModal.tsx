@@ -16,7 +16,7 @@ import {
     TrendingUp,
     X
 } from 'lucide-react';
-import React from 'react';
+import React, { useState } from 'react';
 import { AppView, CareerAnalysis, ResumeOptimizationResult, UserProfile } from '../types';
 
 interface ProfileModalProps {
@@ -46,6 +46,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     setView,
     handleLogout
 }) => {
+    const [showAllSkills, setShowAllSkills] = useState(false);
     if (!isOpen) return null;
 
     return (
@@ -281,7 +282,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                         <div className="py-6 border-b border-zinc-800">
                             <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">Skills Progress</h3>
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                {analysis.skills.slice(0, 8).map((skill, idx) => (
+                                {(showAllSkills ? analysis.skills : analysis.skills.slice(0, 8)).map((skill, idx) => (
                                     <div key={idx} className="p-3 bg-zinc-900 rounded-lg border border-zinc-800 flex flex-col justify-between h-full">
                                         <div className="flex items-center justify-between mb-2">
                                             <span className="text-xs font-semibold text-zinc-300 truncate w-full">{skill.name}</span>
@@ -297,7 +298,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                                 ))}
                             </div>
                             {analysis.skills.length > 8 && (
-                                <p className="text-xs text-zinc-500 mt-3 text-center">+{analysis.skills.length - 8} more skills</p>
+                                <button
+                                    onClick={() => setShowAllSkills(!showAllSkills)}
+                                    className="w-full text-xs text-indigo-400 hover:text-indigo-300 mt-4 text-center font-medium transition-colors py-2 hover:bg-zinc-900 rounded-lg border border-transparent hover:border-zinc-800"
+                                >
+                                    {showAllSkills ? 'Show Less' : `+${analysis.skills.length - 8} more skills`}
+                                </button>
                             )}
                         </div>
                     )}

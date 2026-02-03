@@ -88,9 +88,11 @@ import {
   ChatMessage,
   InterviewFeedback,
   LatexResumeData,
+  LearningTask,
   PastInterview,
   ProjectIdea,
   ResumeOptimizationResult,
+  Skill,
   UserProfile,
   WeeklyPlan
 } from './types';
@@ -1044,16 +1046,54 @@ const App = () => {
   };
 
   const handleToggleTask = (weekIndex: number, taskId: string) => {
-    if (!plan) return;
+    if (!plan || !analysis) return;
+
+    let toggledTask: LearningTask | undefined;
     const newPlan = plan.map((week, idx) => {
       if (idx === weekIndex) {
         return {
           ...week,
-          tasks: week.tasks.map(t => t.id === taskId ? { ...t, completed: !t.completed } : t)
+          tasks: week.tasks.map(t => {
+            if (t.id === taskId) {
+              toggledTask = { ...t, completed: !t.completed };
+              return toggledTask;
+            }
+            return t;
+          })
         };
       }
       return week;
     });
+
+    if (toggledTask) {
+      const taskTitle = toggledTask.title.toLowerCase();
+      const isNowCompleted = toggledTask.completed;
+
+      // Update skills in analysis
+      const newSkills = analysis.skills.map(skill => {
+        const skillName = skill.name.toLowerCase();
+        // Check if task title contains skill name or vice-versa
+        if (taskTitle.includes(skillName) || skillName.includes(taskTitle)) {
+          return { ...skill, status: isNowCompleted ? 'acquired' : 'missing' } as Skill;
+        }
+        return skill;
+      });
+
+      // Recalculate readiness score based on acquired skills
+      const acquiredCount = newSkills.filter(s => s.status === 'acquired').length;
+      const totalCount = newSkills.length;
+      const baseScore = totalCount > 0 ? Math.round((acquiredCount / totalCount) * 100) : analysis.readinessScore;
+
+      // Give a little boost for readiness if the score was lower
+      const newScore = Math.min(100, Math.max(analysis.readinessScore, baseScore));
+
+      setAnalysis({
+        ...analysis,
+        skills: newSkills,
+        readinessScore: newScore
+      });
+    }
+
     setPlan(newPlan);
   };
 
