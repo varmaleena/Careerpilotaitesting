@@ -13,7 +13,7 @@ export const ShareSuccessModal: React.FC<ShareSuccessModalProps> = ({ score, rol
     const [copied, setCopied] = React.useState(false);
     const cardRef = useRef<HTMLDivElement>(null);
 
-    const shareText = `🚀 Just hit a ${score}% readiness score for ${role} on CareerPilot! \n\nI'm on a ${streak}-day streak preparing for my dream job. \n\n#CareerPilot #TechCareers #InterviewPrep`;
+    const shareText = `Just hit a ${score}% readiness score for ${role} on CareerPilot! \n\nI'm on a ${streak}-day streak preparing for my dream job. \n\n#CareerPilot #TechCareers #InterviewPrep`;
 
     const handleCopy = () => {
         navigator.clipboard.writeText(shareText);

@@ -1,6 +1,10 @@
-
-import React from 'react';
-import { ArrowRight, CheckCircle2, TrendingUp, Shield, Zap, Code, Layout, Users, Star, ChevronRight, Globe, Lock } from 'lucide-react';
+import React, { useState } from 'react';
+import {
+   ArrowRight, CheckCircle2, TrendingUp, Shield,
+   FileText, Users, Star, ChevronDown, ChevronRight,
+   Menu, X, Lock, Mail, Linkedin, Twitter, Github, Instagram,
+   Target, Sparkles, BookOpen, Mic, Play
+} from 'lucide-react';
 
 interface LandingPageProps {
    onGetStarted: () => void;
@@ -8,190 +12,276 @@ interface LandingPageProps {
 }
 
 const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin }) => {
-   return (
-      <div className="min-h-screen bg-slate-950 text-white selection:bg-indigo-500/30 overflow-x-hidden">
-         {/* --- Navbar --- */}
-         <nav className="fixed top-0 w-full z-50 bg-slate-950/80 backdrop-blur-lg border-b border-white/5 transition-all duration-300">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between">
-               <div className="flex items-center space-x-2">
-                  <div className="w-8 h-8 bg-gradient-to-tr from-indigo-600 to-purple-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/20">
-                     <TrendingUp className="w-5 h-5 text-white" />
-                  </div>
-                  <span className="text-xl font-bold tracking-tight text-white">CareerPilot</span>
-               </div>
+   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
-               <div className="flex items-center space-x-3 sm:space-x-4">
-                  <button onClick={onLogin} className="text-xs sm:text-sm font-medium text-slate-300 hover:text-white transition-all duration-200 relative after:absolute after:bottom-0 after:left-0 after:w-0 after:h-0.5 after:bg-indigo-500 after:transition-all hover:after:w-full">
-                     Log In
-                  </button>
+   const scrollToSection = (id: string) => {
+      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+      setMobileMenuOpen(false);
+   };
+
+   return (
+      <div className="min-h-screen bg-[#09090b] text-white font-['Inter',sans-serif]">
+         {/* --- Navigation --- */}
+         <nav className="fixed top-0 w-full z-50 bg-[#09090b]/95 backdrop-blur-sm border-b border-zinc-800/50">
+            <div className="max-w-[1200px] mx-auto px-6">
+               <div className="h-16 flex items-center justify-between">
+                  {/* Logo */}
+                  <a href="#" className="flex items-center gap-2.5 group">
+                     <div className="w-8 h-8 bg-gradient-to-br from-violet-500 to-purple-600 rounded-lg flex items-center justify-center transition-transform group-hover:scale-105">
+                        <TrendingUp className="w-4 h-4 text-white" strokeWidth={2.5} />
+                     </div>
+                     <span className="text-base font-semibold tracking-tight">CareerPilot</span>
+                  </a>
+
+                  {/* Desktop Navigation */}
+                  <div className="hidden md:flex items-center gap-1">
+                     {['Features', 'How it works'].map((item) => (
+                        <button
+                           key={item}
+                           onClick={() => scrollToSection(item.toLowerCase().replace(/\s+/g, '-'))}
+                           className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition-colors rounded-md hover:bg-zinc-800/50"
+                        >
+                           {item}
+                        </button>
+                     ))}
+                  </div>
+
+                  {/* Desktop CTA */}
+                  <div className="hidden md:flex items-center gap-3">
+                     <button
+                        onClick={onLogin}
+                        className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition-colors"
+                     >
+                        Sign in
+                     </button>
+                     <button
+                        onClick={onGetStarted}
+                        className="bg-white text-zinc-900 px-5 py-2 rounded-lg text-sm font-medium hover:bg-zinc-100 transition-colors"
+                     >
+                        Get Started
+                     </button>
+                  </div>
+
+                  {/* Mobile Menu Button */}
                   <button
-                     onClick={onGetStarted}
-                     className="bg-white text-slate-950 px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-bold hover:bg-slate-200 transition-colors shadow-lg shadow-white/10 whitespace-nowrap"
+                     onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                     className="md:hidden p-2 -mr-2 text-zinc-400 hover:text-white transition-colors"
                   >
-                     Get Started
+                     {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
                   </button>
                </div>
             </div>
+
+            {/* Mobile Menu */}
+            {mobileMenuOpen && (
+               <div className="md:hidden bg-[#09090b] border-t border-zinc-800/50">
+                  <div className="px-6 py-4 space-y-1">
+                     {['Features', 'How it works'].map((item) => (
+                        <button
+                           key={item}
+                           onClick={() => scrollToSection(item.toLowerCase().replace(/\s+/g, '-'))}
+                           className="block w-full text-left px-3 py-2.5 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/50 rounded-lg transition-colors"
+                        >
+                           {item}
+                        </button>
+                     ))}
+                  </div>
+                  <div className="px-6 pb-4 pt-2 border-t border-zinc-800/50 space-y-2">
+                     <button onClick={onLogin} className="block w-full text-left px-3 py-2.5 text-sm text-zinc-400 hover:text-white transition-colors">
+                        Sign in
+                     </button>
+                     <button onClick={onGetStarted} className="w-full bg-white text-zinc-900 py-2.5 rounded-lg text-sm font-medium">
+                        Get Started
+                     </button>
+                  </div>
+               </div>
+            )}
          </nav>
 
          {/* --- Hero Section --- */}
-         <section className="relative pt-28 pb-16 lg:pt-48 lg:pb-32 overflow-hidden">
-            {/* Background Elements */}
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[1000px] h-[500px] bg-indigo-600/20 blur-[80px] sm:blur-[120px] rounded-full pointer-events-none opacity-60 sm:opacity-100"></div>
-            <div className="absolute bottom-0 right-0 w-[300px] sm:w-[600px] h-[300px] sm:h-[600px] bg-purple-600/10 blur-[80px] sm:blur-[120px] rounded-full pointer-events-none"></div>
+         <section className="pt-28 pb-16 md:pt-36 md:pb-20 relative overflow-hidden">
+            {/* Subtle background glow */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-violet-500/5 rounded-full blur-[100px] pointer-events-none" />
 
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-               <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-20">
+            <div className="max-w-[1200px] mx-auto px-6 relative">
+               <div className="max-w-[800px] mx-auto text-center">
+                  {/* Badge */}
+                  <div className="inline-flex items-center gap-2.5 bg-zinc-800/50 border border-zinc-700/50 rounded-full px-4 py-2 mb-8">
+                     <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500"></span>
+                     </span>
+                     <span className="text-sm text-zinc-400 font-medium">Your AI Career Coach</span>
+                  </div>
 
-                  {/* Hero Copy */}
-                  <div className="lg:w-1/2 text-center lg:text-left">
-                     <div className="inline-flex items-center space-x-2 bg-white/5 border border-white/10 rounded-full px-3 py-1 sm:px-4 sm:py-1.5 mb-6 sm:mb-8 backdrop-blur-sm">
-                        <span className="relative flex h-2 w-2">
-                           <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                        </span>
-                        <span className="text-xs sm:text-sm font-medium text-slate-300">AI-Powered Career Architect v2.0</span>
-                     </div>
+                  {/* Headline */}
+                  <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.1] mb-6">
+                     Land your dream job
+                     <br />
+                     <span className="text-violet-400">faster with AI</span>
+                  </h1>
 
-                     <h1 className="text-[clamp(2.5rem,5vw,4.5rem)] md:text-[clamp(3rem,6vw,5.5rem)] font-bold tracking-tight mb-6 leading-[1.1] sm:leading-[1.1]">
-                        Your Career, <br />
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400">
-                           On Autopilot.
-                        </span>
-                     </h1>
+                  {/* Subheadline */}
+                  <p className="text-lg md:text-xl text-zinc-400 mb-8 max-w-[560px] mx-auto leading-relaxed">
+                     Instant resume feedback, skill roadmaps, and mock interviews. Everything you need in one career coach.
+                  </p>
 
-                     <p className="text-base sm:text-lg md:text-xl text-slate-400 mb-8 max-w-2xl mx-auto lg:mx-0 leading-relaxed">
-                        CareerPilot scans the job market, analyzes your profile, and generates a personalized curriculum and interview strategy to land your dream role.
-                     </p>
+                  {/* CTAs */}
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
+                     <button
+                        onClick={onGetStarted}
+                        className="w-full sm:w-auto bg-violet-500 hover:bg-violet-400 text-white px-8 py-3.5 rounded-xl font-semibold text-base transition-colors flex items-center justify-center gap-2 shadow-lg shadow-violet-500/20"
+                     >
+                        Analyze My Resume
+                        <ArrowRight className="w-4 h-4" />
+                     </button>
+                     <button
+                        onClick={() => scrollToSection('how-it-works')}
+                        className="w-full sm:w-auto text-zinc-300 hover:text-white px-8 py-3.5 rounded-xl font-medium text-base transition-colors border border-zinc-700 hover:border-zinc-600 flex items-center justify-center gap-2"
+                     >
+                        <Play className="w-4 h-4" />
+                        See how it works
+                     </button>
+                  </div>
 
-                     <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start space-y-3 sm:space-y-0 sm:space-x-4 w-full sm:w-auto">
-                        <button
-                           onClick={onGetStarted}
-                           className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-3.5 sm:py-4 rounded-xl font-bold text-base sm:text-lg shadow-[0_0_40px_rgba(79,70,229,0.4)] hover:shadow-[0_0_60px_rgba(79,70,229,0.6)] transition-all flex items-center justify-center group"
+                  {/* Minimal trust signals */}
+                  <p className="text-sm text-zinc-600">
+                     Free to start · No credit card required
+                  </p>
+               </div>
+            </div>
+         </section>
+
+         {/* --- Features Section --- */}
+         <section id="features" className="py-16 md:py-20 border-t border-zinc-800/50">
+            <div className="max-w-[1200px] mx-auto px-6">
+               {/* Section Header */}
+               <div className="text-center mb-12 max-w-[600px] mx-auto">
+                  <h2 className="text-3xl md:text-4xl font-bold mb-4">
+                     Everything you need to succeed
+                  </h2>
+                  <p className="text-zinc-400 text-lg">
+                     A complete toolkit designed to accelerate your career growth
+                  </p>
+               </div>
+
+               {/* Features Grid */}
+               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {[
+                     {
+                        icon: <FileText className="w-5 h-5" />,
+                        title: "Resume Analysis",
+                        desc: "Get detailed AI feedback on your resume with specific, actionable improvements.",
+                        color: "violet"
+                     },
+                     {
+                        icon: <BookOpen className="w-5 h-5" />,
+                        title: "Learning Paths",
+                        desc: "Personalized 2-week learning plans with curated courses and resources.",
+                        color: "blue"
+                     },
+                     {
+                        icon: <Target className="w-5 h-5" />,
+                        title: "Portfolio Projects",
+                        desc: "AI-generated project ideas with complete technical specifications.",
+                        color: "purple"
+                     },
+                     {
+                        icon: <Mic className="w-5 h-5" />,
+                        title: "Mock Interviews",
+                        desc: "Practice with an AI interviewer that adapts to your target role.",
+                        color: "amber"
+                     },
+                     {
+                        icon: <Sparkles className="w-5 h-5" />,
+                        title: "Resume Builder",
+                        desc: "Create ATS-optimized resumes tailored to specific job descriptions.",
+                        color: "pink"
+                     },
+                     {
+                        icon: <TrendingUp className="w-5 h-5" />,
+                        title: "Progress Tracking",
+                        desc: "Monitor your readiness score and track your improvement over time.",
+                        color: "cyan"
+                     }
+                  ].map((feature, idx) => {
+                     const colorMap: Record<string, string> = {
+                        violet: 'bg-violet-500/10 text-violet-400 border-violet-500/20',
+                        blue: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+                        purple: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+                        amber: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+                        pink: 'bg-pink-500/10 text-pink-400 border-pink-500/20',
+                        cyan: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
+                     };
+                     return (
+                        <div
+                           key={idx}
+                           className="group p-6 rounded-2xl bg-zinc-900/50 border border-zinc-800/50 hover:border-zinc-700 hover:bg-zinc-800/30 transition-all duration-300"
                         >
-                           Analyze My Resume <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
-                        </button>
-                     </div>
-
-                     <div className="mt-8 sm:mt-10 flex flex-col sm:flex-row items-center justify-center lg:justify-start space-y-2 sm:space-y-0 sm:space-x-6 text-slate-500 text-sm font-medium">
-                        <div className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-emerald-500" /> No credit card required</div>
-                        <div className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-emerald-500" /> 10,000+ plans generated</div>
-                     </div>
-                  </div>
-
-                  {/* Hero Visual (Mock UI) */}
-                  <div className="w-full lg:w-1/2 relative perspective-1000 mt-8 lg:mt-0">
-                     <div className="relative transform lg:rotate-y-[-10deg] lg:rotate-x-[5deg] transition-transform duration-500 hover:rotate-0">
-                        {/* Decorative Glow */}
-                        <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl blur opacity-30"></div>
-
-                        {/* Main Dashboard Mockup */}
-                        <div className="relative bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden aspect-[4/3] w-full">
-                           {/* Mock Header */}
-                           <div className="h-8 sm:h-12 border-b border-slate-800 bg-slate-900/50 flex items-center px-4 space-x-2">
-                              <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-red-500/20 border border-red-500/50"></div>
-                              <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-amber-500/20 border border-amber-500/50"></div>
-                              <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-emerald-500/20 border border-emerald-500/50"></div>
-                              <div className="flex-1"></div>
-                              <div className="h-2 w-16 sm:w-20 bg-slate-800 rounded-full"></div>
+                           <div className={`w-12 h-12 rounded-xl ${colorMap[feature.color]} border flex items-center justify-center mb-5 group-hover:scale-110 transition-transform`}>
+                              {feature.icon}
                            </div>
-                           {/* Mock Body */}
-                           <div className="flex h-full">
-                              {/* Mock Sidebar */}
-                              <div className="w-12 sm:w-16 border-r border-slate-800 bg-slate-900/30 flex flex-col items-center py-4 space-y-4">
-                                 <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg bg-indigo-500/20 border border-indigo-500/30"></div>
-                                 <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg bg-slate-800"></div>
-                                 <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg bg-slate-800"></div>
-                                 <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg bg-slate-800"></div>
-                              </div>
-                              {/* Mock Content */}
-                              <div className="flex-1 p-4 sm:p-6 space-y-4 sm:space-y-6 bg-slate-950/50">
-                                 <div className="flex justify-between items-end">
-                                    <div className="space-y-2">
-                                       <div className="h-2 sm:h-3 w-24 sm:w-32 bg-slate-800 rounded-full"></div>
-                                       <div className="h-5 sm:h-6 w-32 sm:w-48 bg-slate-700 rounded-md"></div>
-                                    </div>
-                                    <div className="h-8 w-8 sm:h-10 sm:w-10 bg-emerald-500/20 rounded-full border border-emerald-500/30 flex items-center justify-center">
-                                       <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-500" />
-                                    </div>
-                                 </div>
-
-                                 {/* Mock Charts/Cards */}
-                                 <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                                    <div className="col-span-2 h-20 sm:h-24 bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 rounded-xl p-3 sm:p-4 relative overflow-hidden">
-                                       <div className="absolute bottom-0 left-0 w-full h-1/2 bg-indigo-500/10 blur-xl"></div>
-                                       <div className="h-1.5 sm:h-2 w-16 sm:w-20 bg-slate-700 rounded mb-2"></div>
-                                       <div className="flex items-end space-x-2 h-8 sm:h-10 mt-2">
-                                          <div className="w-6 sm:w-8 bg-indigo-600 rounded-t h-full"></div>
-                                          <div className="w-6 sm:w-8 bg-slate-700 rounded-t h-3/4"></div>
-                                          <div className="w-6 sm:w-8 bg-slate-700 rounded-t h-1/2"></div>
-                                       </div>
-                                    </div>
-                                    <div className="h-20 sm:h-24 bg-slate-900 border border-slate-800 rounded-xl p-3">
-                                       <div className="h-6 w-6 sm:h-8 sm:w-8 rounded-full bg-purple-500/20 mb-2"></div>
-                                       <div className="h-1.5 sm:h-2 w-12 sm:w-16 bg-slate-700 rounded"></div>
-                                    </div>
-                                    <div className="h-20 sm:h-24 bg-slate-900 border border-slate-800 rounded-xl p-3">
-                                       <div className="h-6 w-6 sm:h-8 sm:w-8 rounded-full bg-blue-500/20 mb-2"></div>
-                                       <div className="h-1.5 sm:h-2 w-12 sm:w-16 bg-slate-700 rounded"></div>
-                                    </div>
-                                 </div>
-                              </div>
-                           </div>
+                           <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
+                           <p className="text-zinc-400 text-sm leading-relaxed">{feature.desc}</p>
                         </div>
-
-                        {/* Floating Elements - Repositioned for Mobile */}
-                        <div className="absolute right-2 -bottom-6 sm:-right-6 sm:top-10 sm:bottom-auto bg-slate-800 p-3 sm:p-4 rounded-xl border border-slate-700 shadow-xl flex items-center space-x-3 w-max max-w-[calc(100%-20px)]">
-                           <div className="bg-emerald-500/20 p-1.5 sm:p-2 rounded-lg"><CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" /></div>
-                           <div>
-                              <div className="text-[10px] sm:text-xs text-slate-400">Readiness Score</div>
-                              <div className="text-xs sm:text-sm font-bold text-white">Top 5% Candidate</div>
-                           </div>
-                        </div>
-                     </div>
-                  </div>
+                     );
+                  })}
                </div>
             </div>
          </section>
 
          {/* --- How It Works --- */}
-         <section id="how-it-works" className="py-16 sm:py-24 relative border-t border-white/5">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-               <div className="text-center max-w-3xl mx-auto mb-12 sm:mb-20">
-                  <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 sm:mb-6">From <span className="text-indigo-400">Lost</span> to <span className="text-emerald-400">Hired</span> in 3 Steps</h2>
-                  <p className="text-base sm:text-lg text-slate-400 px-4">Most career advice is generic. We build a custom operating system for your professional growth.</p>
+         <section id="how-it-works" className="py-16 md:py-20 bg-zinc-900/30 border-t border-zinc-800/50">
+            <div className="max-w-[1200px] mx-auto px-6">
+               {/* Section Header */}
+               <div className="text-center mb-12 max-w-[600px] mx-auto">
+                  <h2 className="text-3xl md:text-4xl font-bold mb-4">
+                     How it works
+                  </h2>
+                  <p className="text-zinc-400 text-lg">
+                     From upload to job-ready in three simple steps
+                  </p>
                </div>
 
-               <div className="grid md:grid-cols-3 gap-6 sm:gap-8">
+               {/* Steps */}
+               <div className="grid md:grid-cols-3 gap-8 max-w-[1000px] mx-auto">
                   {[
                      {
-                        icon: <Layout className="w-6 h-6 sm:w-8 sm:h-8 text-indigo-400" />,
-                        title: "1. Scan & Analyze",
-                        desc: "Upload your resume and target role. We analyze your profile against millions of job descriptions to find your exact gaps.",
-                        color: "indigo"
+                        step: "01",
+                        title: "Upload & Analyze",
+                        desc: "Upload your resume and tell us your target role. Our AI analyzes your profile against industry standards.",
+                        icon: <FileText className="w-6 h-6" />
                      },
                      {
-                        icon: <Code className="w-6 h-6 sm:w-8 sm:h-8 text-purple-400" />,
-                        title: "2. Build & Learn",
-                        desc: "Get a 2-week sprint plan with curated courses, reading materials, and portfolio-ready project ideas tailored to you.",
-                        color: "purple"
+                        step: "02",
+                        title: "Learn & Build",
+                        desc: "Get a personalized learning plan with curated resources and build portfolio-ready projects.",
+                        icon: <BookOpen className="w-6 h-6" />
                      },
                      {
-                        icon: <Shield className="w-6 h-6 sm:w-8 sm:h-8 text-emerald-400" />,
-                        title: "3. Practice & Apply",
-                        desc: "Master the interview with our AI hiring manager and scan the live market for jobs where you're a 90%+ match.",
-                        color: "emerald"
+                        step: "03",
+                        title: "Practice & Apply",
+                        desc: "Master interviews with AI practice sessions and apply with confidence to matching jobs.",
+                        icon: <Target className="w-6 h-6" />
                      }
-                  ].map((step, idx) => (
-                     <div key={idx} className="relative p-6 sm:p-8 rounded-3xl bg-white/5 border border-white/10 hover:border-white/20 transition-all group">
-                        <div className={`w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-${step.color}-500/10 flex items-center justify-center mb-4 sm:mb-6 border border-${step.color}-500/20 group-hover:scale-110 transition-transform`}>
-                           {step.icon}
+                  ].map((item, idx) => (
+                     <div key={idx} className="relative text-center">
+                        {/* Step Icon */}
+                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-violet-500/10 border border-violet-500/20 text-violet-400 mb-6 mx-auto">
+                           {item.icon}
                         </div>
-                        <h3 className="text-xl sm:text-2xl font-bold text-white mb-3 sm:mb-4">{step.title}</h3>
-                        <p className="text-sm sm:text-base text-slate-400 leading-relaxed">{step.desc}</p>
 
-                        {/* Connecting Line (Desktop) */}
-                        {idx !== 2 && (
-                           <div className="hidden md:block absolute top-12 sm:top-16 -right-4 w-8 border-t-2 border-dashed border-slate-700 z-10"></div>
+                        {/* Content */}
+                        <div className="text-sm text-violet-500 font-semibold mb-2 tracking-wide">STEP {item.step}</div>
+                        <h3 className="text-xl font-semibold mb-3">{item.title}</h3>
+                        <p className="text-zinc-400 text-base leading-relaxed max-w-[280px] mx-auto">{item.desc}</p>
+
+                        {/* Connector */}
+                        {idx < 2 && (
+                           <div className="hidden md:block absolute top-8 -right-4">
+                              <ChevronRight className="w-5 h-5 text-zinc-700" />
+                           </div>
                         )}
                      </div>
                   ))}
@@ -199,135 +289,91 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin }) => {
             </div>
          </section>
 
-         {/* --- Features Bento Grid --- */}
-         <section id="features" className="py-16 sm:py-24 bg-slate-900/50">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-               <div className="mb-10 sm:mb-16">
-                  <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 sm:mb-6">Everything you need to <br className="hidden sm:block" />level up your career.</h2>
-               </div>
-
-               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
-                  {/* Large Card */}
-                  <div className="md:col-span-2 bg-gradient-to-br from-indigo-900/50 to-slate-900 border border-indigo-500/20 rounded-3xl p-6 sm:p-8 md:p-12 relative overflow-hidden group">
-                     <div className="relative z-10">
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-500 rounded-xl flex items-center justify-center mb-4 sm:mb-6">
-                           <Zap className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-                        </div>
-                        <h3 className="text-2xl sm:text-3xl font-bold text-white mb-3 sm:mb-4">Autonomous Learning Plans</h3>
-                        <p className="text-slate-300 text-base sm:text-lg max-w-md">Stop doom-scrolling tutorials. We generate a structured 2-week sprint with exact resources to close your skill gaps efficiently.</p>
-                     </div>
-                     <div className="absolute right-0 bottom-0 w-1/2 h-full bg-indigo-500/10 blur-[60px] sm:blur-[100px]"></div>
-                     <div className="absolute -right-10 -bottom-10 opacity-50 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500 hidden sm:block">
-                        {/* Abstract shapes representing a plan */}
-                        <div className="w-48 sm:w-64 h-36 sm:h-48 bg-slate-900 border border-slate-700 rounded-tl-3xl p-4 sm:p-6">
-                           <div className="space-y-3">
-                              <div className="h-4 w-32 bg-slate-700 rounded"></div>
-                              <div className="h-2 w-full bg-slate-800 rounded"></div>
-                              <div className="h-2 w-2/3 bg-slate-800 rounded"></div>
-                           </div>
-                        </div>
-                     </div>
-                  </div>
-
-                  {/* Tall Card */}
-                  <div className="md:row-span-2 bg-slate-900 border border-white/10 rounded-3xl p-6 sm:p-8 relative overflow-hidden group hover:border-indigo-500/30 transition-all">
-                     <div className="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-500/10 rounded-xl flex items-center justify-center mb-6">
-                        <Users className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-400" />
-                     </div>
-                     <h3 className="text-xl sm:text-2xl font-bold text-white mb-4">AI Role-Play</h3>
-                     <p className="text-slate-400 mb-8 text-sm sm:text-base">Practice technical and behavioral questions with an AI that mimics your target hiring manager.</p>
-
-                     <div className="space-y-4">
-                        {[1, 2, 3].map(i => (
-                           <div key={i} className="bg-slate-800/50 p-3 rounded-xl border border-white/5 flex items-center space-x-3">
-                              <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></div>
-                              <div className="h-2 w-20 sm:w-24 bg-slate-700 rounded"></div>
-                           </div>
-                        ))}
-                     </div>
-                  </div>
-
-                  {/* Small Card */}
-                  <div className="bg-slate-900 border border-white/10 rounded-3xl p-6 sm:p-8 hover:bg-white/5 transition-all">
-                     <Code className="w-6 h-6 sm:w-8 sm:h-8 text-purple-400 mb-4" />
-                     <h3 className="text-lg sm:text-xl font-bold text-white mb-2">Project Generator</h3>
-                     <p className="text-slate-400 text-sm">Don't have experience? We generate portfolio project ideas with full tech specs.</p>
-                  </div>
-
-                  {/* Small Card */}
-                  <div className="bg-slate-900 border border-white/10 rounded-3xl p-6 sm:p-8 hover:bg-white/5 transition-all">
-                     <Globe className="w-6 h-6 sm:w-8 sm:h-8 text-amber-400 mb-4" />
-                     <h3 className="text-lg sm:text-xl font-bold text-white mb-2">Market Trends</h3>
-                     <p className="text-slate-400 text-sm">Real-time salary data and skill demand analysis for your role.</p>
-                  </div>
-               </div>
-            </div>
-         </section>
 
 
-
-         {/* --- CTA --- */}
-         <section className="py-16 sm:py-20">
-            <div className="max-w-5xl mx-auto px-4 sm:px-6">
-               <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-3xl p-8 sm:p-12 md:p-20 text-center relative overflow-hidden">
-                  <div className="relative z-10">
-                     <h2 className="text-2xl sm:text-3xl md:text-5xl font-bold text-white mb-4 sm:mb-6">Ready to accelerate your career?</h2>
-                     <p className="text-indigo-100 text-base sm:text-lg mb-8 sm:mb-10 max-w-2xl mx-auto">Join thousands of professionals who are landing their dream jobs faster with CareerPilot.</p>
-                     <button
-                        onClick={onGetStarted}
-                        className="w-full sm:w-auto bg-white text-indigo-600 px-8 sm:px-10 py-3 sm:py-4 rounded-xl font-bold text-base sm:text-lg hover:bg-indigo-50 transition-all shadow-xl hover:shadow-2xl"
-                     >
-                        Build My Career Plan
-                     </button>
-                  </div>
-
-                  {/* Background patterns */}
-                  <div className="absolute top-0 left-0 w-full h-full opacity-10">
-                     <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                        <path d="M0 100 C 20 0 50 0 100 100 Z" fill="white" />
-                     </svg>
-                  </div>
-               </div>
+         {/* --- CTA Section --- */}
+         <section className="py-16 md:py-20 border-t border-zinc-800/50">
+            <div className="max-w-[700px] mx-auto px-6 text-center">
+               <h2 className="text-3xl md:text-4xl font-bold mb-5">
+                  Ready to get started?
+               </h2>
+               <p className="text-zinc-400 text-lg mb-8 max-w-[500px] mx-auto">
+                  Upload your resume and get personalized feedback in minutes.
+               </p>
+               <button
+                  onClick={onGetStarted}
+                  className="bg-violet-500 hover:bg-violet-400 text-white px-8 py-3.5 rounded-xl font-semibold text-base transition-colors inline-flex items-center gap-2 shadow-lg shadow-violet-500/20"
+               >
+                  Get Started for Free
+                  <ArrowRight className="w-4 h-4" />
+               </button>
             </div>
          </section>
 
          {/* --- Footer --- */}
-         <footer className="py-12 border-t border-white/10 bg-slate-950">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid md:grid-cols-4 gap-8 mb-12">
-               <div className="col-span-1 md:col-span-2">
-                  <div className="flex items-center space-x-2 mb-4">
-                     <div className="w-8 h-8 bg-slate-800 rounded-lg flex items-center justify-center">
-                        <TrendingUp className="w-5 h-5 text-white" />
+         <footer className="py-12 border-t border-zinc-800/50">
+            <div className="max-w-[1200px] mx-auto px-6">
+               <div className="grid grid-cols-2 md:grid-cols-4 gap-8 lg:gap-12 mb-8">
+                  {/* Brand */}
+                  <div className="col-span-2 md:col-span-1">
+                     <a href="#" className="flex items-center gap-2.5 mb-4">
+                        <div className="w-8 h-8 bg-gradient-to-br from-violet-500 to-purple-600 rounded-lg flex items-center justify-center">
+                           <TrendingUp className="w-4 h-4 text-white" strokeWidth={2.5} />
+                        </div>
+                        <span className="text-base font-semibold">CareerPilot</span>
+                     </a>
+                     <p className="text-zinc-500 text-sm mb-6 leading-relaxed max-w-[250px]">
+                        Your AI-powered career platform. Analyze, learn, and practice your way to success.
+                     </p>
+                     <div className="flex items-center gap-4">
+                        <a href="https://instagram.com/careerpilot_ai" target="_blank" rel="noopener noreferrer" className="text-zinc-600 hover:text-white transition-colors">
+                           <Instagram className="w-5 h-5" />
+                        </a>
+                        <a href="#" className="text-zinc-600 hover:text-white transition-colors">
+                           <Twitter className="w-5 h-5" />
+                        </a>
+                        <a href="#" className="text-zinc-600 hover:text-white transition-colors">
+                           <Linkedin className="w-5 h-5" />
+                        </a>
                      </div>
-                     <span className="text-xl font-bold text-white">CareerPilot</span>
                   </div>
-                  <p className="text-slate-400 max-w-sm text-sm sm:text-base">
-                     Your autonomous AI career operating system. Analyze, plan, and practice your way to success.
+
+                  {/* Product */}
+                  <div>
+                     <h4 className="text-sm font-semibold mb-4 text-zinc-300">Product</h4>
+                     <ul className="space-y-3">
+                        {['Resume Analyzer', 'Learning Plans', 'Mock Interviews'].map((item) => (
+                           <li key={item}>
+                              <a href="#features" className="text-zinc-500 text-sm hover:text-white transition-colors">{item}</a>
+                           </li>
+                        ))}
+                     </ul>
+                  </div>
+
+                  {/* Legal */}
+                  <div>
+                     <h4 className="text-sm font-semibold mb-4 text-zinc-300">Legal</h4>
+                     <ul className="space-y-3">
+                        {['Privacy Policy', 'Terms of Service'].map((item) => (
+                           <li key={item}>
+                              <a href="#" className="text-zinc-500 text-sm hover:text-white transition-colors">{item}</a>
+                           </li>
+                        ))}
+                     </ul>
+                  </div>
+               </div>
+
+               {/* Bottom Bar */}
+               <div className="pt-8 border-t border-zinc-800/50 flex flex-col md:flex-row justify-between items-center gap-4">
+                  <p className="text-zinc-600 text-sm">
+                     © {new Date().getFullYear()} CareerPilot AI. All rights reserved.
                   </p>
-               </div>
-               <div>
-                  <h4 className="text-white font-bold mb-4">Product</h4>
-                  <ul className="space-y-2 text-slate-400 text-sm">
-                     <li><a href="#" className="hover:text-indigo-400">Resume Analyzer</a></li>
-                     <li><a href="#" className="hover:text-indigo-400">Learning Plans</a></li>
-                     <li><a href="#" className="hover:text-indigo-400">Interview Simulator</a></li>
-                     <li><a href="#" className="hover:text-indigo-400">Job Scanner</a></li>
-                  </ul>
-               </div>
-               <div>
-                  <h4 className="text-white font-bold mb-4">Legal</h4>
-                  <ul className="space-y-2 text-slate-400 text-sm">
-                     <li><a href="#" className="hover:text-indigo-400">Privacy Policy</a></li>
-                     <li><a href="#" className="hover:text-indigo-400">Terms of Service</a></li>
-                     <li><a href="#" className="hover:text-indigo-400">Cookie Policy</a></li>
-                  </ul>
-               </div>
-            </div>
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 border-t border-white/5 text-center md:text-left flex flex-col md:flex-row justify-between items-center text-slate-500 text-sm">
-               <p>&copy; {new Date().getFullYear()} CareerPilot AI. All rights reserved.</p>
-               <div className="flex space-x-6 mt-4 md:mt-0">
-                  <a href="#" className="hover:text-white"><Globe className="w-4 h-4" /></a>
-                  <a href="#" className="hover:text-white"><Lock className="w-4 h-4" /></a>
+                  <div className="flex items-center gap-2 text-zinc-500">
+                     <Mail className="w-4 h-4" />
+                     <a href="mailto:careerpilotai.official@gmail.com" className="text-sm hover:text-white transition-colors">
+                        careerpilotai.official@gmail.com
+                     </a>
+                  </div>
                </div>
             </div>
          </footer>
@@ -335,13 +381,4 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin }) => {
    );
 };
 
-// Helper Icon for play button
-const PlayCircleIcon = ({ className }: { className?: string }) => (
-   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <circle cx="12" cy="12" r="10" />
-      <polygon points="10 8 16 12 10 16 10 8" />
-   </svg>
-);
-
 export default LandingPage;
-//end of code
