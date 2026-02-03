@@ -458,6 +458,8 @@ const App = () => {
   const [projects, setProjects] = useState<ProjectIdea[]>([]);
   const [seenProjectTitles, setSeenProjectTitles] = useState<string[]>([]);
   const [isGeneratingProjects, setIsGeneratingProjects] = useState(false);
+  const [projectFilter, setProjectFilter] = useState<'All' | 'Beginner' | 'Intermediate' | 'Advanced'>('All');
+  const [generationDifficulty, setGenerationDifficulty] = useState<string>('Intermediate');
 
   // Premium Interview System
   const [interviewStartTime, setInterviewStartTime] = useState<number | null>(null);
@@ -635,6 +637,16 @@ const App = () => {
     }
 
   }, [view]);
+
+  // Sync difficulty with profile on load
+  useEffect(() => {
+    if (userProfile.experienceLevel) {
+      const level = userProfile.experienceLevel.toLowerCase();
+      if (['student', 'fresher', 'beginner'].includes(level)) setGenerationDifficulty('Beginner');
+      else if (['junior', 'mid'].includes(level)) setGenerationDifficulty('Intermediate');
+      else setGenerationDifficulty('Advanced');
+    }
+  }, [userProfile.experienceLevel]);
 
   // --- Helpers ---
   const handleApiError = (error: any, defaultMsg: string) => {
@@ -1070,6 +1082,15 @@ const App = () => {
   };
 
 
+  const handleToggleProjectStatus = (projectId: string) => {
+    setProjects(prev => prev.map(p => {
+      if (p.id === projectId) {
+        return { ...p, completed: !p.completed };
+      }
+      return p;
+    }));
+  };
+
   const handleGenerateProjects = async () => {
     if (!userProfile?.targetRole) return;
     setIsGeneratingProjects(true);
@@ -1089,12 +1110,15 @@ const App = () => {
           .slice(0, 3);
       }
 
+      // Determine difficulty: strict adherence to filter if set, otherwise dropdown preference
+      const effectiveDifficulty = projectFilter !== 'All' ? projectFilter : generationDifficulty;
+
       // Generate highly tailored projects based on User's Dream Role & Company
       const standardProjects = await generateProjectIdeas(
         userProfile.targetRole,
         focusTopics,
         userProfile.targetCompanies || "Tech Company",
-        userProfile.experienceLevel || "Intermediate",
+        effectiveDifficulty,
         seenProjectTitles // Pass the history of seen titles
       );
 
@@ -1916,216 +1940,228 @@ const App = () => {
         )}
 
         <div className="min-h-screen bg-[#09090b] flex items-center justify-center p-4">
-          <div className="bg-zinc-900 max-w-2xl w-full rounded-2xl shadow-2xl shadow-black/50 p-8 border border-zinc-800 relative">
-            {/* Back to Login if stuck */}
+          <div className="bg-[#0c0c0e] max-w-3xl w-full rounded-3xl shadow-2xl shadow-black/80 p-10 border border-white/5 relative overflow-hidden">
+            {/* Background Decoration */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-violet-600/10 rounded-full blur-[100px] pointer-events-none"></div>
+            <div className="absolute bottom-0 left-0 w-64 h-64 bg-indigo-600/10 rounded-full blur-[100px] pointer-events-none"></div>
+
+            {/* Back to Login */}
             <button
               onClick={handleLogout}
-              className="absolute top-6 right-6 text-zinc-500 hover:text-white flex items-center text-sm"
+              className="absolute top-8 right-8 text-zinc-600 hover:text-white flex items-center text-xs font-medium transition-colors"
             >
-              <User className="w-4 h-4 mr-2" /> {userProfile.name} (Logout)
+              <User className="w-3.5 h-3.5 mr-2" />
+              {userProfile.name}
+              <span className="ml-1 text-zinc-700">|</span>
+              <span className="ml-1 hover:underline">Log out</span>
             </button>
 
-            <div className="flex items-center space-x-3 mb-8">
-              <div className="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
-                <TrendingUp className="w-6 h-6 text-white" />
+            {/* Header */}
+            <div className="mb-10 text-center">
+              <div className="w-16 h-16 bg-gradient-to-br from-violet-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/20 mx-auto mb-6 rotate-3">
+                <TrendingUp className="w-8 h-8 text-white" />
               </div>
-              <h1 className="text-3xl font-bold text-zinc-100">Setup your Pilot</h1>
+              <h1 className="text-3xl font-bold text-white tracking-tight mb-2">Configure Your Pilot</h1>
+              <p className="text-zinc-400 text-sm max-w-md mx-auto leading-relaxed">
+                We'll analyze your profile to build a custom career roadmap, interview prep, and project portfolio.
+              </p>
             </div>
 
-            <form onSubmit={handleOnboardingSubmit} className="space-y-6">
-              {/* Career Stage Section */}
-              <div className="bg-zinc-800/30 p-6 rounded-xl border border-zinc-700/50">
-                <h3 className="text-lg font-bold text-white mb-4 flex items-center">
-                  <Compass className="w-5 h-5 mr-2 text-violet-400" />
-                  Where are you in your journey?
-                </h3>
+            <form onSubmit={handleOnboardingSubmit} className="space-y-8">
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Experience Level */}
-                  <div>
-                    <label className="block text-sm font-semibold text-zinc-300 mb-2">Experience Level</label>
-                    <select
-                      required
-                      className="w-full p-3 bg-[#09090b] border border-zinc-800 text-zinc-100 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none"
-                      value={userProfile.experienceLevel || ''}
-                      onChange={e => setUserProfile(prev => ({ ...prev, experienceLevel: e.target.value }))}
-                    >
-                      <option value="">Select...</option>
-                      <option value="student">Student (Still Studying)</option>
-                      <option value="fresher">Fresher (0-1 year)</option>
-                      <option value="junior">Junior (1-3 years)</option>
-                      <option value="mid">Mid-Level (3-5 years)</option>
-                      <option value="senior">Senior (5+ years)</option>
-                    </select>
-                  </div>
+              <div className="grid md:grid-cols-2 gap-8">
+                {/* Left Column: Profile */}
+                <div className="space-y-6">
+                  <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider flex items-center">
+                    <span className="w-2 h-2 rounded-full bg-violet-500 mr-2"></span>
+                    Profile Details
+                  </h3>
 
-                  {/* Graduation Year */}
-                  <div>
-                    <label className="block text-sm font-semibold text-zinc-300 mb-2">Graduation Year</label>
-                    <input
-                      type="number"
-                      required
-                      min="2020"
-                      max="2030"
-                      className="w-full p-3 bg-[#09090b] border border-zinc-800 text-zinc-100 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none placeholder-slate-600"
-                      placeholder="e.g. 2024, 2025..."
-                      value={userProfile.graduationYear || ''}
-                      onChange={e => setUserProfile(prev => ({ ...prev, graduationYear: e.target.value }))}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Career Goals Section */}
-              <div className="bg-zinc-800/30 p-6 rounded-xl border border-zinc-700/50">
-                <h3 className="text-lg font-bold text-white mb-4 flex items-center">
-                  <Target className="w-5 h-5 mr-2 text-emerald-400" />
-                  Career Target
-                </h3>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Target Role */}
-                  <div>
-                    <label className="block text-sm font-semibold text-zinc-300 mb-2">
-                      Target Role <span className="text-red-400">*</span>
-                    </label>
-                    <div className="relative group">
-                      <Briefcase className="absolute left-3 top-3.5 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400 transition-colors" />
-                      <input
-                        type="text"
-                        required
-                        className="w-full p-3 pl-10 bg-[#09090b] border border-zinc-800 text-zinc-100 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none placeholder-slate-600"
-                        placeholder="e.g. Software Engineer"
-                        value={userProfile.targetRole}
-                        onChange={e => setUserProfile(prev => ({ ...prev, targetRole: e.target.value }))}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Target Companies */}
-                  <div>
-                    <label className="block text-sm font-semibold text-zinc-300 mb-2">
-                      Target Company <span className="text-zinc-500 font-normal text-xs">(Optional)</span>
-                    </label>
-                    <div className="relative group">
-                      <div className="absolute left-3 top-3.5 w-4 h-4 flex items-center justify-center text-zinc-500 group-focus-within:text-emerald-400 transition-colors font-bold text-xs">
-                        @
+                  <div className="space-y-5">
+                    {/* Experience Level */}
+                    <div className="group">
+                      <label className="block text-xs font-medium text-zinc-400 mb-1.5 transition-colors group-focus-within:text-violet-400">Experience Level</label>
+                      <div className="relative">
+                        <select
+                          required
+                          className="w-full pl-3 pr-10 py-3 bg-zinc-900/50 border border-zinc-800 text-zinc-200 rounded-xl focus:ring-1 focus:ring-violet-500 focus:border-violet-500 focus:bg-zinc-900 transition-all outline-none appearance-none text-sm"
+                          value={userProfile.experienceLevel || ''}
+                          onChange={e => setUserProfile(prev => ({ ...prev, experienceLevel: e.target.value }))}
+                        >
+                          <option value="">Select Level...</option>
+                          <option value="student">Student (Currently Enrolled)</option>
+                          <option value="fresher">Fresher (0-1 Years)</option>
+                          <option value="junior">Junior (1-3 Years)</option>
+                          <option value="mid">Mid-Level (3-5 Years)</option>
+                          <option value="senior">Senior (5+ Years)</option>
+                        </select>
+                        <ChevronRight className="absolute right-3 top-3.5 w-4 h-4 text-zinc-600 rotate-90 pointer-events-none" />
                       </div>
+                    </div>
+
+                    {/* Graduation Year */}
+                    <div className="group">
+                      <label className="block text-xs font-medium text-zinc-400 mb-1.5 transition-colors group-focus-within:text-violet-400">Graduation Year</label>
                       <input
-                        type="text"
-                        className="w-full p-3 pl-10 bg-[#09090b] border border-zinc-800 text-zinc-100 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none placeholder-slate-600"
-                        placeholder="e.g. Google, TCS, Startup..."
-                        value={userProfile.targetCompanies || ''}
-                        onChange={e => setUserProfile(prev => ({ ...prev, targetCompanies: e.target.value }))}
+                        type="number"
+                        required
+                        min="2020"
+                        max="2030"
+                        className="w-full p-3 bg-zinc-900/50 border border-zinc-800 text-zinc-200 rounded-xl focus:ring-1 focus:ring-violet-500 focus:border-violet-500 focus:bg-zinc-900 transition-all outline-none placeholder-zinc-700 text-sm"
+                        placeholder="YYYY"
+                        value={userProfile.graduationYear || ''}
+                        onChange={e => setUserProfile(prev => ({ ...prev, graduationYear: e.target.value }))}
                       />
                     </div>
                   </div>
                 </div>
 
-                <p className="text-xs text-zinc-500 mt-3 flex items-center">
-                  <span className="bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold mr-2">Tip</span>
-                  We'll auto-tailor your resume and interview questions for this specific role.
-                </p>
+                {/* Right Column: Target */}
+                <div className="space-y-6">
+                  <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider flex items-center">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 mr-2"></span>
+                    Career Goal
+                  </h3>
+
+                  <div className="space-y-5">
+                    {/* Target Role */}
+                    <div className="group">
+                      <label className="block text-xs font-medium text-zinc-400 mb-1.5 transition-colors group-focus-within:text-emerald-400">
+                        Target Role <span className="text-red-500/80">*</span>
+                      </label>
+                      <div className="relative">
+                        <Briefcase className="absolute left-3 top-3 w-4 h-4 text-zinc-600 group-focus-within:text-emerald-500 transition-colors" />
+                        <input
+                          type="text"
+                          required
+                          className="w-full pl-10 pr-3 py-3 bg-zinc-900/50 border border-zinc-800 text-zinc-200 rounded-xl focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 focus:bg-zinc-900 transition-all outline-none placeholder-zinc-700 text-sm"
+                          placeholder="e.g. Frontend Engineer"
+                          value={userProfile.targetRole}
+                          onChange={e => setUserProfile(prev => ({ ...prev, targetRole: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Target Companies */}
+                    <div className="group">
+                      <label className="block text-xs font-medium text-zinc-400 mb-1.5 transition-colors group-focus-within:text-emerald-400">Target Companies</label>
+                      <div className="relative">
+                        <div className="absolute left-3 top-3 w-4 h-4 text-zinc-600 font-serif italic text-xs flex items-center justify-center group-focus-within:text-emerald-500">@</div>
+                        <input
+                          type="text"
+                          className="w-full pl-10 pr-3 py-3 bg-zinc-900/50 border border-zinc-800 text-zinc-200 rounded-xl focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 focus:bg-zinc-900 transition-all outline-none placeholder-zinc-700 text-sm"
+                          placeholder="e.g. Google, Microsoft..."
+                          value={userProfile.targetCompanies || ''}
+                          onChange={e => setUserProfile(prev => ({ ...prev, targetCompanies: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              {/* Resume Upload Section */}
-              <div className="bg-zinc-800/30 p-6 rounded-xl border border-zinc-700/50">
-                <h3 className="text-lg font-bold text-white mb-4 flex items-center">
-                  <FileText className="w-5 h-5 mr-2 text-amber-400" />
-                  Upload Your Resume <span className="text-red-400 ml-1">*</span>
+              {/* Resume Section */}
+              <div className="pt-6 border-t border-white/5">
+                <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider flex items-center mb-6">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 mr-2"></span>
+                  Resume Data <span className="text-zinc-600 ml-1 font-normal lowercase">(Required)</span>
                 </h3>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* File Upload Option */}
-                  <div className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all ${userProfile.resumeFile ? 'border-emerald-500 bg-emerald-500/10' : 'border-zinc-700 hover:border-indigo-500 hover:bg-zinc-800'}`}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-[220px]">
+                  {/* File Upload - Enhanced Visuals */}
+                  <div className={`relative border border-dashed rounded-2xl flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-300 group ${userProfile.resumeFile
+                    ? 'border-emerald-500/50 bg-emerald-500/5'
+                    : 'border-zinc-700 hover:border-violet-500/50 hover:bg-zinc-800/50'
+                    }`}>
                     <input
                       type="file"
                       accept=".pdf,.txt,.md"
                       onChange={handleFileUpload}
-                      className="hidden"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                       id="resume-upload"
                     />
-                    <label htmlFor="resume-upload" className="cursor-pointer w-full h-full flex flex-col items-center justify-center">
-                      {isUploadingResume ? (
-                        <>
-                          <Loader2 className="w-8 h-8 text-violet-400 mb-2 animate-spin" />
-                          <span className="text-sm font-medium text-violet-300">Processing...</span>
-                          <span className="text-xs text-zinc-500 mt-1">Reading your resume</span>
-                        </>
-                      ) : userProfile.resumeFile ? (
-                        <>
-                          <FileText className="w-8 h-8 text-emerald-400 mb-2" />
-                          <span className="text-sm font-medium text-emerald-300">Resume Uploaded ✓</span>
-                          <span className="text-xs text-emerald-500/70 mt-1">Ready to analyze</span>
-                        </>
-                      ) : (
-                        <>
-                          <UploadCloud className="w-8 h-8 text-violet-400 mb-2" />
-                          <span className="text-sm font-medium text-zinc-300">Upload PDF / TXT</span>
-                          <span className="text-xs text-zinc-500 mt-1">Drag & drop or click</span>
-                        </>
-                      )}
-                    </label>
+
+                    {isUploadingResume ? (
+                      <div className="flex flex-col items-center animate-pulse">
+                        <Loader2 className="w-10 h-10 text-violet-400 mb-4 animate-spin" />
+                        <span className="text-sm font-semibold text-white">Extracting Data...</span>
+                        <span className="text-xs text-zinc-500 mt-2">This may take a few seconds</span>
+                      </div>
+                    ) : userProfile.resumeFile ? (
+                      <div className="flex flex-col items-center animate-in fade-in zoom-in duration-300">
+                        <div className="w-12 h-12 bg-emerald-500/10 rounded-full flex items-center justify-center mb-4 ring-4 ring-emerald-500/5">
+                          <Check className="w-6 h-6 text-emerald-400" />
+                        </div>
+                        <span className="text-sm font-bold text-white">Resume Attached</span>
+                        <span className="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-full mt-2 font-mono">
+                          {userProfile.resumeFile.name || "resume.pdf"}
+                        </span>
+                        <p className="text-[10px] text-zinc-500 mt-4 group-hover:text-emerald-400 transition-colors">Click to replace</p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center p-6">
+                        <div className="w-14 h-14 bg-zinc-800 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-violet-500/10 group-hover:text-violet-400 transition-all duration-300">
+                          <UploadCloud className="w-7 h-7 text-zinc-400 group-hover:text-violet-400" />
+                        </div>
+                        <span className="text-sm font-bold text-zinc-200 group-hover:text-white transition-colors">Upload Resume</span>
+                        <p className="text-xs text-zinc-500 mt-2 max-w-[180px]">
+                          PDF or TXT accepted. We extract skills & experience automatically.
+                        </p>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Or Text Paste Option */}
-                  <div className="relative">
-                    <textarea
-                      className="w-full h-full min-h-[140px] p-4 bg-[#09090b] border border-zinc-800 text-zinc-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none resize-none font-mono text-xs placeholder-slate-600"
-                      placeholder="Or paste resume text here..."
-                      value={userProfile.resumeText || ''}
-                      onChange={e => setUserProfile(prev => ({ ...prev, resumeText: e.target.value }))}
-                    />
-                    <div className="absolute bottom-2 right-2 text-[10px] text-zinc-600">
-                      {userProfile.resumeText?.length || 0} chars
+                  {/* Text Paste Option */}
+                  <div className="relative h-full flex flex-col">
+                    <div className={`flex-1 bg-zinc-900/50 border border-zinc-800 rounded-2xl overflow-hidden focus-within:ring-1 focus-within:ring-violet-500/50 focus-within:border-violet-500/50 transition-all ${userProfile.resumeText ? 'border-zinc-700' : ''
+                      }`}>
+                      <div className="bg-zinc-900 px-4 py-2 border-b border-zinc-800 flex justify-between items-center h-10">
+                        <span className="text-[10px] font-bold text-zinc-500 uppercase">Resume Content</span>
+                        <span className="text-[10px] text-zinc-600 font-mono">{userProfile.resumeText?.length || 0} chars</span>
+                      </div>
+                      <textarea
+                        className="w-full h-[calc(100%-40px)] p-4 bg-transparent text-zinc-300 text-xs font-mono resize-none outline-none placeholder-zinc-700 leading-relaxed"
+                        placeholder="Paste your full resume text here (Work history, skills, projects)..."
+                        value={userProfile.resumeText || ''}
+                        onChange={e => setUserProfile(prev => ({ ...prev, resumeText: e.target.value }))}
+                      />
                     </div>
                   </div>
                 </div>
-
-
               </div>
 
-              {/* Validation Error Message */}
-              {validationError && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-center space-x-3">
-                  <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
-                  <span className="text-red-400 font-medium">{validationError}</span>
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={isAnalyzing || (!userProfile.resumeFile && !userProfile.resumeText) || !userProfile.targetRole}
-                className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold py-4 rounded-xl shadow-lg hover:shadow-indigo-500/25 transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
-              >
-                {isAnalyzing ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Analyzing Profile...</span>
-                  </>
-                ) : (!userProfile.resumeFile && !userProfile.resumeText) || !userProfile.targetRole ? (
-                  <span>Select Resume & Role to Launch</span>
-                ) : (
-                  <>
-                    <span>Launch Career Analysis</span>
-                    <ArrowRight className="w-5 h-5" />
-                  </>
+              {/* Validation & Actions */}
+              <div className="flex border-t border-white/5 pt-8 gap-4 flex-col sm:flex-row items-center">
+                {/* Error Box */}
+                {validationError && (
+                  <div className="flex-1 w-full bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex items-center gap-3">
+                    <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                    <p className="text-xs text-red-300 font-medium">{validationError}</p>
+                  </div>
                 )}
-              </button>
 
-              {/* Save Draft & Exit Button */}
-              {(userProfile.resumeFile || userProfile.resumeText || userProfile.targetRole) && (
+                {/* Primary Action */}
                 <button
-                  type="button"
-                  onClick={() => {
-                    // Data is already auto-saved via localStorage
-                    setView(isLoggedIn ? AppView.DASHBOARD : AppView.LANDING);
-                  }}
-                  className="w-full mt-3 bg-zinc-800 hover:bg-slate-700 text-zinc-300 font-medium py-3 rounded-xl border border-zinc-700 transition-all flex items-center justify-center space-x-2"
+                  type="submit"
+                  disabled={isAnalyzing || (!userProfile.resumeFile && !userProfile.resumeText) || !userProfile.targetRole}
+                  className="w-full sm:flex-1 bg-white hover:bg-zinc-200 text-black font-bold py-4 rounded-xl shadow-xl shadow-white/5 hover:shadow-white/10 transition-all transform hover:-translate-y-0.5 flex items-center justify-center gap-2.5 disabled:opacity-50 disabled:translate-y-0 disabled:cursor-not-allowed"
                 >
-                  <span>Save Draft & Exit</span>
+                  {isAnalyzing ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>Processing...</span>
+                    </>
+                  ) : (!userProfile.resumeFile && !userProfile.resumeText) || !userProfile.targetRole ? (
+                    <span className="text-zinc-500">Complete Steps to Launch</span>
+                  ) : (
+                    <>
+                      <span>Launch Pilot</span>
+                      <ArrowRight className="w-5 h-5" />
+                    </>
+                  )}
                 </button>
-              )}
+              </div>
+
             </form>
           </div>
         </div>
@@ -2589,17 +2625,30 @@ const App = () => {
                     <h1 className="text-xl font-bold text-white">Portfolio Builder</h1>
                     <p className="text-sm text-zinc-500 mt-0.5">AI-generated projects for <span className="text-zinc-300">{userProfile.targetRole}</span></p>
                   </div>
-                  <button
-                    onClick={handleGenerateProjects}
-                    disabled={isGeneratingProjects}
-                    className="bg-white hover:bg-zinc-200 text-zinc-900 px-6 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-white/5"
-                  >
-                    {isGeneratingProjects ? (
-                      <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Generating...</>
-                    ) : (
-                      <><RefreshCw className="w-4 h-4 mr-2" /> Generate Ideas</>
-                    )}
-                  </button>
+                  <div className="flex items-center gap-3">
+                    {/* Difficulty Selector */}
+                    <select
+                      value={generationDifficulty}
+                      onChange={(e) => setGenerationDifficulty(e.target.value)}
+                      className="bg-zinc-900 border border-zinc-700 text-zinc-300 text-sm rounded-lg p-2.5 outline-none focus:border-violet-500"
+                    >
+                      <option value="Beginner">Beginner</option>
+                      <option value="Intermediate">Intermediate</option>
+                      <option value="Advanced">Advanced</option>
+                    </select>
+
+                    <button
+                      onClick={handleGenerateProjects}
+                      disabled={isGeneratingProjects}
+                      className="bg-white hover:bg-zinc-200 text-zinc-900 px-6 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-white/5"
+                    >
+                      {isGeneratingProjects ? (
+                        <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Generating...</>
+                      ) : (
+                        <><RefreshCw className="w-4 h-4 mr-2" /> Generate Ideas</>
+                      )}
+                    </button>
+                  </div>
                 </div>
 
                 {/* Main Content */}
@@ -2658,6 +2707,25 @@ const App = () => {
                         </svg>
                       </div>
 
+                      {/* Projects Filter */}
+                      {!isGeneratingProjects && projects.length > 0 && (
+                        <div className="flex items-center gap-2 mb-6 bg-zinc-900/50 p-1 rounded-lg border border-zinc-800 w-fit">
+                          {['All', 'Beginner', 'Intermediate', 'Advanced'].map((filter) => (
+                            <button
+                              key={filter}
+                              onClick={() => setProjectFilter(filter as any)}
+                              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${projectFilter === filter
+                                ? 'bg-zinc-800 text-white shadow-sm ring-1 ring-white/5'
+                                : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
+                                }`}
+                            >
+                              {filter}
+                            </button>
+                          ))}
+                        </div>
+                      )
+                      }
+
                       {/* Loading Text */}
                       <p className="text-zinc-400 text-sm tracking-wide">
                         Crafting Your Perfect Projects
@@ -2686,72 +2754,91 @@ const App = () => {
                   {/* Projects Grid */}
                   {projects?.length > 0 && (
                     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {projects?.map((project, idx) => (
-                        <div
-                          key={idx}
-                          className="group bg-zinc-900 rounded-xl border border-zinc-800 hover:border-violet-500/50 transition-all flex flex-col h-full"
-                        >
-                          <div className="p-6 flex flex-col h-full">
-                            {/* Header Row */}
-                            <div className="flex items-start justify-between mb-4">
-                              <div className={`inline-flex items-center px-2.5 py-1 rounded text-[11px] font-medium border ${project.difficulty === 'Beginner' ? 'bg-emerald-500/5 text-emerald-400 border-emerald-500/20' :
-                                project.difficulty === 'Intermediate' ? 'bg-blue-500/5 text-blue-400 border-blue-500/20' :
-                                  'bg-purple-500/5 text-purple-400 border-purple-500/20'
-                                }`}>
-                                {project.difficulty}
+                      {projects
+                        .filter(p => projectFilter === 'All' || p.difficulty === projectFilter)
+                        .map((project, idx) => (
+                          <div
+                            key={idx}
+                            className="group bg-zinc-900 rounded-xl border border-zinc-800 hover:border-violet-500/50 transition-all flex flex-col h-full"
+                          >
+                            <div className="p-6 flex flex-col h-full">
+                              {/* Header Row */}
+                              <div className="flex items-start justify-between mb-4">
+                                <div className={`inline-flex items-center px-2.5 py-1 rounded text-[11px] font-medium border ${project.difficulty === 'Beginner' ? 'bg-emerald-500/5 text-emerald-400 border-emerald-500/20' :
+                                  project.difficulty === 'Intermediate' ? 'bg-blue-500/5 text-blue-400 border-blue-500/20' :
+                                    'bg-purple-500/5 text-purple-400 border-purple-500/20'
+                                  }`}>
+                                  {project.difficulty}
+                                </div>
+                                <div className="p-2 bg-zinc-800 rounded-lg">
+                                  <Layers className="w-4 h-4 text-zinc-400" />
+                                </div>
                               </div>
-                              <div className="p-2 bg-zinc-800 rounded-lg">
-                                <Layers className="w-4 h-4 text-zinc-400" />
+
+                              {/* Title */}
+                              <h4 className="text-lg font-bold text-white mb-2 line-clamp-2">
+                                {project.title}
+                              </h4>
+
+                              {/* Description */}
+                              <p className="text-sm text-zinc-400 mb-6 line-clamp-3 leading-relaxed">
+                                {project.description}
+                              </p>
+
+                              {/* Tech Stack */}
+                              <div className="mt-auto mb-6">
+                                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-2">Tech Stack</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {project.techStack?.slice(0, 4).map(t => (
+                                    <span key={t} className="text-[11px] bg-zinc-800 text-zinc-300 px-2 py-1 rounded border border-zinc-700">
+                                      {t}
+                                    </span>
+                                  ))}
+                                  {project.techStack?.length > 4 && (
+                                    <span className="text-[11px] text-zinc-500 px-1 py-1">
+                                      +{project.techStack.length - 4} more
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-                            </div>
 
-                            {/* Title */}
-                            <h4 className="text-lg font-bold text-white mb-2 line-clamp-2">
-                              {project.title}
-                            </h4>
+                              {/* Divider */}
+                              <div className="h-px bg-zinc-800 w-full mb-4"></div>
 
-                            {/* Description */}
-                            <p className="text-sm text-zinc-400 mb-6 line-clamp-3 leading-relaxed">
-                              {project.description}
-                            </p>
+                              {/* Resume Value */}
+                              <div className="flex items-start gap-2 mb-6">
+                                <TrendingUp className="w-4 h-4 text-zinc-500 shrink-0 mt-0.5" />
+                                <p className="text-xs text-zinc-400 line-clamp-2">{project.resumeValue}</p>
+                              </div>
 
-                            {/* Tech Stack */}
-                            <div className="mt-auto mb-6">
-                              <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-2">Tech Stack</p>
-                              <div className="flex flex-wrap gap-2">
-                                {project.techStack?.slice(0, 4).map(t => (
-                                  <span key={t} className="text-[11px] bg-zinc-800 text-zinc-300 px-2 py-1 rounded border border-zinc-700">
-                                    {t}
-                                  </span>
-                                ))}
-                                {project.techStack?.length > 4 && (
-                                  <span className="text-[11px] text-zinc-500 px-1 py-1">
-                                    +{project.techStack.length - 4} more
-                                  </span>
+                              {/* Action Button */}
+                              <button
+                                onClick={() => setSelectedProject(project)}
+                                className="w-full bg-zinc-900 hover:bg-zinc-800 text-white py-2.5 rounded-lg font-medium text-sm flex items-center justify-center transition-colors border border-zinc-700 hover:border-zinc-600"
+                              >
+                                View Specs
+                                <ArrowRight className="w-4 h-4 ml-2 text-zinc-500 group-hover:text-zinc-300 transition-colors" />
+                              </button>
+
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleProjectStatus(project.id);
+                                }}
+                                className={`mt-2 w-full py-2.5 rounded-lg font-medium text-sm flex items-center justify-center transition-all border ${project.completed
+                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
+                                  : 'bg-zinc-900 text-zinc-500 border-zinc-800 hover:text-zinc-300 hover:border-zinc-700'
+                                  }`}
+                              >
+                                {project.completed ? (
+                                  <><CheckCircle className="w-4 h-4 mr-2" /> Completed</>
+                                ) : (
+                                  <><Circle className="w-4 h-4 mr-2" /> Mark as Done</>
                                 )}
-                              </div>
+                              </button>
                             </div>
-
-                            {/* Divider */}
-                            <div className="h-px bg-zinc-800 w-full mb-4"></div>
-
-                            {/* Resume Value */}
-                            <div className="flex items-start gap-2 mb-6">
-                              <TrendingUp className="w-4 h-4 text-zinc-500 shrink-0 mt-0.5" />
-                              <p className="text-xs text-zinc-400 line-clamp-2">{project.resumeValue}</p>
-                            </div>
-
-                            {/* Action Button */}
-                            <button
-                              onClick={() => setSelectedProject(project)}
-                              className="w-full bg-zinc-900 hover:bg-zinc-800 text-white py-2.5 rounded-lg font-medium text-sm flex items-center justify-center transition-colors border border-zinc-700 hover:border-zinc-600"
-                            >
-                              View Specs
-                              <ArrowRight className="w-4 h-4 ml-2 text-zinc-500 group-hover:text-zinc-300 transition-colors" />
-                            </button>
                           </div>
-                        </div>
-                      ))}
+                        ))}
                     </div>
                   )}
 
@@ -2902,6 +2989,30 @@ const App = () => {
                           </div>
                         </div>
 
+                        {/* Reference GitHub - NEW SECTION */}
+                        {selectedProject.referenceGithubUrl && (
+                          <div className="bg-zinc-900 rounded-lg p-5 border border-zinc-800">
+                            <h3 className="text-sm font-bold text-white mb-3 flex items-center">
+                              <Github className="w-4 h-4 mr-2 text-white" />
+                              Reference Repository
+                            </h3>
+                            <p className="text-xs text-zinc-500 mb-3">
+                              Explore a similar project implementation or starter code to guide your development.
+                            </p>
+                            <a
+                              href={selectedProject.referenceGithubUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center justify-between p-3 bg-zinc-800/50 hover:bg-zinc-800 rounded-lg border border-white/5 transition-all group"
+                            >
+                              <span className="text-sm text-blue-400 group-hover:underline truncate max-w-[300px]">
+                                {selectedProject.referenceGithubUrl}
+                              </span>
+                              <ExternalLink className="w-3.5 h-3.5 text-zinc-500 group-hover:text-white" />
+                            </a>
+                          </div>
+                        )}
+
                         {/* Implementation Resources */}
                         {selectedProject.implementationResources && selectedProject.implementationResources.length > 0 && (
                           <div>
@@ -2962,7 +3073,25 @@ const App = () => {
                             onClick={() => setSelectedProject(null)}
                             className="flex-1 bg-violet-600 hover:bg-violet-500 text-white py-2.5 rounded-lg font-bold text-sm flex items-center justify-center transition-all"
                           >
-                            Done
+                            Close
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              handleToggleProjectStatus(selectedProject.id);
+                              // Update the selected project local state to reflect change immediately in modal
+                              setSelectedProject(prev => prev ? ({ ...prev, completed: !prev.completed }) : null);
+                            }}
+                            className={`flex-1 py-2.5 rounded-lg font-bold text-sm flex items-center justify-center transition-all ${selectedProject.completed
+                              ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                              : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+                              }`}
+                          >
+                            {selectedProject.completed ? (
+                              <><CheckCircle className="w-4 h-4 mr-2" /> Completed</>
+                            ) : (
+                              <><Circle className="w-4 h-4 mr-2" /> Mark as Done</>
+                            )}
                           </button>
                         </div>
                       </div>
