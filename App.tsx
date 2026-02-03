@@ -2257,8 +2257,8 @@ const App = () => {
             <header className="flex justify-between md:justify-end items-center px-4 md:px-6 py-3">
               {/* Mobile Logo */}
               <div className="flex items-center gap-2 md:hidden">
-                <div className="w-8 h-8 rounded-lg overflow-hidden shadow-lg shadow-violet-500/20">
-                  <img src="/logo.jpg" alt="CareerPilot Logo" className="w-full h-full object-cover" />
+                <div className="w-10 h-10 rounded-lg overflow-hidden shadow-lg shadow-violet-500/20 flex items-center justify-center">
+                  <img src="/logo.png" alt="CareerPilot Logo" className="initial w-full h-full object-contain" />
                 </div>
                 <span className="font-bold text-lg text-white tracking-tight">CareerPilot</span>
               </div>

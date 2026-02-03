@@ -24,8 +24,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
     <div className="hidden md:flex fixed top-0 left-0 z-50 h-screen w-64 bg-zinc-950 border-r border-zinc-800/60 flex-col shadow-2xl">
       {/* Desktop Logo Area */}
       <div className="flex p-6 border-b border-zinc-800 items-center space-x-3">
-        <div className="w-8 h-8 rounded-lg overflow-hidden shadow-lg shadow-violet-500/20">
-          <img src="/logo.jpg" alt="CareerPilot Logo" className="w-full h-full object-cover" />
+        <div className="w-10 h-10 rounded-lg overflow-hidden shadow-lg shadow-violet-500/20 flex items-center justify-center">
+          <img src="/logo.png" alt="CareerPilot Logo" className="w-full h-full object-contain" />
         </div>
         <span className="text-xl font-bold text-white tracking-tight">CareerPilot</span>
       </div>
