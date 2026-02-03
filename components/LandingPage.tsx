@@ -27,11 +27,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin }) => {
             <div className="max-w-[1200px] mx-auto px-6">
                <div className="h-16 flex items-center justify-between">
                   {/* Logo */}
-                  <a href="#" className="flex items-center gap-2.5 group">
-                     <div className="w-8 h-8 bg-gradient-to-br from-violet-500 to-purple-600 rounded-lg flex items-center justify-center transition-transform group-hover:scale-105">
-                        <TrendingUp className="w-4 h-4 text-white" strokeWidth={2.5} />
+                  <a href="#" className="flex items-center gap-3 group">
+                     <div className="w-12 h-12 rounded-lg overflow-hidden flex items-center justify-center transition-transform group-hover:scale-105">
+                        <img src="/logo.png" alt="CareerPilot Logo" className="w-full h-full object-contain" />
                      </div>
-                     <span className="text-base font-semibold tracking-tight">CareerPilot</span>
+                     <span className="text-xl font-bold tracking-tight">CareerPilot</span>
                   </a>
 
                   {/* Desktop Navigation */}
@@ -316,11 +316,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin }) => {
                <div className="grid grid-cols-2 md:grid-cols-4 gap-8 lg:gap-12 mb-8">
                   {/* Brand */}
                   <div className="col-span-2 md:col-span-1">
-                     <a href="#" className="flex items-center gap-2.5 mb-4">
-                        <div className="w-8 h-8 bg-gradient-to-br from-violet-500 to-purple-600 rounded-lg flex items-center justify-center">
-                           <TrendingUp className="w-4 h-4 text-white" strokeWidth={2.5} />
+                     <a href="#" className="flex items-center gap-3 mb-4">
+                        <div className="w-12 h-12 rounded-lg overflow-hidden flex items-center justify-center">
+                           <img src="/logo.png" alt="CareerPilot Logo" className="w-full h-full object-contain" />
                         </div>
-                        <span className="text-base font-semibold">CareerPilot</span>
+                        <span className="text-xl font-bold">CareerPilot</span>
                      </a>
                      <p className="text-zinc-500 text-sm mb-6 leading-relaxed max-w-[250px]">
                         Your AI-powered career platform. Analyze, learn, and practice your way to success.
