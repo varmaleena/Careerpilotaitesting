@@ -9,6 +9,7 @@ import {
   Briefcase,
   Check,
   ChevronRight,
+  Circle,
   Clock,
   Code,
   Compass,
@@ -53,7 +54,11 @@ import {
   Edit2,
   Save,
   Zap,
-  Share2
+  Share2,
+  Sparkles,
+  Flame,
+  Calendar,
+  Activity
 } from 'lucide-react';
 
 import LandingPage from "./components/LandingPage";
@@ -63,6 +68,7 @@ import Sidebar from "./components/Sidebar";
 import MobileBottomNav from "./components/MobileBottomNav";
 import { SkillCard } from "./components/SkillCard";
 import { ShareSuccessModal } from "./components/ShareSuccessModal";
+import { DailyQuest } from "./components/DailyQuest";
 import { InterviewAnalysisView } from "./components/InterviewAnalysisView";
 import { ConfirmResetModal } from "./components/ConfirmResetModal";
 import { ProfileModal } from "./components/ProfileModal";
@@ -452,6 +458,8 @@ const App = () => {
   const [projects, setProjects] = useState<ProjectIdea[]>([]);
   const [seenProjectTitles, setSeenProjectTitles] = useState<string[]>([]);
   const [isGeneratingProjects, setIsGeneratingProjects] = useState(false);
+  const [projectFilter, setProjectFilter] = useState<'All' | 'Beginner' | 'Intermediate' | 'Advanced'>('All');
+  const [generationDifficulty, setGenerationDifficulty] = useState<string>('Intermediate');
 
   // Premium Interview System
   const [interviewStartTime, setInterviewStartTime] = useState<number | null>(null);
@@ -629,6 +637,16 @@ const App = () => {
     }
 
   }, [view]);
+
+  // Sync difficulty with profile on load
+  useEffect(() => {
+    if (userProfile.experienceLevel) {
+      const level = userProfile.experienceLevel.toLowerCase();
+      if (['student', 'fresher', 'beginner'].includes(level)) setGenerationDifficulty('Beginner');
+      else if (['junior', 'mid'].includes(level)) setGenerationDifficulty('Intermediate');
+      else setGenerationDifficulty('Advanced');
+    }
+  }, [userProfile.experienceLevel]);
 
   // --- Helpers ---
   const handleApiError = (error: any, defaultMsg: string) => {
@@ -928,7 +946,9 @@ const App = () => {
       // Step 2: Only proceed with analysis if validation passed
       const result = await analyzeProfile(
         { text: userProfile.resumeText, file: userProfile.resumeFile },
-        userProfile.targetRole
+        userProfile.targetRole,
+        userProfile.targetCompanies,
+        userProfile.experienceLevel
       );
       setAnalysis(result.analysis);
       setUserProfile(prev => ({
@@ -1062,6 +1082,15 @@ const App = () => {
   };
 
 
+  const handleToggleProjectStatus = (projectId: string) => {
+    setProjects(prev => prev.map(p => {
+      if (p.id === projectId) {
+        return { ...p, completed: !p.completed };
+      }
+      return p;
+    }));
+  };
+
   const handleGenerateProjects = async () => {
     if (!userProfile?.targetRole) return;
     setIsGeneratingProjects(true);
@@ -1081,12 +1110,15 @@ const App = () => {
           .slice(0, 3);
       }
 
+      // Determine difficulty: strict adherence to filter if set, otherwise dropdown preference
+      const effectiveDifficulty = projectFilter !== 'All' ? projectFilter : generationDifficulty;
+
       // Generate highly tailored projects based on User's Dream Role & Company
       const standardProjects = await generateProjectIdeas(
         userProfile.targetRole,
         focusTopics,
         userProfile.targetCompanies || "Tech Company",
-        userProfile.experienceLevel || "Intermediate",
+        effectiveDifficulty,
         seenProjectTitles // Pass the history of seen titles
       );
 
@@ -1666,8 +1698,8 @@ const App = () => {
         {/* Navigation Loading Overlay */}
         {isNavigating && (
           <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[9999] flex items-center justify-center">
-            <div className="bg-slate-900/90 backdrop-blur-xl rounded-2xl p-6 border border-white/10 shadow-2xl">
-              <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mx-auto" />
+            <div className="bg-zinc-900/90 backdrop-blur-xl rounded-2xl p-6 border border-white/10 shadow-2xl">
+              <Loader2 className="w-8 h-8 animate-spin text-violet-500 mx-auto" />
             </div>
           </div>
         )}
@@ -1691,8 +1723,8 @@ const App = () => {
           }}
         />
         {showAuthModal && (
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 max-w-md w-full shadow-2xl relative">
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="bg-[#0a0a0a] border border-zinc-800 rounded-2xl p-8 max-w-md w-full shadow-2xl relative">
               <button
                 onClick={() => {
                   setShowAuthModal(false);
@@ -1700,7 +1732,7 @@ const App = () => {
                   setEmailInput('');
                   setPasswordInput('');
                 }}
-                className="absolute top-4 right-4 text-slate-500 hover:text-white"
+                className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1709,7 +1741,7 @@ const App = () => {
                 <h2 className="text-2xl font-bold text-white mb-2">
                   {authMode === 'login' ? 'Welcome Back' : 'Create Account'}
                 </h2>
-                <p className="text-slate-400 text-sm">
+                <p className="text-zinc-400 text-sm">
                   {authMode === 'login'
                     ? 'Enter your credentials to access your career plan.'
                     : 'Join CareerPilot to start your journey.'}
@@ -1718,29 +1750,27 @@ const App = () => {
 
               <form onSubmit={handleAuthSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1 ml-1">Email Address</label>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1 ml-1">Email Address</label>
                   <div className="relative">
-                    <Mail className="absolute left-3 top-3.5 w-4 h-4 text-slate-500" />
+                    <Mail className="absolute left-3 top-3.5 w-4 h-4 text-zinc-500" />
                     <input
                       type="email"
                       required
                       value={emailInput}
                       onChange={(e) => {
                         setEmailInput(e.target.value);
-                        // Clear error when user starts typing again
                         if (emailError && AuthService.isValidEmail(e.target.value)) {
                           setEmailError('');
                         }
                       }}
                       onBlur={() => {
-                        // Validate on blur (when user leaves the field)
                         if (emailInput.trim() && !AuthService.isValidEmail(emailInput)) {
                           setEmailError('Please enter a valid email address');
                         } else {
                           setEmailError('');
                         }
                       }}
-                      className={`w-full bg-slate-950 border rounded-xl p-3 pl-10 text-white outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder-slate-600 ${emailError ? 'border-red-500' : 'border-slate-700'}`}
+                      className={`w-full bg-zinc-900 border rounded-xl p-3 pl-10 text-white outline-none focus:ring-2 focus:ring-violet-500 transition-all placeholder-zinc-600 ${emailError ? 'border-red-500' : 'border-zinc-800'}`}
                       placeholder="you@example.com"
                     />
                   </div>
@@ -1749,21 +1779,21 @@ const App = () => {
                   )}
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1 ml-1">Password</label>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1 ml-1">Password</label>
                   <div className="relative">
-                    <Lock className="absolute left-3 top-3.5 w-4 h-4 text-slate-500" />
+                    <Lock className="absolute left-3 top-3.5 w-4 h-4 text-zinc-500" />
                     <input
                       type="password"
                       required
                       value={passwordInput}
                       onChange={(e) => setPasswordInput(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 pl-10 text-white outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder-slate-600"
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 pl-10 text-white outline-none focus:ring-2 focus:ring-violet-500 transition-all placeholder-zinc-600"
                       placeholder="••••••••"
                     />
                   </div>
                   {authMode === 'signup' && (
-                    <div className="mt-2 text-xs text-slate-500 space-y-0.5">
-                      <p className="text-slate-400 font-medium mb-1">Password requirements:</p>
+                    <div className="mt-2 text-xs text-zinc-500 space-y-0.5">
+                      <p className="text-zinc-400 font-medium mb-1">Password requirements:</p>
                       <p className={passwordInput.length >= 8 ? 'text-emerald-400' : ''}>• Minimum 8 characters</p>
                       <p className={/\d/.test(passwordInput) ? 'text-emerald-400' : ''}>• At least one number (0-9)</p>
                       <p className={/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(passwordInput) ? 'text-emerald-400' : ''}>• At least one special character (!@#$%^&*...)</p>
@@ -1781,7 +1811,7 @@ const App = () => {
                           const result = await AuthService.resetPassword(emailInput);
                           alert(result.message);
                         }}
-                        className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                        className="text-xs text-violet-400 hover:text-violet-300 transition-colors"
                       >
                         Forgot Password?
                       </button>
@@ -1799,7 +1829,7 @@ const App = () => {
                 <button
                   type="submit"
                   disabled={isAuthLoading}
-                  className="w-full bg-indigo-600 hover:bg-indigo-500 hover:shadow-indigo-500/40 text-white font-bold py-3 rounded-xl transition-all duration-200 shadow-lg shadow-indigo-500/20 flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                  className="w-full bg-violet-600 hover:bg-violet-500 text-white font-semibold py-3 rounded-xl transition-all duration-200 shadow-lg shadow-violet-500/20 flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed"
                 >
                   {isAuthLoading ? (
                     <>
@@ -1816,17 +1846,17 @@ const App = () => {
 
                 <div className="relative my-4">
                   <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-slate-800"></div>
+                    <div className="w-full border-t border-zinc-800"></div>
                   </div>
                   <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-slate-900 px-2 text-slate-500">Or continue with</span>
+                    <span className="bg-[#0a0a0a] px-2 text-zinc-500">Or continue with</span>
                   </div>
                 </div>
 
                 <button
                   type="button"
                   onClick={handleGoogleLogin}
-                  className="w-full bg-white text-slate-900 font-bold py-3 rounded-xl transition-all hover:bg-slate-200 flex items-center justify-center space-x-2"
+                  className="w-full bg-white text-zinc-900 font-semibold py-3 rounded-xl transition-all hover:bg-zinc-100 flex items-center justify-center space-x-2"
                 >
                   <svg className="w-5 h-5" viewBox="0 0 24 24">
                     <path
@@ -1850,13 +1880,13 @@ const App = () => {
                 </button>
               </form>
 
-              <div className="mt-6 pt-6 border-t border-slate-800 text-center">
+              <div className="mt-6 pt-6 border-t border-zinc-800 text-center">
                 <button
                   onClick={() => {
                     setAuthMode(authMode === 'login' ? 'signup' : 'login');
                     setAuthError('');
                   }}
-                  className="text-sm text-slate-400 hover:text-indigo-400 transition-colors"
+                  className="text-sm text-zinc-400 hover:text-violet-400 transition-colors"
                 >
                   {authMode === 'login' ? "Don't have an account? Sign up" : "Already have an account? Log in"}
                 </button>
@@ -1873,24 +1903,24 @@ const App = () => {
     // Premium Full-Screen Loading State during Analysis
     if (isAnalyzing) {
       return (
-        <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
+        <div className="min-h-screen bg-[#09090b] flex flex-col items-center justify-center p-4">
           <div className="flex flex-col items-center text-center space-y-8">
             {/* Logo Container */}
-            <div className="w-24 h-24 bg-slate-900 rounded-3xl border border-slate-700 flex items-center justify-center shadow-xl">
-              <TrendingUp className="w-12 h-12 text-indigo-400" />
+            <div className="w-24 h-24 bg-zinc-900 rounded-3xl border border-zinc-700 flex items-center justify-center shadow-xl">
+              <TrendingUp className="w-12 h-12 text-violet-400" />
             </div>
 
             <div className="space-y-3 max-w-md">
               <h2 className="text-3xl font-bold text-white tracking-tight">
                 Initializing Pilot...
               </h2>
-              <p className="text-slate-400 text-lg">
+              <p className="text-zinc-400 text-lg">
                 Analyzing your resume and building your custom roadmap.
               </p>
             </div>
 
             {/* Progress Bar */}
-            <div className="w-64 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+            <div className="w-64 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
               <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 w-1/2 rounded-full"></div>
             </div>
           </div>
@@ -1903,223 +1933,235 @@ const App = () => {
         {/* Navigation Loading Overlay */}
         {isNavigating && (
           <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[9999] flex items-center justify-center">
-            <div className="bg-slate-900/90 backdrop-blur-xl rounded-2xl p-6 border border-white/10 shadow-2xl">
-              <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mx-auto" />
+            <div className="bg-zinc-900/90 backdrop-blur-xl rounded-2xl p-6 border border-white/10 shadow-2xl">
+              <Loader2 className="w-8 h-8 animate-spin text-violet-500 mx-auto" />
             </div>
           </div>
         )}
 
-        <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-          <div className="bg-slate-900 max-w-2xl w-full rounded-2xl shadow-2xl shadow-black/50 p-8 border border-slate-800 relative">
-            {/* Back to Login if stuck */}
+        <div className="min-h-screen bg-[#09090b] flex items-center justify-center p-4">
+          <div className="bg-[#0c0c0e] max-w-3xl w-full rounded-3xl shadow-2xl shadow-black/80 p-10 border border-white/5 relative overflow-hidden">
+            {/* Background Decoration */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-violet-600/10 rounded-full blur-[100px] pointer-events-none"></div>
+            <div className="absolute bottom-0 left-0 w-64 h-64 bg-indigo-600/10 rounded-full blur-[100px] pointer-events-none"></div>
+
+            {/* Back to Login */}
             <button
               onClick={handleLogout}
-              className="absolute top-6 right-6 text-slate-500 hover:text-white flex items-center text-sm"
+              className="absolute top-8 right-8 text-zinc-600 hover:text-white flex items-center text-xs font-medium transition-colors"
             >
-              <User className="w-4 h-4 mr-2" /> {userProfile.name} (Logout)
+              <User className="w-3.5 h-3.5 mr-2" />
+              {userProfile.name}
+              <span className="ml-1 text-zinc-700">|</span>
+              <span className="ml-1 hover:underline">Log out</span>
             </button>
 
-            <div className="flex items-center space-x-3 mb-8">
-              <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
-                <TrendingUp className="w-6 h-6 text-white" />
+            {/* Header */}
+            <div className="mb-10 text-center">
+              <div className="w-16 h-16 bg-gradient-to-br from-violet-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/20 mx-auto mb-6 rotate-3">
+                <TrendingUp className="w-8 h-8 text-white" />
               </div>
-              <h1 className="text-3xl font-bold text-slate-100">Setup your Pilot</h1>
+              <h1 className="text-3xl font-bold text-white tracking-tight mb-2">Configure Your Pilot</h1>
+              <p className="text-zinc-400 text-sm max-w-md mx-auto leading-relaxed">
+                We'll analyze your profile to build a custom career roadmap, interview prep, and project portfolio.
+              </p>
             </div>
 
-            <form onSubmit={handleOnboardingSubmit} className="space-y-6">
-              {/* Career Stage Section */}
-              <div className="bg-slate-800/30 p-6 rounded-xl border border-slate-700/50">
-                <h3 className="text-lg font-bold text-white mb-4 flex items-center">
-                  <Compass className="w-5 h-5 mr-2 text-indigo-400" />
-                  Where are you in your journey?
-                </h3>
+            <form onSubmit={handleOnboardingSubmit} className="space-y-8">
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Experience Level */}
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-300 mb-2">Experience Level</label>
-                    <select
-                      required
-                      className="w-full p-3 bg-slate-950 border border-slate-800 text-slate-100 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none"
-                      value={userProfile.experienceLevel || ''}
-                      onChange={e => setUserProfile(prev => ({ ...prev, experienceLevel: e.target.value }))}
-                    >
-                      <option value="">Select...</option>
-                      <option value="student">Student (Still Studying)</option>
-                      <option value="fresher">Fresher (0-1 year)</option>
-                      <option value="junior">Junior (1-3 years)</option>
-                      <option value="mid">Mid-Level (3-5 years)</option>
-                      <option value="senior">Senior (5+ years)</option>
-                    </select>
-                  </div>
+              <div className="grid md:grid-cols-2 gap-8">
+                {/* Left Column: Profile */}
+                <div className="space-y-6">
+                  <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider flex items-center">
+                    <span className="w-2 h-2 rounded-full bg-violet-500 mr-2"></span>
+                    Profile Details
+                  </h3>
 
-                  {/* Graduation Year */}
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-300 mb-2">Graduation Year</label>
-                    <input
-                      type="number"
-                      required
-                      min="2020"
-                      max="2030"
-                      className="w-full p-3 bg-slate-950 border border-slate-800 text-slate-100 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none placeholder-slate-600"
-                      placeholder="e.g. 2024, 2025..."
-                      value={userProfile.graduationYear || ''}
-                      onChange={e => setUserProfile(prev => ({ ...prev, graduationYear: e.target.value }))}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Career Goals Section */}
-              <div className="bg-slate-800/30 p-6 rounded-xl border border-slate-700/50">
-                <h3 className="text-lg font-bold text-white mb-4 flex items-center">
-                  <Target className="w-5 h-5 mr-2 text-emerald-400" />
-                  Career Target
-                </h3>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Target Role */}
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-300 mb-2">
-                      Target Role <span className="text-red-400">*</span>
-                    </label>
-                    <div className="relative group">
-                      <Briefcase className="absolute left-3 top-3.5 w-4 h-4 text-slate-500 group-focus-within:text-emerald-400 transition-colors" />
-                      <input
-                        type="text"
-                        required
-                        className="w-full p-3 pl-10 bg-slate-950 border border-slate-800 text-slate-100 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none placeholder-slate-600"
-                        placeholder="e.g. Software Engineer"
-                        value={userProfile.targetRole}
-                        onChange={e => setUserProfile(prev => ({ ...prev, targetRole: e.target.value }))}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Target Companies */}
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-300 mb-2">
-                      Target Company <span className="text-slate-500 font-normal text-xs">(Optional)</span>
-                    </label>
-                    <div className="relative group">
-                      <div className="absolute left-3 top-3.5 w-4 h-4 flex items-center justify-center text-slate-500 group-focus-within:text-emerald-400 transition-colors font-bold text-xs">
-                        @
+                  <div className="space-y-5">
+                    {/* Experience Level */}
+                    <div className="group">
+                      <label className="block text-xs font-medium text-zinc-400 mb-1.5 transition-colors group-focus-within:text-violet-400">Experience Level</label>
+                      <div className="relative">
+                        <select
+                          required
+                          className="w-full pl-3 pr-10 py-3 bg-zinc-900/50 border border-zinc-800 text-zinc-200 rounded-xl focus:ring-1 focus:ring-violet-500 focus:border-violet-500 focus:bg-zinc-900 transition-all outline-none appearance-none text-sm"
+                          value={userProfile.experienceLevel || ''}
+                          onChange={e => setUserProfile(prev => ({ ...prev, experienceLevel: e.target.value }))}
+                        >
+                          <option value="">Select Level...</option>
+                          <option value="student">Student (Currently Enrolled)</option>
+                          <option value="fresher">Fresher (0-1 Years)</option>
+                          <option value="junior">Junior (1-3 Years)</option>
+                          <option value="mid">Mid-Level (3-5 Years)</option>
+                          <option value="senior">Senior (5+ Years)</option>
+                        </select>
+                        <ChevronRight className="absolute right-3 top-3.5 w-4 h-4 text-zinc-600 rotate-90 pointer-events-none" />
                       </div>
+                    </div>
+
+                    {/* Graduation Year */}
+                    <div className="group">
+                      <label className="block text-xs font-medium text-zinc-400 mb-1.5 transition-colors group-focus-within:text-violet-400">Graduation Year</label>
                       <input
-                        type="text"
-                        className="w-full p-3 pl-10 bg-slate-950 border border-slate-800 text-slate-100 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none placeholder-slate-600"
-                        placeholder="e.g. Google, TCS, Startup..."
-                        value={userProfile.targetCompanies || ''}
-                        onChange={e => setUserProfile(prev => ({ ...prev, targetCompanies: e.target.value }))}
+                        type="number"
+                        required
+                        min="2020"
+                        max="2030"
+                        className="w-full p-3 bg-zinc-900/50 border border-zinc-800 text-zinc-200 rounded-xl focus:ring-1 focus:ring-violet-500 focus:border-violet-500 focus:bg-zinc-900 transition-all outline-none placeholder-zinc-700 text-sm"
+                        placeholder="YYYY"
+                        value={userProfile.graduationYear || ''}
+                        onChange={e => setUserProfile(prev => ({ ...prev, graduationYear: e.target.value }))}
                       />
                     </div>
                   </div>
                 </div>
 
-                <p className="text-xs text-slate-500 mt-3 flex items-center">
-                  <span className="bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold mr-2">Tip</span>
-                  We'll auto-tailor your resume and interview questions for this specific role.
-                </p>
+                {/* Right Column: Target */}
+                <div className="space-y-6">
+                  <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider flex items-center">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 mr-2"></span>
+                    Career Goal
+                  </h3>
+
+                  <div className="space-y-5">
+                    {/* Target Role */}
+                    <div className="group">
+                      <label className="block text-xs font-medium text-zinc-400 mb-1.5 transition-colors group-focus-within:text-emerald-400">
+                        Target Role <span className="text-red-500/80">*</span>
+                      </label>
+                      <div className="relative">
+                        <Briefcase className="absolute left-3 top-3 w-4 h-4 text-zinc-600 group-focus-within:text-emerald-500 transition-colors" />
+                        <input
+                          type="text"
+                          required
+                          className="w-full pl-10 pr-3 py-3 bg-zinc-900/50 border border-zinc-800 text-zinc-200 rounded-xl focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 focus:bg-zinc-900 transition-all outline-none placeholder-zinc-700 text-sm"
+                          placeholder="e.g. Frontend Engineer"
+                          value={userProfile.targetRole}
+                          onChange={e => setUserProfile(prev => ({ ...prev, targetRole: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Target Companies */}
+                    <div className="group">
+                      <label className="block text-xs font-medium text-zinc-400 mb-1.5 transition-colors group-focus-within:text-emerald-400">Target Companies</label>
+                      <div className="relative">
+                        <div className="absolute left-3 top-3 w-4 h-4 text-zinc-600 font-serif italic text-xs flex items-center justify-center group-focus-within:text-emerald-500">@</div>
+                        <input
+                          type="text"
+                          className="w-full pl-10 pr-3 py-3 bg-zinc-900/50 border border-zinc-800 text-zinc-200 rounded-xl focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 focus:bg-zinc-900 transition-all outline-none placeholder-zinc-700 text-sm"
+                          placeholder="e.g. Google, Microsoft..."
+                          value={userProfile.targetCompanies || ''}
+                          onChange={e => setUserProfile(prev => ({ ...prev, targetCompanies: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              {/* Resume Upload Section */}
-              <div className="bg-slate-800/30 p-6 rounded-xl border border-slate-700/50">
-                <h3 className="text-lg font-bold text-white mb-4 flex items-center">
-                  <FileText className="w-5 h-5 mr-2 text-amber-400" />
-                  Upload Your Resume <span className="text-red-400 ml-1">*</span>
+              {/* Resume Section */}
+              <div className="pt-6 border-t border-white/5">
+                <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider flex items-center mb-6">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 mr-2"></span>
+                  Resume Data <span className="text-zinc-600 ml-1 font-normal lowercase">(Required)</span>
                 </h3>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* File Upload Option */}
-                  <div className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all ${userProfile.resumeFile ? 'border-emerald-500 bg-emerald-500/10' : 'border-slate-700 hover:border-indigo-500 hover:bg-slate-800'}`}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-[220px]">
+                  {/* File Upload - Enhanced Visuals */}
+                  <div className={`relative border border-dashed rounded-2xl flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-300 group ${userProfile.resumeFile
+                    ? 'border-emerald-500/50 bg-emerald-500/5'
+                    : 'border-zinc-700 hover:border-violet-500/50 hover:bg-zinc-800/50'
+                    }`}>
                     <input
                       type="file"
                       accept=".pdf,.txt,.md"
                       onChange={handleFileUpload}
-                      className="hidden"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                       id="resume-upload"
                     />
-                    <label htmlFor="resume-upload" className="cursor-pointer w-full h-full flex flex-col items-center justify-center">
-                      {isUploadingResume ? (
-                        <>
-                          <Loader2 className="w-8 h-8 text-indigo-400 mb-2 animate-spin" />
-                          <span className="text-sm font-medium text-indigo-300">Processing...</span>
-                          <span className="text-xs text-slate-500 mt-1">Reading your resume</span>
-                        </>
-                      ) : userProfile.resumeFile ? (
-                        <>
-                          <FileText className="w-8 h-8 text-emerald-400 mb-2" />
-                          <span className="text-sm font-medium text-emerald-300">Resume Uploaded ✓</span>
-                          <span className="text-xs text-emerald-500/70 mt-1">Ready to analyze</span>
-                        </>
-                      ) : (
-                        <>
-                          <UploadCloud className="w-8 h-8 text-indigo-400 mb-2" />
-                          <span className="text-sm font-medium text-slate-300">Upload PDF / TXT</span>
-                          <span className="text-xs text-slate-500 mt-1">Drag & drop or click</span>
-                        </>
-                      )}
-                    </label>
+
+                    {isUploadingResume ? (
+                      <div className="flex flex-col items-center animate-pulse">
+                        <Loader2 className="w-10 h-10 text-violet-400 mb-4 animate-spin" />
+                        <span className="text-sm font-semibold text-white">Extracting Data...</span>
+                        <span className="text-xs text-zinc-500 mt-2">This may take a few seconds</span>
+                      </div>
+                    ) : userProfile.resumeFile ? (
+                      <div className="flex flex-col items-center animate-in fade-in zoom-in duration-300">
+                        <div className="w-12 h-12 bg-emerald-500/10 rounded-full flex items-center justify-center mb-4 ring-4 ring-emerald-500/5">
+                          <Check className="w-6 h-6 text-emerald-400" />
+                        </div>
+                        <span className="text-sm font-bold text-white">Resume Attached</span>
+                        <span className="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-full mt-2 font-mono">
+                          {userProfile.resumeFile.name || "resume.pdf"}
+                        </span>
+                        <p className="text-[10px] text-zinc-500 mt-4 group-hover:text-emerald-400 transition-colors">Click to replace</p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center p-6">
+                        <div className="w-14 h-14 bg-zinc-800 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-violet-500/10 group-hover:text-violet-400 transition-all duration-300">
+                          <UploadCloud className="w-7 h-7 text-zinc-400 group-hover:text-violet-400" />
+                        </div>
+                        <span className="text-sm font-bold text-zinc-200 group-hover:text-white transition-colors">Upload Resume</span>
+                        <p className="text-xs text-zinc-500 mt-2 max-w-[180px]">
+                          PDF or TXT accepted. We extract skills & experience automatically.
+                        </p>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Or Text Paste Option */}
-                  <div className="relative">
-                    <textarea
-                      className="w-full h-full min-h-[140px] p-4 bg-slate-950 border border-slate-800 text-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none resize-none font-mono text-xs placeholder-slate-600"
-                      placeholder="Or paste resume text here..."
-                      value={userProfile.resumeText || ''}
-                      onChange={e => setUserProfile(prev => ({ ...prev, resumeText: e.target.value }))}
-                    />
-                    <div className="absolute bottom-2 right-2 text-[10px] text-slate-600">
-                      {userProfile.resumeText?.length || 0} chars
+                  {/* Text Paste Option */}
+                  <div className="relative h-full flex flex-col">
+                    <div className={`flex-1 bg-zinc-900/50 border border-zinc-800 rounded-2xl overflow-hidden focus-within:ring-1 focus-within:ring-violet-500/50 focus-within:border-violet-500/50 transition-all ${userProfile.resumeText ? 'border-zinc-700' : ''
+                      }`}>
+                      <div className="bg-zinc-900 px-4 py-2 border-b border-zinc-800 flex justify-between items-center h-10">
+                        <span className="text-[10px] font-bold text-zinc-500 uppercase">Resume Content</span>
+                        <span className="text-[10px] text-zinc-600 font-mono">{userProfile.resumeText?.length || 0} chars</span>
+                      </div>
+                      <textarea
+                        className="w-full h-[calc(100%-40px)] p-4 bg-transparent text-zinc-300 text-xs font-mono resize-none outline-none placeholder-zinc-700 leading-relaxed"
+                        placeholder="Paste your full resume text here (Work history, skills, projects)..."
+                        value={userProfile.resumeText || ''}
+                        onChange={e => setUserProfile(prev => ({ ...prev, resumeText: e.target.value }))}
+                      />
                     </div>
                   </div>
                 </div>
-
-
               </div>
 
-              {/* Validation Error Message */}
-              {validationError && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-center space-x-3">
-                  <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
-                  <span className="text-red-400 font-medium">{validationError}</span>
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={isAnalyzing || (!userProfile.resumeFile && !userProfile.resumeText) || !userProfile.targetRole}
-                className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold py-4 rounded-xl shadow-lg hover:shadow-indigo-500/25 transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
-              >
-                {isAnalyzing ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Analyzing Profile...</span>
-                  </>
-                ) : (!userProfile.resumeFile && !userProfile.resumeText) || !userProfile.targetRole ? (
-                  <span>Select Resume & Role to Launch</span>
-                ) : (
-                  <>
-                    <span>Launch Career Analysis</span>
-                    <ArrowRight className="w-5 h-5" />
-                  </>
+              {/* Validation & Actions */}
+              <div className="flex border-t border-white/5 pt-8 gap-4 flex-col sm:flex-row items-center">
+                {/* Error Box */}
+                {validationError && (
+                  <div className="flex-1 w-full bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex items-center gap-3">
+                    <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                    <p className="text-xs text-red-300 font-medium">{validationError}</p>
+                  </div>
                 )}
-              </button>
 
-              {/* Save Draft & Exit Button */}
-              {(userProfile.resumeFile || userProfile.resumeText || userProfile.targetRole) && (
+                {/* Primary Action */}
                 <button
-                  type="button"
-                  onClick={() => {
-                    // Data is already auto-saved via localStorage
-                    setView(isLoggedIn ? AppView.DASHBOARD : AppView.LANDING);
-                  }}
-                  className="w-full mt-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium py-3 rounded-xl border border-slate-700 transition-all flex items-center justify-center space-x-2"
+                  type="submit"
+                  disabled={isAnalyzing || (!userProfile.resumeFile && !userProfile.resumeText) || !userProfile.targetRole}
+                  className="w-full sm:flex-1 bg-white hover:bg-zinc-200 text-black font-bold py-4 rounded-xl shadow-xl shadow-white/5 hover:shadow-white/10 transition-all transform hover:-translate-y-0.5 flex items-center justify-center gap-2.5 disabled:opacity-50 disabled:translate-y-0 disabled:cursor-not-allowed"
                 >
-                  <span>Save Draft & Exit</span>
+                  {isAnalyzing ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>Processing...</span>
+                    </>
+                  ) : (!userProfile.resumeFile && !userProfile.resumeText) || !userProfile.targetRole ? (
+                    <span className="text-zinc-500">Complete Steps to Launch</span>
+                  ) : (
+                    <>
+                      <span>Launch Pilot</span>
+                      <ArrowRight className="w-5 h-5" />
+                    </>
+                  )}
                 </button>
-              )}
+              </div>
+
             </form>
           </div>
         </div>
@@ -2133,13 +2175,13 @@ const App = () => {
       {/* Navigation Loading Overlay */}
       {isNavigating && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[9999] flex items-center justify-center">
-          <div className="bg-slate-900/90 backdrop-blur-xl rounded-2xl p-6 border border-white/10 shadow-2xl">
-            <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mx-auto" />
+          <div className="bg-zinc-900/90 backdrop-blur-xl rounded-2xl p-6 border border-white/10 shadow-2xl">
+            <Loader2 className="w-8 h-8 animate-spin text-violet-500 mx-auto" />
           </div>
         </div>
       )}
 
-      <div className="min-h-screen bg-slate-950 flex text-slate-100 font-sans">
+      <div className="min-h-screen bg-[#09090b] flex text-zinc-100 font-sans">
         {showShareModal && analysis && (
           <ShareSuccessModal
             score={analysis.readinessScore}
@@ -2168,25 +2210,34 @@ const App = () => {
           onOpenProfile={() => setShowProfileModal(true)}
         />
 
-        <main className="flex-1 md:ml-64 p-6 md:p-10 pb-24 md:pb-10 pt-6 md:pt-10 bg-slate-950 relative">
-          {/* Background Gradients */}
-          <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
-            <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-indigo-900/20 blur-[100px] rounded-full"></div>
-            <div className="absolute bottom-[-10%] left-[10%] w-[400px] h-[400px] bg-purple-900/10 blur-[100px] rounded-full"></div>
-          </div>
+        <main className="flex-1 md:ml-64 p-6 md:p-10 pb-24 md:pb-10 pt-6 md:pt-10 bg-[#09090b] relative">
 
-          <div className="relative z-10 flex-1 flex flex-col">
-            {/* Top Bar - Streak & Profile */}
-            <header className="flex justify-end items-center px-6 py-3">
+          <div className="flex-1 flex flex-col">
+            {/* Top Bar - Profile */}
+            <header className="flex justify-between md:justify-end items-center px-4 md:px-6 py-3">
+              {/* Mobile Logo */}
+              <div className="flex items-center gap-2 md:hidden">
+                <div className="w-8 h-8 bg-gradient-to-br from-violet-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg shadow-violet-500/20">
+                  <TrendingUp className="w-4 h-4 text-white" />
+                </div>
+                <span className="font-bold text-lg text-white tracking-tight">CareerPilot</span>
+              </div>
               {isLoggedIn && (
-                <div className="flex items-center space-x-4">
-                  <div className="hidden md:flex items-center space-x-1.5 text-amber-400 bg-amber-500/10 px-3 py-1.5 rounded-lg border border-amber-500/20">
-                    <Zap className="w-3.5 h-3.5 fill-current" />
-                    <span className="text-xs font-bold">{userProfile.streak || 1} Day Streak</span>
+                <div className="flex items-center space-x-3">
+                  <div className="flex items-center gap-2 px-2 md:px-3 py-1 md:py-1.5 bg-zinc-900/50 border border-amber-500/20 rounded-full shadow-[0_0_10px_rgba(245,158,11,0.1)] hover:shadow-[0_0_15px_rgba(245,158,11,0.2)] transition-all group cursor-default">
+                    <div className="bg-amber-500/10 p-1 rounded-full group-hover:bg-amber-500/20 transition-colors">
+                      <Flame className="w-3 h-3 md:w-3.5 md:h-3.5 text-amber-500 fill-amber-500 animate-[pulse_3s_ease-in-out_infinite]" />
+                    </div>
+                    <div className="flex flex-col leading-none">
+                      <span className="text-xs md:text-sm font-bold text-zinc-200 group-hover:text-white transition-colors">
+                        {userProfile.streak || 1} <span className="text-amber-500">Days</span>
+                      </span>
+                    </div>
                   </div>
                   <button
                     onClick={() => setShowProfileModal(true)}
-                    className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm hover:scale-105 transition-transform cursor-pointer"
+                    className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-zinc-950 font-bold text-sm shadow-lg shadow-white/20 hover:shadow-white/40 hover:scale-105 transition-all cursor-pointer ring-2 ring-zinc-500/20"
+                    title="View Profile"
                   >
                     {userProfile.name?.[0]?.toUpperCase() || 'U'}
                   </button>
@@ -2201,11 +2252,11 @@ const App = () => {
                 <div className="flex justify-between items-center px-6 py-4 border-b border-white/5">
                   <div>
                     <h1 className="text-xl font-bold text-white">Dashboard</h1>
-                    <p className="text-sm text-slate-500 mt-0.5">Target: <span className="text-slate-300">{userProfile.targetRole}</span></p>
+                    <p className="text-sm text-zinc-500 mt-0.5">Target: <span className="text-zinc-300">{userProfile.targetRole}</span></p>
                   </div>
                   <button
                     onClick={() => setShowShareModal(true)}
-                    className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors"
+                    className="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-zinc-400 hover:text-white transition-colors"
                   >
                     <Share2 className="w-4 h-4" />
                   </button>
@@ -2213,13 +2264,20 @@ const App = () => {
 
                 {/* Main Content */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6">
+                  {/* Daily Quest */}
+                  <DailyQuest
+                    streak={userProfile.streak || 1}
+                    xp={userProfile.xp || 150}
+                    onNavigate={setView}
+                  />
+
                   {/* Score & Summary Row */}
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                     {/* Score Card */}
-                    <div className="bg-slate-900/50 rounded-xl border border-white/5 p-6">
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Match Potential</p>
+                    <div className="bg-zinc-900/50 rounded-xl border border-white/5 p-6">
+                      <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-4">Match Potential</p>
                       <ScoreGauge score={analysis.readinessScore} />
-                      <p className="text-center text-xs text-slate-400 mt-4">
+                      <p className="text-center text-xs text-zinc-400 mt-4">
                         {analysis.readinessScore > 75
                           ? "Strong candidate. Focus on polishing advanced skills."
                           : "Great foundation. Complete your plan to boost this score."}
@@ -2227,79 +2285,79 @@ const App = () => {
                     </div>
 
                     {/* Strengths */}
-                    <div className="bg-slate-900/50 rounded-xl border border-white/5 p-6">
+                    <div className="bg-zinc-900/50 rounded-xl border border-white/5 p-6">
                       <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-3 flex items-center">
                         <TrendingUp className="w-3.5 h-3.5 mr-1.5" />
                         Top Strengths
                       </p>
                       <div className="space-y-2">
                         {analysis.strengths?.slice(0, 3).map((s, i) => (
-                          <div key={i} className="text-sm text-slate-300 bg-emerald-500/5 p-2.5 rounded-lg border border-emerald-500/10 flex items-start">
+                          <div key={i} className="text-sm text-zinc-300 bg-emerald-500/5 p-2.5 rounded-lg border border-emerald-500/10 flex items-start">
                             <span className="text-emerald-400 mr-2">•</span>
                             <span className="line-clamp-2">{s}</span>
                           </div>
                         ))}
                         {(!analysis.strengths || analysis.strengths.length === 0) && (
-                          <p className="text-sm text-slate-500 italic">No strengths detected yet.</p>
+                          <p className="text-sm text-zinc-500 italic">No strengths detected yet.</p>
                         )}
                       </div>
                     </div>
 
                     {/* Gaps */}
-                    <div className="bg-slate-900/50 rounded-xl border border-white/5 p-6">
+                    <div className="bg-zinc-900/50 rounded-xl border border-white/5 p-6">
                       <p className="text-xs font-bold text-amber-400 uppercase tracking-wider mb-3 flex items-center">
                         <Target className="w-3.5 h-3.5 mr-1.5" />
                         Key Gaps
                       </p>
                       <div className="space-y-2">
                         {analysis.weaknesses?.slice(0, 3).map((w, i) => (
-                          <div key={i} className="text-sm text-slate-300 bg-amber-500/5 p-2.5 rounded-lg border border-amber-500/10 flex items-start">
+                          <div key={i} className="text-sm text-zinc-300 bg-amber-500/5 p-2.5 rounded-lg border border-amber-500/10 flex items-start">
                             <span className="text-amber-400 mr-2">•</span>
                             <span className="line-clamp-2">{w}</span>
                           </div>
                         ))}
                         {(!analysis.weaknesses || analysis.weaknesses.length === 0) && (
-                          <p className="text-sm text-slate-500 italic">No gaps detected yet.</p>
+                          <p className="text-sm text-zinc-500 italic">No gaps detected yet.</p>
                         )}
                       </div>
                     </div>
                   </div>
 
                   {/* Skills Matrix */}
-                  <div className="bg-slate-900/50 rounded-xl border border-white/5 p-6">
+                  <div className="bg-zinc-900/50 rounded-xl border border-white/5 p-6">
                     <div className="flex justify-between items-center mb-4">
                       <h3 className="text-sm font-bold text-white">Skills Breakdown</h3>
-                      <span className="text-[11px] font-bold px-2.5 py-1 bg-slate-800 rounded text-slate-400">
+                      <span className="text-[11px] font-bold px-2.5 py-1 bg-zinc-800 rounded text-zinc-400">
                         {analysis.skills?.length || 0} skills tracked
                       </span>
                     </div>
 
                     <div className="grid md:grid-cols-2 gap-6">
                       <div>
-                        <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-3">Acquired</p>
+                        <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider mb-3">Acquired</p>
                         <div className="flex flex-wrap gap-2">
                           {analysis.skills?.filter(s => s.status === 'acquired').map(s => <SkillCard key={s.name} skill={s} />)}
                           {analysis.skills?.filter(s => s.status === 'acquired').length === 0 && (
-                            <span className="text-sm text-slate-500 italic">No exact matches found yet.</span>
+                            <span className="text-sm text-zinc-500 italic">No exact matches found yet.</span>
                           )}
                         </div>
                       </div>
                       <div>
-                        <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-3">Missing / To Learn</p>
+                        <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider mb-3">Missing / To Learn</p>
                         <div className="flex flex-wrap gap-2">
                           {analysis.skills?.filter(s => s.status === 'missing').map(s => <SkillCard key={s.name} skill={s} />)}
                         </div>
                       </div>
                     </div>
 
-                    <div className="mt-6 pt-4 border-t border-white/5 flex justify-end">
+                    <div className="mt-6 pt-4 border-t border-zinc-800 flex justify-end">
                       <button
                         onClick={handleGeneratePlan}
                         disabled={isGeneratingPlan}
-                        className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-xl font-bold text-sm flex items-center transition-all disabled:opacity-70"
+                        className="bg-violet-600 hover:bg-violet-500 text-white px-5 py-2 rounded-lg font-medium text-sm flex items-center transition-colors disabled:opacity-70"
                       >
                         {isGeneratingPlan ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <BookOpen className="w-4 h-4 mr-2" />}
-                        {plan ? 'Regenerate Roadmap' : 'Generate Career Roadmap'}
+                        {plan ? 'Regenerate' : 'Create Roadmap'}
                       </button>
                     </div>
                   </div>
@@ -2314,13 +2372,13 @@ const App = () => {
                 <div className="flex justify-between items-center px-6 py-4 border-b border-white/5">
                   <div>
                     <h1 className="text-xl font-bold text-white">Learning Plan</h1>
-                    <p className="text-sm text-slate-500 mt-0.5">Roadmap for <span className="text-slate-300">{userProfile.targetRole}</span></p>
+                    <p className="text-sm text-zinc-500 mt-0.5">Roadmap for <span className="text-zinc-300">{userProfile.targetRole}</span></p>
                   </div>
                   {plan && (
                     <button
                       onClick={handleGeneratePlan}
                       disabled={isGeneratingPlan}
-                      className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded-xl font-bold text-sm transition-all flex items-center disabled:opacity-50"
+                      className="bg-violet-600 hover:bg-violet-500 text-white px-5 py-2 rounded-xl font-bold text-sm transition-all flex items-center disabled:opacity-50 shadow-[0_0_15px_rgba(255,255,255,0.2)] hover:shadow-[0_0_25px_rgba(255,255,255,0.3)]"
                     >
                       {isGeneratingPlan ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
                       Regenerate
@@ -2332,16 +2390,16 @@ const App = () => {
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
                   {!plan && !isGeneratingPlan && (
                     <div className="text-center py-16">
-                      <div className="w-14 h-14 bg-indigo-500/10 rounded-xl flex items-center justify-center mx-auto mb-4">
-                        <BookOpen className="w-7 h-7 text-indigo-400" />
+                      <div className="w-14 h-14 bg-zinc-900 rounded-xl flex items-center justify-center mx-auto mb-4 border border-zinc-800">
+                        <BookOpen className="w-7 h-7 text-zinc-500" />
                       </div>
                       <h3 className="text-lg font-bold text-white mb-2">No Learning Plan Yet</h3>
-                      <p className="text-sm text-slate-400 mb-6 max-w-sm mx-auto">
+                      <p className="text-sm text-zinc-400 mb-6 max-w-sm mx-auto">
                         Create a personalized curriculum based on your skill gaps.
                       </p>
                       <button
                         onClick={handleGeneratePlan}
-                        className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-xl font-bold text-sm flex items-center mx-auto transition-all"
+                        className="bg-white hover:bg-zinc-200 text-zinc-900 px-6 py-2.5 rounded-xl font-bold text-sm flex items-center mx-auto transition-all shadow-lg shadow-white/5"
                       >
                         <BookOpen className="w-4 h-4 mr-2" />
                         Generate Plan
@@ -2351,8 +2409,8 @@ const App = () => {
 
                   {isGeneratingPlan && (
                     <div className="flex flex-col items-center justify-center py-24">
-                      <Loader2 className="w-10 h-10 text-indigo-500 animate-spin mb-4" />
-                      <p className="text-slate-400 text-sm">Designing your curriculum...</p>
+                      <Loader2 className="w-10 h-10 text-zinc-500 animate-spin mb-4" />
+                      <p className="text-zinc-400 text-sm">Designing your curriculum...</p>
                     </div>
                   )}
 
@@ -2364,79 +2422,68 @@ const App = () => {
                         const currentWeek = getCurrentWeek(plan);
                         const progressMessage = getProgressMessage(stats.progressPercentage);
 
+                        console.log(`[UI] Plan Stats Updated - Hours: ${stats.completedHours}/${stats.totalHours}`);
+
                         return (
-                          <div className="bg-slate-900/50 rounded-xl border border-white/5 p-6">
+                          <div className="bg-gradient-to-br from-[#09090b] via-zinc-900 to-indigo-950/30 rounded-2xl border border-zinc-800/60 p-8 shadow-xl relative overflow-hidden group">
+                            {/* Ambient Glow */}
+                            <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+
                             {/* Top Row - Progress */}
-                            <div className="flex items-center justify-between mb-5">
-                              <div className="flex items-center gap-4">
-                                <div className="text-4xl font-bold text-white">{stats.progressPercentage}%</div>
-                                <div>
-                                  <p className="text-sm font-bold text-white">Complete</p>
-                                  <p className="text-sm text-indigo-400">{progressMessage}</p>
-                                </div>
+                            <div className="flex items-end justify-between mb-8 relative z-10">
+                              <div>
+                                <h2 className="text-2xl font-bold text-white tracking-tight mb-2 flex items-center gap-2">
+                                  Course Progress
+                                  {stats.progressPercentage >= 100 && <Sparkles className="w-5 h-5 text-amber-500 fill-amber-500 animate-bounce" />}
+                                </h2>
+                                <p className="text-base font-medium text-indigo-200/70">{progressMessage}</p>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-5xl font-black text-white tracking-tight drop-shadow-lg">{stats.progressPercentage}%</div>
                               </div>
                             </div>
 
-                            {/* Progress Bar */}
-                            <div className="h-3 bg-slate-800 rounded-full overflow-hidden mb-6">
+                            {/* Professional Progress Bar */}
+                            <div className="h-4 bg-zinc-900/50 rounded-full overflow-hidden mb-8 border border-white/5 shadow-inner">
                               <div
-                                className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all"
+                                className="h-full bg-gradient-to-r from-violet-600 via-indigo-500 to-cyan-400 rounded-full shadow-[0_0_20px_rgba(99,102,241,0.5)] transition-all duration-1000 ease-out"
                                 style={{ width: `${stats.progressPercentage}%` }}
                               />
                             </div>
 
-                            {/* Stats Grid */}
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                              {/* Tasks */}
-                              <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <CheckCircle className="w-4 h-4 text-emerald-400" />
-                                  <span className="text-xs font-bold text-slate-400 uppercase">Tasks</span>
-                                </div>
-                                <p className="text-2xl font-bold text-white">{stats.completedTasks}<span className="text-slate-500 text-base font-normal">/{stats.totalTasks}</span></p>
+                            {/* Stats Grid - Vibrant & Clean */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 pt-6 border-t border-white/5 relative z-10">
+                              <div className="group/stat">
+                                <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                  <CheckCircle className="w-3.5 h-3.5 text-emerald-500/70" /> Tasks
+                                </p>
+                                <p className="text-2xl font-bold text-white group-hover/stat:text-emerald-400 transition-colors">
+                                  {stats.completedTasks} <span className="text-zinc-600 text-lg font-medium px-1">/</span> <span className="text-zinc-500 text-lg font-medium">{stats.totalTasks}</span>
+                                </p>
                               </div>
-
-                              {/* Hours */}
-                              <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <Clock className="w-4 h-4 text-amber-400" />
-                                  <span className="text-xs font-bold text-slate-400 uppercase">Hours</span>
-                                </div>
-                                <p className="text-2xl font-bold text-white">{stats.completedHours}<span className="text-slate-500 text-base font-normal">/{stats.totalHours}h</span></p>
+                              <div className="group/stat">
+                                <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                  <Clock className="w-3.5 h-3.5 text-blue-500/70" /> Hours
+                                </p>
+                                <p className="text-2xl font-bold text-white group-hover/stat:text-blue-400 transition-colors">
+                                  {stats.completedHours}<span className="text-sm">h</span> <span className="text-zinc-600 text-lg font-medium px-1">/</span> <span className="text-zinc-500 text-lg font-medium">{stats.totalHours}<span className="text-sm">h</span></span>
+                                </p>
                               </div>
-
-                              {/* Target Date */}
-                              <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <Target className="w-4 h-4 text-purple-400" />
-                                  <span className="text-xs font-bold text-slate-400 uppercase">Est. Done</span>
-                                </div>
-                                <p className="text-base font-bold text-white">{stats.estimatedCompletionDate}</p>
+                              <div className="group/stat">
+                                <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                  <Calendar className="w-3.5 h-3.5 text-violet-500/70" /> Est. Completion
+                                </p>
+                                <p className="text-lg font-bold text-white group-hover/stat:text-violet-400 transition-colors truncate">
+                                  {stats.estimatedCompletionDate}
+                                </p>
                               </div>
-
-                              {/* Current Week */}
-                              <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <TrendingUp className="w-4 h-4 text-indigo-400" />
-                                  <span className="text-xs font-bold text-slate-400 uppercase">Week</span>
-                                </div>
-                                <p className="text-2xl font-bold text-white">{currentWeek}<span className="text-slate-500 text-base font-normal">/{stats.totalWeeks}</span></p>
-                              </div>
-                            </div>
-
-                            {/* Task Type Breakdown */}
-                            <div className="flex items-center justify-center gap-8 mt-5 pt-5 border-t border-white/5">
-                              <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                                <span className="text-sm text-slate-400"><span className="text-white font-bold">{stats.taskBreakdown.course}</span> Courses</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 rounded-full bg-purple-500"></div>
-                                <span className="text-sm text-slate-400"><span className="text-white font-bold">{stats.taskBreakdown.project}</span> Projects</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 rounded-full bg-amber-500"></div>
-                                <span className="text-sm text-slate-400"><span className="text-white font-bold">{stats.taskBreakdown.reading}</span> Reading</span>
+                              <div className="group/stat">
+                                <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                  <Activity className="w-3.5 h-3.5 text-amber-500/70" /> Current Week
+                                </p>
+                                <p className="text-2xl font-bold text-white group-hover/stat:text-amber-400 transition-colors">
+                                  {currentWeek} <span className="text-zinc-600 text-lg font-medium px-1">/</span> <span className="text-zinc-500 text-lg font-medium">{stats.totalWeeks}</span>
+                                </p>
                               </div>
                             </div>
                           </div>
@@ -2449,144 +2496,113 @@ const App = () => {
                         const totalCount = week.tasks.length;
                         const weekProgress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
+                        // Unified Theme: Professional Indigo/Violet
+                        const borderColor = 'border-l-indigo-500';
+                        const headerGradient = 'from-indigo-500/10';
+
                         return (
-                          <div key={idx} className="bg-slate-900/50 rounded-xl border border-white/5 overflow-hidden">
+                          <div key={idx} className={`bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden mb-6 border-l-4 ${borderColor} shadow-lg shadow-black/20`}>
                             {/* Week Header */}
-                            <div className="px-5 py-4 border-b border-white/5 flex justify-between items-center">
+                            <div className={`px-6 py-5 border-b border-zinc-800 flex justify-between items-center bg-gradient-to-r ${headerGradient} to-transparent`}>
                               <div>
-                                <h3 className="text-sm font-bold text-white">Week {idx + 1}</h3>
-                                <p className="text-xs text-indigo-400 mt-0.5">{week.theme}</p>
+                                <h3 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
+                                  <span className="opacity-50 font-normal text-sm uppercase tracking-wider">Week {idx + 1}</span>
+                                  <span className="w-1 h-1 rounded-full bg-zinc-600"></span>
+                                  {week.theme}
+                                </h3>
                               </div>
-                              <div className="flex items-center gap-3">
-                                <span className="text-xs text-slate-400">{completedCount}/{totalCount}</span>
-                                <div className="w-20 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                              <div className="flex items-center gap-4">
+                                <span className="text-xs font-bold text-zinc-500 uppercase tracking-wide">{Math.round(weekProgress)}% Done</span>
+                                <div className="w-28 h-2 bg-zinc-800 rounded-full overflow-hidden border border-white/5">
                                   <div
-                                    className="h-full bg-emerald-500 rounded-full transition-all"
+                                    className={`h-full rounded-full transition-all duration-500 ${weekProgress === 100 ? 'bg-emerald-500' : 'bg-gradient-to-r from-zinc-500 to-white'}`}
                                     style={{ width: `${weekProgress}%` }}
                                   />
                                 </div>
-                                <span className="text-xs font-bold text-slate-400">{weekProgress}%</span>
                               </div>
                             </div>
 
-                            {/* Tasks */}
-                            <div className="divide-y divide-white/5">
+                            {/* Tasks List */}
+                            <div className="divide-y divide-zinc-800/50">
                               {week.tasks?.map((task) => (
-                                <div key={task.id} className="px-5 py-4 hover:bg-white/5 transition-colors group relative">
-                                  <div className="flex items-start gap-4">
-                                    {/* Icon */}
-                                    <div className={`p-2 rounded-lg shrink-0 ${task.type === 'project' ? 'bg-purple-500/10 text-purple-400' :
-                                      task.type === 'course' ? 'bg-blue-500/10 text-blue-400' :
-                                        'bg-amber-500/10 text-amber-400'
-                                      }`}>
-                                      {task.type === 'project' ? <Briefcase className="w-4 h-4" /> :
-                                        task.type === 'course' ? <PlayCircle className="w-4 h-4" /> :
-                                          <BookOpen className="w-4 h-4" />}
-                                    </div>
-
-                                    {/* Content */}
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-start justify-between gap-2">
-                                        <h4 className={`text-sm font-bold transition-all ${task.completed ? 'text-slate-500 line-through' : 'text-white'}`}>
-                                          {task.title}
-                                        </h4>
-                                        <span className="text-[11px] font-bold px-2 py-0.5 bg-slate-800 rounded text-slate-400 shrink-0">
-                                          {task.estimatedHours}h
-                                        </span>
-                                      </div>
-                                      <p className="text-xs text-slate-400 mt-1 line-clamp-2">{task.description}</p>
-
-                                      <div className="flex items-center gap-3 mt-3">
-                                        {task.videoQuery && (
-                                          <a
-                                            href={`https://www.youtube.com/results?search_query=${encodeURIComponent(task.videoQuery)}`}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="inline-flex items-center text-[11px] font-bold text-red-400 hover:text-red-300 bg-red-500/10 px-2 py-1 rounded border border-red-500/20 transition-colors"
-                                          >
-                                            <Youtube className="w-3 h-3 mr-1.5" /> Watch
-                                          </a>
-                                        )}
-
-                                        <button
-                                          onClick={() => handleToggleTask(idx, task.id)}
-                                          className={`text-[11px] font-bold transition-all inline-flex items-center ${task.completed
-                                            ? 'text-emerald-400'
-                                            : 'text-indigo-400 opacity-0 group-hover:opacity-100'
-                                            }`}
-                                        >
-                                          {task.completed ? (
-                                            <><Check className="w-3 h-3 mr-1" /> Done</>
-                                          ) : (
-                                            <>Mark Done <ChevronRight className="w-3 h-3 ml-1" /></>
-                                          )}
-                                        </button>
-                                      </div>
-                                    </div>
-
-                                    {/* Delete Button */}
-                                    <button
-                                      onClick={() => handleDeleteTask(idx, task.id)}
-                                      className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-600 hover:text-red-400 transition-all shrink-0"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
+                                <div key={task.id} className="px-6 py-4 hover:bg-zinc-800/30 transition-colors group flex items-start gap-4">
+                                  {/* Minimal Icon */}
+                                  <div className={`mt-0.5 ${task.type === 'project' ? 'text-zinc-400' : task.type === 'course' ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                                    {task.type === 'project' ? <Briefcase className="w-4 h-4" /> :
+                                      task.type === 'course' ? <PlayCircle className="w-4 h-4" /> :
+                                        <BookOpen className="w-4 h-4" />}
                                   </div>
+
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-start justify-between">
+                                      <h4 className={`text-sm font-medium transition-colors ${task.completed ? 'text-zinc-500 line-through' : 'text-zinc-200'}`}>
+                                        {task.title}
+                                      </h4>
+                                      <span className="text-xs text-zinc-500 ml-4 shrink-0 font-medium">
+                                        {task.estimatedHours}h
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-zinc-500 mt-1 line-clamp-1">{task.description}</p>
+
+                                    <div className="flex items-center gap-3 mt-3">
+                                      {task.videoQuery && (
+                                        <a
+                                          href={`https://www.youtube.com/results?search_query=${encodeURIComponent(task.videoQuery)}`}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="flex items-center text-xs font-medium text-zinc-400 hover:text-red-400 transition-colors"
+                                        >
+                                          <Youtube className="w-3 h-3 mr-1.5" /> Watch Tutorial
+                                        </a>
+                                      )}
+
+                                      <button
+                                        onClick={() => handleToggleTask(idx, task.id)}
+                                        className={`text-xs font-medium transition-colors flex items-center ${task.completed ? 'text-emerald-500' : 'text-zinc-500 hover:text-white'
+                                          }`}
+                                      >
+                                        {task.completed ? (
+                                          <><Check className="w-3 h-3 mr-1.5" /> Completed</>
+                                        ) : (
+                                          <><Circle className="w-3 h-3 mr-1.5" /> Mark as Done</>
+                                        )}
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {/* Actions */}
+                                  <button
+                                    onClick={() => handleDeleteTask(idx, task.id)}
+                                    className="text-zinc-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
                                 </div>
                               ))}
 
-                              {/* Add Task UI */}
-                              <div className="p-3 bg-slate-800/30">
+                              {/* Add Task - Minimal */}
+                              <div className="px-6 py-3 bg-zinc-900 border-t border-zinc-800">
                                 {addingTaskWeek === idx ? (
-                                  <div className="bg-slate-900 p-4 rounded-lg border border-slate-700">
-                                    <div className="space-y-3">
-                                      <input
-                                        type="text"
-                                        value={newTaskTitle}
-                                        onChange={(e) => setNewTaskTitle(e.target.value)}
-                                        placeholder="Task title..."
-                                        className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:ring-1 focus:ring-indigo-500 outline-none"
-                                      />
-                                      <div className="flex gap-2">
-                                        <select
-                                          value={newTaskType}
-                                          onChange={(e) => setNewTaskType(e.target.value as any)}
-                                          className="bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-300 outline-none"
-                                        >
-                                          <option value="reading">Reading</option>
-                                          <option value="course">Course</option>
-                                          <option value="project">Project</option>
-                                        </select>
-                                        <input
-                                          type="number"
-                                          value={newTaskHours}
-                                          onChange={(e) => setNewTaskHours(Number(e.target.value))}
-                                          min={0.5}
-                                          step={0.5}
-                                          className="w-20 bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-sm text-white outline-none"
-                                        />
-                                        <div className="flex-1"></div>
-                                        <button
-                                          onClick={() => setAddingTaskWeek(null)}
-                                          className="p-2.5 text-slate-400 hover:text-white"
-                                        >
-                                          <X className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                          onClick={() => handleAddTask(idx)}
-                                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-lg"
-                                        >
-                                          Add
-                                        </button>
-                                      </div>
+                                  <div className="space-y-3">
+                                    <input
+                                      type="text"
+                                      value={newTaskTitle}
+                                      onChange={(e) => setNewTaskTitle(e.target.value)}
+                                      placeholder="New task title..."
+                                      className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm text-white focus:border-zinc-500 outline-none"
+                                      autoFocus
+                                    />
+                                    <div className="flex justify-end gap-2">
+                                      <button onClick={() => setAddingTaskWeek(null)} className="px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-white">Cancel</button>
+                                      <button onClick={() => handleAddTask(idx)} className="px-3 py-1.5 bg-white hover:bg-zinc-200 text-zinc-900 text-xs font-bold rounded shadow-sm">Add Task</button>
                                     </div>
                                   </div>
                                 ) : (
                                   <button
                                     onClick={() => setAddingTaskWeek(idx)}
-                                    className="w-full py-2.5 flex items-center justify-center text-xs font-medium text-slate-500 hover:text-indigo-400 border border-dashed border-white/10 hover:border-indigo-500/50 rounded-lg transition-all"
+                                    className="flex items-center text-xs font-medium text-zinc-500 hover:text-white transition-colors"
                                   >
-                                    <Plus className="w-3.5 h-3.5 mr-1.5" /> Add Task
+                                    <Plus className="w-3.5 h-3.5 mr-1.5" /> Add Item
                                   </button>
                                 )}
                               </div>
@@ -2607,19 +2623,32 @@ const App = () => {
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center px-6 py-4 border-b border-white/5 gap-4 sm:gap-0">
                   <div>
                     <h1 className="text-xl font-bold text-white">Portfolio Builder</h1>
-                    <p className="text-sm text-slate-500 mt-0.5">AI-generated projects for <span className="text-slate-300">{userProfile.targetRole}</span></p>
+                    <p className="text-sm text-zinc-500 mt-0.5">AI-generated projects for <span className="text-zinc-300">{userProfile.targetRole}</span></p>
                   </div>
-                  <button
-                    onClick={handleGenerateProjects}
-                    disabled={isGeneratingProjects}
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/10"
-                  >
-                    {isGeneratingProjects ? (
-                      <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Generating...</>
-                    ) : (
-                      <><RefreshCw className="w-4 h-4 mr-2" /> Generate Ideas</>
-                    )}
-                  </button>
+                  <div className="flex items-center gap-3">
+                    {/* Difficulty Selector */}
+                    <select
+                      value={generationDifficulty}
+                      onChange={(e) => setGenerationDifficulty(e.target.value)}
+                      className="bg-zinc-900 border border-zinc-700 text-zinc-300 text-sm rounded-lg p-2.5 outline-none focus:border-violet-500"
+                    >
+                      <option value="Beginner">Beginner</option>
+                      <option value="Intermediate">Intermediate</option>
+                      <option value="Advanced">Advanced</option>
+                    </select>
+
+                    <button
+                      onClick={handleGenerateProjects}
+                      disabled={isGeneratingProjects}
+                      className="bg-white hover:bg-zinc-200 text-zinc-900 px-6 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-white/5"
+                    >
+                      {isGeneratingProjects ? (
+                        <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Generating...</>
+                      ) : (
+                        <><RefreshCw className="w-4 h-4 mr-2" /> Generate Ideas</>
+                      )}
+                    </button>
+                  </div>
                 </div>
 
                 {/* Main Content */}
@@ -2627,17 +2656,17 @@ const App = () => {
 
                   {/* Loading State - Full page centered (same as initial page load) */}
                   {isGeneratingProjects && projects?.length === 0 && (
-                    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-slate-500">
+                    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#09090b] text-zinc-500">
                       {/* CSS Animation */}
                       <style>{`
                     @keyframes iconPulse {
-                      0%, 100% { opacity: 0.3; transform: scale(1); color: #64748b; }
-                      50% { opacity: 1; transform: scale(1.15); color: #818cf8; }
+                      0%, 100% { opacity: 0.3; transform: scale(1); color: #52525b; }
+                      50% { opacity: 1; transform: scale(1.15); color: #ffffff; }
                     }
                     .portfolio-loader-icon {
                       width: 48px;
                       height: 48px;
-                      color: #64748b; /* Start as slate-500/grey */
+                      color: #52525b; /* zinc-600 */
                       animation: iconPulse 1.5s ease-in-out infinite;
                     }
                     @keyframes dotBounce {
@@ -2678,8 +2707,27 @@ const App = () => {
                         </svg>
                       </div>
 
+                      {/* Projects Filter */}
+                      {!isGeneratingProjects && projects.length > 0 && (
+                        <div className="flex items-center gap-2 mb-6 bg-zinc-900/50 p-1 rounded-lg border border-zinc-800 w-fit">
+                          {['All', 'Beginner', 'Intermediate', 'Advanced'].map((filter) => (
+                            <button
+                              key={filter}
+                              onClick={() => setProjectFilter(filter as any)}
+                              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${projectFilter === filter
+                                ? 'bg-zinc-800 text-white shadow-sm ring-1 ring-white/5'
+                                : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
+                                }`}
+                            >
+                              {filter}
+                            </button>
+                          ))}
+                        </div>
+                      )
+                      }
+
                       {/* Loading Text */}
-                      <p className="text-slate-400 text-sm tracking-wide">
+                      <p className="text-zinc-400 text-sm tracking-wide">
                         Crafting Your Perfect Projects
                         <span className="inline-flex gap-1 ml-1">
                           <span className="w-1 h-1 bg-indigo-400 rounded-full" style={{ animation: 'dotBounce 1.2s ease-in-out infinite', animationDelay: '0s' }}></span>
@@ -2705,87 +2753,108 @@ const App = () => {
 
                   {/* Projects Grid */}
                   {projects?.length > 0 && (
-                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {projects?.map((project, idx) => (
-                        <div
-                          key={idx}
-                          className="group bg-slate-900/50 rounded-xl border border-white/5 hover:border-indigo-500/30 transition-all overflow-hidden"
-                        >
-                          <div className="p-5 flex flex-col h-full">
-                            {/* Header Row */}
-                            <div className="flex items-start justify-between mb-3">
-                              <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold ${project.difficulty === 'Beginner'
-                                ? 'bg-emerald-500/10 text-emerald-400'
-                                : project.difficulty === 'Intermediate'
-                                  ? 'bg-blue-500/10 text-blue-400'
-                                  : 'bg-purple-500/10 text-purple-400'
-                                }`}>
-                                {project.difficulty}
-                              </span>
-                              <Layers className="w-4 h-4 text-slate-600" />
-                            </div>
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {projects
+                        .filter(p => projectFilter === 'All' || p.difficulty === projectFilter)
+                        .map((project, idx) => (
+                          <div
+                            key={idx}
+                            className="group bg-zinc-900 rounded-xl border border-zinc-800 hover:border-violet-500/50 transition-all flex flex-col h-full"
+                          >
+                            <div className="p-6 flex flex-col h-full">
+                              {/* Header Row */}
+                              <div className="flex items-start justify-between mb-4">
+                                <div className={`inline-flex items-center px-2.5 py-1 rounded text-[11px] font-medium border ${project.difficulty === 'Beginner' ? 'bg-emerald-500/5 text-emerald-400 border-emerald-500/20' :
+                                  project.difficulty === 'Intermediate' ? 'bg-blue-500/5 text-blue-400 border-blue-500/20' :
+                                    'bg-purple-500/5 text-purple-400 border-purple-500/20'
+                                  }`}>
+                                  {project.difficulty}
+                                </div>
+                                <div className="p-2 bg-zinc-800 rounded-lg">
+                                  <Layers className="w-4 h-4 text-zinc-400" />
+                                </div>
+                              </div>
 
-                            {/* Title */}
-                            <h4 className="text-lg font-bold text-white mb-2 group-hover:text-indigo-400 transition-colors line-clamp-2">
-                              {project.title}
-                            </h4>
+                              {/* Title */}
+                              <h4 className="text-lg font-bold text-white mb-2 line-clamp-2">
+                                {project.title}
+                              </h4>
 
-                            {/* Description */}
-                            <p className="text-sm text-slate-400 mb-4 flex-1 line-clamp-2 leading-relaxed">
-                              {project.description}
-                            </p>
+                              {/* Description */}
+                              <p className="text-sm text-zinc-400 mb-6 line-clamp-3 leading-relaxed">
+                                {project.description}
+                              </p>
 
-                            {/* Tech Stack */}
-                            <div className="mb-4">
-                              <div className="flex flex-wrap gap-1.5">
-                                {project.techStack?.slice(0, 4).map(t => (
-                                  <span key={t} className="text-[11px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded">
-                                    {t}
-                                  </span>
-                                ))}
-                                {project.techStack?.length > 4 && (
-                                  <span className="text-[11px] bg-slate-800 text-slate-500 px-2 py-0.5 rounded">
-                                    +{project.techStack.length - 4}
-                                  </span>
+                              {/* Tech Stack */}
+                              <div className="mt-auto mb-6">
+                                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-2">Tech Stack</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {project.techStack?.slice(0, 4).map(t => (
+                                    <span key={t} className="text-[11px] bg-zinc-800 text-zinc-300 px-2 py-1 rounded border border-zinc-700">
+                                      {t}
+                                    </span>
+                                  ))}
+                                  {project.techStack?.length > 4 && (
+                                    <span className="text-[11px] text-zinc-500 px-1 py-1">
+                                      +{project.techStack.length - 4} more
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Divider */}
+                              <div className="h-px bg-zinc-800 w-full mb-4"></div>
+
+                              {/* Resume Value */}
+                              <div className="flex items-start gap-2 mb-6">
+                                <TrendingUp className="w-4 h-4 text-zinc-500 shrink-0 mt-0.5" />
+                                <p className="text-xs text-zinc-400 line-clamp-2">{project.resumeValue}</p>
+                              </div>
+
+                              {/* Action Button */}
+                              <button
+                                onClick={() => setSelectedProject(project)}
+                                className="w-full bg-zinc-900 hover:bg-zinc-800 text-white py-2.5 rounded-lg font-medium text-sm flex items-center justify-center transition-colors border border-zinc-700 hover:border-zinc-600"
+                              >
+                                View Specs
+                                <ArrowRight className="w-4 h-4 ml-2 text-zinc-500 group-hover:text-zinc-300 transition-colors" />
+                              </button>
+
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleProjectStatus(project.id);
+                                }}
+                                className={`mt-2 w-full py-2.5 rounded-lg font-medium text-sm flex items-center justify-center transition-all border ${project.completed
+                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
+                                  : 'bg-zinc-900 text-zinc-500 border-zinc-800 hover:text-zinc-300 hover:border-zinc-700'
+                                  }`}
+                              >
+                                {project.completed ? (
+                                  <><CheckCircle className="w-4 h-4 mr-2" /> Completed</>
+                                ) : (
+                                  <><Circle className="w-4 h-4 mr-2" /> Mark as Done</>
                                 )}
-                              </div>
+                              </button>
                             </div>
-
-                            {/* Resume Impact - Simplified */}
-                            <div className="bg-indigo-500/5 rounded-lg p-3 mb-4 border border-indigo-500/10">
-                              <div className="flex items-start gap-2">
-                                <TrendingUp className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
-                                <p className="text-xs text-indigo-200/80 italic line-clamp-2">"{project.resumeValue}"</p>
-                              </div>
-                            </div>
-
-                            {/* Action Button */}
-                            <button
-                              onClick={() => setSelectedProject(project)}
-                              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 rounded-lg font-bold text-sm flex items-center justify-center transition-all"
-                            >
-                              <ExternalLink className="w-4 h-4 mr-2" />
-                              View Details
-                            </button>
                           </div>
-                        </div>
-                      ))}
+                        ))}
                     </div>
                   )}
 
                   {/* Empty State */}
                   {!isGeneratingProjects && projects?.length === 0 && (
                     <div className="text-center py-16">
-                      <div className="w-14 h-14 bg-indigo-500/10 rounded-xl flex items-center justify-center mx-auto mb-4">
-                        <Code className="w-7 h-7 text-indigo-400" />
+                      <div className="w-14 h-14 bg-violet-500/10 rounded-xl flex items-center justify-center mx-auto mb-4">
+                        <Code className="w-7 h-7 text-violet-400" />
                       </div>
                       <h3 className="text-lg font-bold text-white mb-2">Build Your Portfolio</h3>
-                      <p className="text-sm text-slate-400 mb-6 max-w-sm mx-auto">
+                      <p className="text-sm text-zinc-400 mb-6 max-w-sm mx-auto">
                         Get 3 project ideas (Beginner to Advanced) designed to impress recruiters.
                       </p>
                       <button
                         onClick={handleGenerateProjects}
-                        className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-xl font-bold text-sm flex items-center mx-auto transition-all"
+                        className="bg-violet-600 hover:bg-violet-500 text-white px-6 py-2.5 rounded-xl font-bold text-sm flex items-center mx-auto transition-all"
                       >
                         <RefreshCw className="w-4 h-4 mr-2" />
                         Generate Projects
@@ -2801,11 +2870,11 @@ const App = () => {
                     onClick={() => setSelectedProject(null)}
                   >
                     <div
-                      className="bg-slate-900 rounded-xl border border-white/10 max-w-3xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar"
+                      className="bg-zinc-900 rounded-xl border border-white/10 max-w-3xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar"
                       onClick={(e) => e.stopPropagation()}
                     >
                       {/* Modal Header */}
-                      <div className="sticky top-0 bg-slate-900/95 backdrop-blur-sm border-b border-white/5 px-6 py-4 z-10">
+                      <div className="sticky top-0 bg-zinc-900/95 backdrop-blur-sm border-b border-white/5 px-6 py-4 z-10">
                         <div className="flex items-start justify-between">
                           <div className="flex-1 pr-4">
                             <div className="flex items-center gap-3 mb-2">
@@ -2819,13 +2888,13 @@ const App = () => {
                               </span>
                             </div>
                             <h2 className="text-xl font-bold text-white mb-1">{selectedProject.title}</h2>
-                            <p className="text-sm text-slate-400 line-clamp-1">{selectedProject.techStack?.join(' • ')}</p>
+                            <p className="text-sm text-zinc-400 line-clamp-1">{selectedProject.techStack?.join(' • ')}</p>
                           </div>
                           <button
                             onClick={() => setSelectedProject(null)}
-                            className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center transition-all shrink-0"
+                            className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition-colors shrink-0 border border-zinc-700"
                           >
-                            <X className="w-4 h-4 text-slate-400" />
+                            <X className="w-4 h-4 text-zinc-400" />
                           </button>
                         </div>
                       </div>
@@ -2834,19 +2903,19 @@ const App = () => {
                       <div className="p-6 space-y-6">
                         {/* Description */}
                         <div>
-                          <p className="text-sm text-slate-300 leading-relaxed">{selectedProject.description}</p>
+                          <p className="text-sm text-zinc-300 leading-relaxed">{selectedProject.description}</p>
                         </div>
                         {/* User Stories Section */}
                         {selectedProject.userStories && selectedProject.userStories.length > 0 && (
-                          <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
+                          <div className="bg-zinc-800/50 rounded-lg p-4 border border-white/5">
                             <h3 className="text-sm font-bold text-white mb-3 flex items-center">
-                              <Users className="w-4 h-4 mr-2 text-indigo-400" />
+                              <Users className="w-4 h-4 mr-2 text-violet-400" />
                               User Stories
                             </h3>
                             <ul className="space-y-2">
                               {selectedProject.userStories.map((story, idx) => (
-                                <li key={idx} className="text-sm text-slate-300 flex items-start">
-                                  <span className="text-indigo-400 mr-2">•</span>
+                                <li key={idx} className="text-sm text-zinc-300 flex items-start">
+                                  <span className="text-violet-400 mr-2">•</span>
                                   {story}
                                 </li>
                               ))}
@@ -2856,14 +2925,14 @@ const App = () => {
 
                         {/* Key Features Section */}
                         {selectedProject.keyFeatures && selectedProject.keyFeatures.length > 0 && (
-                          <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
+                          <div className="bg-zinc-800/50 rounded-lg p-4 border border-white/5">
                             <h3 className="text-sm font-bold text-white mb-3 flex items-center">
                               <CheckCircle className="w-4 h-4 mr-2 text-emerald-400" />
                               Key Features
                             </h3>
                             <ul className="space-y-2">
                               {selectedProject.keyFeatures.map((feature, idx) => (
-                                <li key={idx} className="text-sm text-slate-300 flex items-start">
+                                <li key={idx} className="text-sm text-zinc-300 flex items-start">
                                   <span className="text-emerald-400 mr-2">•</span>
                                   {feature}
                                 </li>
@@ -2874,15 +2943,15 @@ const App = () => {
 
                         {/* Implementation Steps Section */}
                         {selectedProject.implementationFlow && selectedProject.implementationFlow.length > 0 && (
-                          <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
+                          <div className="bg-zinc-800/50 rounded-lg p-4 border border-white/5">
                             <h3 className="text-sm font-bold text-white mb-3 flex items-center">
-                              <List className="w-4 h-4 mr-2 text-indigo-400" />
+                              <List className="w-4 h-4 mr-2 text-violet-400" />
                               Implementation Steps
                             </h3>
                             <div className="space-y-2">
                               {selectedProject.implementationFlow.map((step, idx) => (
-                                <div key={idx} className="flex items-start text-sm text-slate-300">
-                                  <span className="text-indigo-400 font-bold mr-2 shrink-0">{idx + 1}.</span>
+                                <div key={idx} className="flex items-start text-sm text-zinc-300">
+                                  <span className="text-violet-400 font-bold mr-2 shrink-0">{idx + 1}.</span>
                                   <span>{step.replace(/^\d+\.\s*/, '')}</span>
                                 </div>
                               ))}
@@ -2892,14 +2961,14 @@ const App = () => {
 
                         {/* You'll Learn Section */}
                         {selectedProject.learningOutcomes && selectedProject.learningOutcomes.length > 0 && (
-                          <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
-                            <h3 className="text-sm font-bold text-white mb-3 flex items-center">
-                              <Award className="w-4 h-4 mr-2 text-amber-400" />
-                              You'll Learn
+                          <div className="bg-zinc-900 rounded-lg p-5 border border-zinc-800">
+                            <h3 className="text-sm font-bold text-white mb-4 flex items-center">
+                              <Award className="w-4 h-4 mr-2 text-zinc-400" />
+                              Skills You'll Master
                             </h3>
                             <div className="flex flex-wrap gap-2">
                               {selectedProject.learningOutcomes.map((outcome, idx) => (
-                                <span key={idx} className="text-xs bg-amber-500/10 text-amber-400 px-2.5 py-1 rounded border border-amber-500/20">
+                                <span key={idx} className="text-xs bg-zinc-800 text-zinc-300 px-3 py-1.5 rounded border border-zinc-700">
                                   {outcome}
                                 </span>
                               ))}
@@ -2908,15 +2977,41 @@ const App = () => {
                         )}
 
                         {/* Resume Value */}
-                        <div className="bg-indigo-500/5 rounded-lg p-4 border border-indigo-500/10">
-                          <div className="flex items-start gap-3">
-                            <TrendingUp className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+                        <div className="bg-zinc-900 rounded-lg p-6 border border-zinc-800">
+                          <div className="flex items-start gap-4">
+                            <div className="p-3 bg-zinc-800 rounded-lg shrink-0">
+                              <TrendingUp className="w-5 h-5 text-white" />
+                            </div>
                             <div>
-                              <p className="text-xs font-bold text-indigo-300 mb-1">Resume Impact</p>
-                              <p className="text-sm text-indigo-200/80 italic">"{selectedProject.resumeValue}"</p>
+                              <h3 className="text-sm font-bold text-white mb-1">Why Build This?</h3>
+                              <p className="text-sm text-zinc-400 leading-relaxed">{selectedProject.resumeValue}</p>
                             </div>
                           </div>
                         </div>
+
+                        {/* Reference GitHub - NEW SECTION */}
+                        {selectedProject.referenceGithubUrl && (
+                          <div className="bg-zinc-900 rounded-lg p-5 border border-zinc-800">
+                            <h3 className="text-sm font-bold text-white mb-3 flex items-center">
+                              <Github className="w-4 h-4 mr-2 text-white" />
+                              Reference Repository
+                            </h3>
+                            <p className="text-xs text-zinc-500 mb-3">
+                              Explore a similar project implementation or starter code to guide your development.
+                            </p>
+                            <a
+                              href={selectedProject.referenceGithubUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center justify-between p-3 bg-zinc-800/50 hover:bg-zinc-800 rounded-lg border border-white/5 transition-all group"
+                            >
+                              <span className="text-sm text-blue-400 group-hover:underline truncate max-w-[300px]">
+                                {selectedProject.referenceGithubUrl}
+                              </span>
+                              <ExternalLink className="w-3.5 h-3.5 text-zinc-500 group-hover:text-white" />
+                            </a>
+                          </div>
+                        )}
 
                         {/* Implementation Resources */}
                         {selectedProject.implementationResources && selectedProject.implementationResources.length > 0 && (
@@ -2932,10 +3027,10 @@ const App = () => {
                                   href={resource.url}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="flex items-center justify-between p-3 bg-slate-800/50 hover:bg-slate-800 rounded-lg border border-white/5 transition-all group"
+                                  className="flex items-center justify-between p-3 bg-zinc-800/50 hover:bg-zinc-800 rounded-lg border border-white/5 transition-all group"
                                 >
-                                  <span className="text-sm text-slate-300 group-hover:text-white">{resource.name}</span>
-                                  <ExternalLink className="w-3.5 h-3.5 text-slate-500 group-hover:text-indigo-400" />
+                                  <span className="text-sm text-zinc-300 group-hover:text-white">{resource.name}</span>
+                                  <ExternalLink className="w-3.5 h-3.5 text-zinc-500 group-hover:text-violet-400" />
                                 </a>
                               ))}
                             </div>
@@ -2950,7 +3045,7 @@ const App = () => {
                               Research Paper
                             </h3>
                             <p className="text-sm text-white font-medium mb-1">{selectedProject.sourcePaper.title}</p>
-                            <p className="text-xs text-slate-400 mb-2">{selectedProject.sourcePaper.authors.join(', ')}</p>
+                            <p className="text-xs text-zinc-400 mb-2">{selectedProject.sourcePaper.authors.join(', ')}</p>
                             <a
                               href={selectedProject.sourcePaper.url}
                               target="_blank"
@@ -2969,16 +3064,34 @@ const App = () => {
                               navigator.clipboard.writeText(`${selectedProject.title}\n\n${selectedProject.description}\n\nTech Stack: ${selectedProject.techStack?.join(', ')}`);
                               alert('Project details copied to clipboard!');
                             }}
-                            className="flex-1 bg-slate-800 hover:bg-slate-700 text-white py-2.5 rounded-lg font-bold text-sm flex items-center justify-center transition-all"
+                            className="flex-1 bg-zinc-800 hover:bg-slate-700 text-white py-2.5 rounded-lg font-bold text-sm flex items-center justify-center transition-all"
                           >
                             <Copy className="w-4 h-4 mr-2" />
                             Copy
                           </button>
                           <button
                             onClick={() => setSelectedProject(null)}
-                            className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 rounded-lg font-bold text-sm flex items-center justify-center transition-all"
+                            className="flex-1 bg-violet-600 hover:bg-violet-500 text-white py-2.5 rounded-lg font-bold text-sm flex items-center justify-center transition-all"
                           >
-                            Done
+                            Close
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              handleToggleProjectStatus(selectedProject.id);
+                              // Update the selected project local state to reflect change immediately in modal
+                              setSelectedProject(prev => prev ? ({ ...prev, completed: !prev.completed }) : null);
+                            }}
+                            className={`flex-1 py-2.5 rounded-lg font-bold text-sm flex items-center justify-center transition-all ${selectedProject.completed
+                              ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                              : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+                              }`}
+                          >
+                            {selectedProject.completed ? (
+                              <><CheckCircle className="w-4 h-4 mr-2" /> Completed</>
+                            ) : (
+                              <><Circle className="w-4 h-4 mr-2" /> Mark as Done</>
+                            )}
                           </button>
                         </div>
                       </div>
@@ -2995,7 +3108,7 @@ const App = () => {
                 <FileText className="w-10 h-10 text-emerald-400" />
               </div>
               <h2 className="text-3xl font-bold text-white mb-3">Resume Architect Pro</h2>
-              <p className="text-slate-400 max-w-lg mb-8 text-lg">
+              <p className="text-zinc-400 max-w-lg mb-8 text-lg">
                 Unlock professional resume optimization and LaTeX downloads. Land 3x more interviews with an ATS-optimized resume for just <span className="text-white font-bold">₹1</span>.
               </p>
 
@@ -3006,7 +3119,7 @@ const App = () => {
                   </div>
                   <div>
                     <h4 className="font-bold text-white text-sm">ATS Optimization</h4>
-                    <p className="text-xs text-slate-400">Keyword injection & metric focus</p>
+                    <p className="text-xs text-zinc-400">Keyword injection & metric focus</p>
                   </div>
                 </div>
                 <div className="bg-white/5 p-4 rounded-xl border border-white/5 flex items-center">
@@ -3015,7 +3128,7 @@ const App = () => {
                   </div>
                   <div>
                     <h4 className="font-bold text-white text-sm">LaTeX Export</h4>
-                    <p className="text-xs text-slate-400">Get professional PDF versions</p>
+                    <p className="text-xs text-zinc-400">Get professional PDF versions</p>
                   </div>
                 </div>
               </div>
@@ -3027,12 +3140,12 @@ const App = () => {
                 Unlock Architect for ₹1
                 <ChevronRight className="w-5 h-5 ml-2" />
               </button>
-              <p className="mt-4 text-xs text-slate-500 flex items-center">
+              <p className="mt-4 text-xs text-zinc-500 flex items-center">
                 <Lock className="w-3 h-3 mr-1" /> Secure payment via Razorpay
               </p>
               <button
                 onClick={() => setUserProfile(p => ({ ...p, isResumePremium: true }))}
-                className="mt-8 text-[10px] text-slate-700 hover:text-emerald-400 transition-colors"
+                className="mt-8 text-[10px] text-zinc-700 hover:text-emerald-400 transition-colors"
                 title="Dev Bypass"
               >
                 [Dev Bypass]
@@ -3047,7 +3160,7 @@ const App = () => {
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center px-6 py-4 border-b border-white/5 gap-4 sm:gap-0">
                   <div>
                     <h1 className="text-xl font-bold text-white">Resume Architect</h1>
-                    <p className="text-sm text-slate-500 mt-0.5">Transform your resume for <span className="text-slate-300">{userProfile.targetRole}</span></p>
+                    <p className="text-sm text-zinc-500 mt-0.5">Transform your resume for <span className="text-zinc-300">{userProfile.targetRole}</span></p>
                   </div>
                   <button
                     onClick={handleOptimizeResume}
@@ -3063,45 +3176,47 @@ const App = () => {
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6">
 
                   {/* Profile Links - Compact Row */}
-                  <div className="bg-slate-900/50 rounded-xl border border-white/5 p-4">
-                    <div className="flex items-center justify-between mb-3">
+                  <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-6">
+                    <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center">
-                        <Link className="w-4 h-4 text-indigo-400 mr-2" />
-                        <span className="text-sm font-bold text-white">Profile Links</span>
-                        {(!userProfile.githubProfile || !userProfile.linkedinProfile) && (
-                          <span className="ml-2 text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">Required</span>
-                        )}
+                        <div className="p-1.5 bg-zinc-800 rounded mr-3">
+                          <Link className="w-4 h-4 text-zinc-400" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-semibold text-white">Social Profiles</h3>
+                          <p className="text-xs text-zinc-500">Required for accurate personal branding</p>
+                        </div>
                       </div>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div className="relative">
-                        <Github className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="relative group">
+                        <Github className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-white transition-colors" />
                         <input
                           type="url"
                           placeholder="GitHub URL"
                           value={userProfile.githubProfile || ''}
                           onChange={(e) => setUserProfile(prev => ({ ...prev, githubProfile: e.target.value }))}
-                          className="w-full bg-slate-800/50 border border-white/5 rounded-lg pl-10 pr-3 py-2.5 text-white text-sm outline-none focus:ring-1 focus:ring-indigo-500 transition-all placeholder-slate-600"
+                          className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-10 pr-3 py-2.5 text-white text-sm outline-none focus:border-violet-500 transition-all placeholder-zinc-600"
                         />
                       </div>
-                      <div className="relative">
-                        <Linkedin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                      <div className="relative group">
+                        <Linkedin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-white transition-colors" />
                         <input
                           type="url"
                           placeholder="LinkedIn URL"
                           value={userProfile.linkedinProfile || ''}
                           onChange={(e) => setUserProfile(prev => ({ ...prev, linkedinProfile: e.target.value }))}
-                          className="w-full bg-slate-800/50 border border-white/5 rounded-lg pl-10 pr-3 py-2.5 text-white text-sm outline-none focus:ring-1 focus:ring-indigo-500 transition-all placeholder-slate-600"
+                          className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-10 pr-3 py-2.5 text-white text-sm outline-none focus:border-violet-500 transition-all placeholder-zinc-600"
                         />
                       </div>
-                      <div className="relative">
-                        <Code className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                      <div className="relative group">
+                        <Code className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-white transition-colors" />
                         <input
                           type="url"
-                          placeholder="LeetCode URL (Optional)"
+                          placeholder="LeetCode URL"
                           value={userProfile.leetcodeProfile || ''}
                           onChange={(e) => setUserProfile(prev => ({ ...prev, leetcodeProfile: e.target.value }))}
-                          className="w-full bg-slate-800/50 border border-white/5 rounded-lg pl-10 pr-3 py-2.5 text-white text-sm outline-none focus:ring-1 focus:ring-indigo-500 transition-all placeholder-slate-600"
+                          className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-10 pr-3 py-2.5 text-white text-sm outline-none focus:border-violet-500 transition-all placeholder-zinc-600"
                         />
                       </div>
                     </div>
@@ -3109,83 +3224,98 @@ const App = () => {
 
                   {/* ATS Score Impact - Only show after optimization */}
                   {resumeAnalysisResult && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="bg-gradient-to-br from-indigo-600/20 to-purple-600/10 rounded-xl border border-indigo-500/20 p-4 flex items-center justify-between">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-5 flex items-center justify-between">
                         <div>
-                          <p className="text-xs text-indigo-300 font-bold uppercase tracking-wider mb-1">ATS Score</p>
-                          <div className="flex items-center space-x-2">
-                            <span className="text-xl font-bold text-slate-500 line-through">{resumeAnalysisResult.atsScore.before}</span>
-                            <ArrowRight className="w-4 h-4 text-indigo-400" />
-                            <span className="text-2xl font-bold text-white">{resumeAnalysisResult.atsScore.after}</span>
+                          <p className="text-xs text-zinc-500 font-semibold uppercase tracking-wider mb-2">ATS Score</p>
+                          <div className="flex items-baseline gap-3">
+                            <span className="text-3xl font-bold text-white">{resumeAnalysisResult.atsScore.after}</span>
+                            <span className="text-sm font-medium text-emerald-500 flex items-center">
+                              <ArrowRight className="w-3 h-3 mr-1" />
+                              +{resumeAnalysisResult.atsScore.after - resumeAnalysisResult.atsScore.before} pts
+                            </span>
                           </div>
                         </div>
-                        <div className="w-10 h-10 bg-indigo-500/20 rounded-full flex items-center justify-center">
-                          <TrendingUp className="w-5 h-5 text-indigo-400" />
+                        <div className="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center border border-zinc-700">
+                          <TrendingUp className="w-6 h-6 text-white" />
                         </div>
                       </div>
-                      <div className="bg-slate-900/50 rounded-xl border border-white/5 p-4">
-                        <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-2">Keywords Added</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {resumeAnalysisResult.missingKeywordsAdded.slice(0, 4).map(k => (
-                            <span key={k} className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[11px] border border-emerald-500/20">{k}</span>
+
+                      <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-5">
+                        <p className="text-xs text-zinc-500 font-semibold uppercase tracking-wider mb-3">Keywords Added</p>
+                        <div className="flex flex-wrap gap-2">
+                          {resumeAnalysisResult.missingKeywordsAdded.slice(0, 5).map(k => (
+                            <span key={k} className="px-2 py-1 rounded-md bg-zinc-800 text-zinc-300 text-xs border border-zinc-700">{k}</span>
                           ))}
-                          {resumeAnalysisResult.missingKeywordsAdded.length > 4 && (
-                            <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-400 text-[11px]">+{resumeAnalysisResult.missingKeywordsAdded.length - 4}</span>
+                          {resumeAnalysisResult.missingKeywordsAdded.length > 5 && (
+                            <span className="px-2 py-1 rounded-md bg-zinc-800 text-zinc-500 text-xs border border-zinc-700">+{resumeAnalysisResult.missingKeywordsAdded.length - 5}</span>
                           )}
                         </div>
                       </div>
-                      <div className="bg-slate-900/50 rounded-xl border border-white/5 p-4">
-                        <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-2">Changes Made</p>
-                        <p className="text-sm text-slate-300">{resumeAnalysisResult.keyImprovements?.length || 0} improvements applied</p>
+
+                      <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-5">
+                        <p className="text-xs text-zinc-500 font-semibold uppercase tracking-wider mb-3">Optimization Stats</p>
+                        <div className="flex items-center gap-4">
+                          <div>
+                            <p className="text-2xl font-bold text-white">{resumeAnalysisResult.keyImprovements?.length || 0}</p>
+                            <p className="text-xs text-zinc-500">Fixes applied</p>
+                          </div>
+                          <div className="h-8 w-px bg-zinc-800"></div>
+                          <div>
+                            <p className="text-2xl font-bold text-white">100%</p>
+                            <p className="text-xs text-zinc-500">Format check</p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}
 
                   {/* Side-by-Side Comparison */}
-                  <div className="grid md:grid-cols-2 gap-4 flex-1 min-h-[500px]">
+                  <div className="grid md:grid-cols-2 gap-6 flex-1 min-h-[500px]">
                     {/* Original */}
-                    <div className="bg-slate-900/50 rounded-xl border border-white/5 flex flex-col overflow-hidden">
-                      <div className="px-4 py-3 border-b border-white/5 bg-white/5">
-                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Original Resume</h3>
+                    <div className="bg-zinc-900 rounded-xl border border-zinc-800 flex flex-col overflow-hidden">
+                      <div className="px-4 py-3 border-b border-zinc-800 bg-zinc-900/50">
+                        <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Original Source</h3>
                       </div>
-                      <div className="flex-1 p-4 overflow-y-auto custom-scrollbar">
+                      <div className="flex-1 p-5 overflow-y-auto custom-scrollbar bg-zinc-950/30">
                         {userProfile.resumeText ? (
-                          <pre className="text-sm text-slate-400 font-mono whitespace-pre-wrap leading-relaxed">{userProfile.resumeText}</pre>
+                          <pre className="text-xs text-zinc-500 font-mono whitespace-pre-wrap leading-relaxed">{userProfile.resumeText}</pre>
                         ) : userProfile.resumeFile ? (
                           <div className="h-full flex flex-col items-center justify-center text-center">
-                            <FileText className="w-10 h-10 text-emerald-500/50 mb-3" />
-                            <p className="text-sm text-slate-400">Resume file uploaded</p>
-                            <p className="text-xs text-slate-600 mt-1">Click "Polish Resume" to extract and optimize</p>
+                            <FileText className="w-8 h-8 text-zinc-700 mb-3" />
+                            <p className="text-sm text-zinc-400 font-medium">Resume file loaded</p>
+                            <p className="text-xs text-zinc-600 mt-1">Ready to analyze</p>
                           </div>
                         ) : (
-                          <label className="h-full flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 rounded-lg transition-all border-2 border-dashed border-slate-700 hover:border-indigo-500 p-8">
+                          <label className="h-full flex flex-col items-center justify-center cursor-pointer hover:bg-zinc-900/50 transition-colors border-2 border-dashed border-zinc-800 hover:border-zinc-700 p-8 rounded-lg group">
                             <input type="file" accept=".pdf" className="hidden" onChange={handleResumeUpload} />
-                            <UploadCloud className="w-10 h-10 text-slate-600 mb-3" />
-                            <p className="text-sm text-slate-400 font-medium">Upload your resume</p>
-                            <p className="text-xs text-slate-600 mt-1">PDF format recommended</p>
+                            <UploadCloud className="w-8 h-8 text-zinc-700 group-hover:text-zinc-500 transition-colors mb-3" />
+                            <p className="text-sm text-zinc-500 group-hover:text-zinc-300 transition-colors font-medium">Upload PDF Resume</p>
+                            <p className="text-xs text-zinc-700 mt-1">Drag & drop or click</p>
                           </label>
                         )}
                       </div>
                     </div>
 
                     {/* Optimized */}
-                    <div className="bg-indigo-900/10 rounded-xl border border-indigo-500/20 flex flex-col overflow-hidden">
-                      <div className="px-4 py-3 border-b border-indigo-500/20 bg-indigo-500/5 flex justify-between items-center">
-                        <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-wider flex items-center">
-                          <Award className="w-3 h-3 mr-1.5" /> AI Optimized
+                    <div className="bg-zinc-900 rounded-xl border border-zinc-800 flex flex-col overflow-hidden shadow-sm">
+                      <div className="px-4 py-3 border-b border-zinc-800 bg-zinc-900 flex justify-between items-center">
+                        <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center">
+                          <Award className="w-3.5 h-3.5 mr-2 text-zinc-500" /> Professional Draft
                         </h3>
                         {optimizedResume && (
                           <div className="flex items-center gap-2">
-                            <div className="flex bg-slate-800 rounded-lg p-0.5">
+                            <div className="flex bg-zinc-950 rounded-lg p-0.5 border border-zinc-800">
                               <button
                                 onClick={() => setResumeFormat('text')}
-                                className={`px-2.5 py-1 text-[11px] font-medium rounded transition-all ${resumeFormat === 'text' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                                className={`px-2.5 py-1 text-[10px] font-medium rounded transition-all ${resumeFormat === 'text' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-white'}`}
                               >Text</button>
                               <button
                                 onClick={() => setResumeFormat('latex')}
-                                className={`px-2.5 py-1 text-[11px] font-medium rounded transition-all ${resumeFormat === 'latex' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                                className={`px-2.5 py-1 text-[10px] font-medium rounded transition-all ${resumeFormat === 'latex' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-white'}`}
                               >LaTeX</button>
                             </div>
+                            <div className="h-4 w-px bg-zinc-800 mx-1"></div>
                             <button
                               onClick={() => {
                                 const contentToCopy = resumeFormat === 'latex' ? latexResume : optimizedResume;
@@ -3193,61 +3323,83 @@ const App = () => {
                                 setIsCopied(true);
                                 setTimeout(() => setIsCopied(false), 2000);
                               }}
-                              className="p-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors"
-                              title="Copy"
+                              className="p-1.5 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded transition-colors"
+                              title="Copy to Clipboard"
                             >
-                              {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                              {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                             </button>
                             <button
                               onClick={() => {
                                 if (latexData) downloadLatexPdf(latexData);
                                 else if (resumeAnalysisResult) downloadResumeAsPdf(resumeAnalysisResult, userProfile.name);
                               }}
-                              className="p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors"
-                              title="Download PDF"
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-black hover:bg-zinc-200 rounded text-xs font-bold transition-colors"
                             >
                               <Download className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">Export</span>
                             </button>
                           </div>
                         )}
                       </div>
-                      <div className="flex-1 p-4 overflow-y-auto custom-scrollbar">
+                      <div className="flex-1 p-5 overflow-y-auto custom-scrollbar bg-zinc-950/50">
                         {optimizedResume ? (
-                          <pre className="text-sm text-slate-200 font-mono whitespace-pre-wrap leading-relaxed">{resumeFormat === 'latex' ? latexResume : optimizedResume}</pre>
+                          <pre className="text-xs text-zinc-300 font-mono whitespace-pre-wrap leading-relaxed">{resumeFormat === 'latex' ? latexResume : optimizedResume}</pre>
                         ) : (
-                          <div className="h-full flex flex-col items-center justify-center text-center opacity-50">
-                            <FileText className="w-10 h-10 text-indigo-400 mb-3" />
-                            <p className="text-sm text-slate-400">Optimized version will appear here</p>
+                          <div className="h-full flex flex-col items-center justify-center text-center opacity-40">
+                            <Bot className="w-8 h-8 text-zinc-500 mb-3" />
+                            <p className="text-sm text-zinc-400">Optimization pending</p>
                           </div>
                         )}
                       </div>
                     </div>
                   </div>
 
-                  {/* Improvements List - Collapsible Style */}
+                  {/* Improvements List - Clean Document Style */}
                   {resumeAnalysisResult && resumeAnalysisResult.keyImprovements && resumeAnalysisResult.keyImprovements.length > 0 && (
-                    <div className="bg-slate-900/50 rounded-xl border border-white/5">
-                      <div className="px-4 py-3 border-b border-white/5">
-                        <h3 className="text-sm font-bold text-white">Detailed Improvements</h3>
+                    <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+                      <div className="px-6 py-5 border-b border-zinc-800 flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-zinc-500" />
+                        <h3 className="text-sm font-semibold text-white">Suggested Improvements</h3>
                       </div>
-                      <div className="divide-y divide-white/5">
+                      <div className="divide-y divide-zinc-800">
                         {resumeAnalysisResult.keyImprovements.map((imp, idx) => (
-                          <div key={idx} className="p-4">
-                            <div className="flex items-start gap-3">
-                              <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded uppercase ${imp.category === 'Impact' ? 'bg-emerald-500/10 text-emerald-400' :
-                                imp.category === 'Keywords' ? 'bg-blue-500/10 text-blue-400' :
-                                  'bg-purple-500/10 text-purple-400'
+                          <div key={idx} className="p-6">
+                            <div className="flex items-center gap-3 mb-4">
+                              <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-zinc-800 text-xs font-bold text-zinc-400 border border-zinc-700">
+                                {idx + 1}
+                              </span>
+                              <span className={`text-[11px] font-medium px-2.5 py-1 rounded-md border ${imp.category === 'Impact' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                                imp.category === 'Keywords' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                                  'bg-purple-500/10 text-purple-400 border-purple-500/20'
                                 }`}>{imp.category}</span>
-                              <p className="text-sm text-slate-300">{imp.suggestion}</p>
+                              <p className="text-sm text-zinc-200 font-medium">{imp.suggestion}</p>
                             </div>
-                            <div className="grid md:grid-cols-2 gap-3 mt-3 ml-0 md:ml-[60px]">
-                              <div className="bg-red-900/10 p-3 rounded-lg border border-red-500/10">
-                                <p className="text-[10px] text-red-400 uppercase font-bold mb-1">Before</p>
-                                <p className="text-xs text-red-300 font-mono">"{imp.originalSnippet}"</p>
+
+                            <div className="grid md:grid-cols-2 gap-6 pl-9">
+                              {/* Original */}
+                              <div className="relative group">
+                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-zinc-800 rounded-full group-hover:bg-rose-500/50 transition-colors"></div>
+                                <div className="pl-4">
+                                  <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1.5 flex items-center">
+                                    Before
+                                  </p>
+                                  <p className="text-sm text-zinc-500 leading-relaxed bg-zinc-950/50 p-3 rounded-lg border border-transparent group-hover:border-rose-500/20 transition-colors">
+                                    "{imp.originalSnippet}"
+                                  </p>
+                                </div>
                               </div>
-                              <div className="bg-emerald-900/10 p-3 rounded-lg border border-emerald-500/10">
-                                <p className="text-[10px] text-emerald-400 uppercase font-bold mb-1">After</p>
-                                <p className="text-xs text-emerald-300 font-mono">"{imp.improvedSnippet}"</p>
+
+                              {/* Optimized */}
+                              <div className="relative group">
+                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500 rounded-full opacity-60"></div>
+                                <div className="pl-4">
+                                  <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mb-1.5 flex items-center">
+                                    Optimized
+                                  </p>
+                                  <p className="text-sm text-zinc-300 leading-relaxed bg-zinc-950 p-3 rounded-lg border border-zinc-800 group-hover:border-zinc-700 transition-colors shadow-sm">
+                                    "{imp.improvedSnippet}"
+                                  </p>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -3262,11 +3414,11 @@ const App = () => {
             {/* Interview View - Payment Gate */}
             {/* {view === AppView.INTERVIEW && !userProfile.isPremium && (
             <div className="h-[calc(100vh-140px)] min-h-[600px] flex flex-col items-center justify-center bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 overflow-hidden shadow-2xl relative text-center px-4">
-              <div className="w-24 h-24 bg-indigo-600/20 rounded-full flex items-center justify-center mb-6 ring-4 ring-indigo-600/10">
-                <Lock className="w-10 h-10 text-indigo-400" />
+              <div className="w-24 h-24 bg-violet-600/20 rounded-full flex items-center justify-center mb-6 ring-4 ring-indigo-600/10">
+                <Lock className="w-10 h-10 text-violet-400" />
               </div>
               <h2 className="text-3xl font-bold text-white mb-3">Premium Feature</h2>
-              <p className="text-slate-400 max-w-lg mb-8 text-lg">
+              <p className="text-zinc-400 max-w-lg mb-8 text-lg">
                 Unlock unlimited AI Mock Interviews with personalized feedback and scoring. Master your interviews for just <span className="text-white font-bold">₹1</span>.
               </p>
 
@@ -3277,7 +3429,7 @@ const App = () => {
                   </div>
                   <div>
                     <h4 className="font-bold text-white text-sm">Real-time Simulation</h4>
-                    <p className="text-xs text-slate-400">Voice-enabled AI interviewer</p>
+                    <p className="text-xs text-zinc-400">Voice-enabled AI interviewer</p>
                   </div>
                 </div>
                 <div className="bg-white/5 p-4 rounded-xl border border-white/5 flex items-center">
@@ -3286,24 +3438,24 @@ const App = () => {
                   </div>
                   <div>
                     <h4 className="font-bold text-white text-sm">Detailed Scoring</h4>
-                    <p className="text-xs text-slate-400">Get rated on 1-10 scale</p>
+                    <p className="text-xs text-zinc-400">Get rated on 1-10 scale</p>
                   </div>
                 </div>
               </div>
 
               <button
                 onClick={handlePayment}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white px-10 py-4 rounded-xl font-bold text-lg shadow-[0_0_30px_rgba(79,70,229,0.3)] hover:shadow-[0_0_50px_rgba(79,70,229,0.5)] transition-all transform hover:-translate-y-1 flex items-center"
+                className="bg-violet-600 hover:bg-violet-500 text-white px-10 py-4 rounded-xl font-bold text-lg shadow-[0_0_30px_rgba(79,70,229,0.3)] hover:shadow-[0_0_50px_rgba(79,70,229,0.5)] transition-all transform hover:-translate-y-1 flex items-center"
               >
                 Unlock Now for ₹1
                 <ChevronRight className="w-5 h-5 ml-2" />
               </button>
-              <p className="mt-4 text-xs text-slate-500 flex items-center">
+              <p className="mt-4 text-xs text-zinc-500 flex items-center">
                 <Lock className="w-3 h-3 mr-1" /> Secure payment via Razorpay
               </p>
               <button
                 onClick={() => setUserProfile(p => ({ ...p, isPremium: true }))}
-                className="mt-8 text-[10px] text-slate-700 hover:text-indigo-400 transition-colors"
+                className="mt-8 text-[10px] text-zinc-700 hover:text-violet-400 transition-colors"
                 title="Dev Bypass"
               >
                 [Dev Bypass]
@@ -3318,9 +3470,9 @@ const App = () => {
                 {isGeneratingFeedback ? (
                   /* Feedback Loading State */
                   <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-                    <Loader2 className="w-12 h-12 text-indigo-500 animate-spin mb-6" />
+                    <Loader2 className="w-12 h-12 text-violet-500 animate-spin mb-6" />
                     <h3 className="text-2xl font-bold text-white mb-2">Analyzing Performance</h3>
-                    <p className="text-slate-400 max-w-md">Our AI is reviewing your answers, tone, and technical accuracy to generate a personalized report.</p>
+                    <p className="text-zinc-400 max-w-md">Our AI is reviewing your answers, tone, and technical accuracy to generate a personalized report.</p>
                   </div>
                 ) : interviewFeedback ? (
                   /* Feedback Report */
@@ -3338,13 +3490,13 @@ const App = () => {
                     <div className="flex justify-between items-center px-6 py-4 border-b border-white/5">
                       <div>
                         <h1 className="text-xl font-bold text-white">Mock Interview Simulator</h1>
-                        <p className="text-sm text-slate-500 mt-0.5">Target Role: <span className="text-slate-300">{userProfile.targetRole}</span></p>
+                        <p className="text-sm text-zinc-500 mt-0.5">Target Role: <span className="text-zinc-300">{userProfile.targetRole}</span></p>
                       </div>
                       {/* Past Interviews Dropdown */}
                       <div className="relative">
                         <button
                           onClick={() => setShowPastInterviewsDropdown(!showPastInterviewsDropdown)}
-                          className="text-sm text-slate-400 hover:text-white flex items-center transition-colors"
+                          className="text-sm text-zinc-400 hover:text-white flex items-center transition-colors"
                         >
                           <History className="w-4 h-4 mr-1.5" />
                           Past Interviews
@@ -3353,7 +3505,7 @@ const App = () => {
 
                         {/* Dropdown */}
                         {showPastInterviewsDropdown && (
-                          <div className="absolute right-0 top-full mt-2 w-72 bg-slate-900 border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden">
+                          <div className="absolute right-0 top-full mt-2 w-72 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden">
                             <div className="max-h-64 overflow-y-auto custom-scrollbar">
                               {userProfile.pastInterviews && userProfile.pastInterviews.length > 0 ? (
                                 userProfile.pastInterviews.map((interview) => (
@@ -3363,7 +3515,7 @@ const App = () => {
                                   >
                                     <div>
                                       <div className="text-sm font-medium text-white">{interview.targetRole}</div>
-                                      <div className="text-xs text-slate-500 mt-0.5">
+                                      <div className="text-xs text-zinc-500 mt-0.5">
                                         {new Date(interview.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                                         <span className="mx-1.5">•</span>
                                         <span className={interview.score >= 70 ? 'text-emerald-400' : 'text-amber-400'}>{interview.score}%</span>
@@ -3374,14 +3526,14 @@ const App = () => {
                                         setInterviewFeedback(interview.feedback);
                                         setShowPastInterviewsDropdown(false);
                                       }}
-                                      className="text-xs text-indigo-400 hover:text-indigo-300 font-medium"
+                                      className="text-xs text-violet-400 hover:text-violet-300 font-medium"
                                     >
                                       View Analysis
                                     </button>
                                   </div>
                                 ))
                               ) : (
-                                <div className="px-4 py-6 text-center text-sm text-slate-500">
+                                <div className="px-4 py-6 text-center text-sm text-zinc-500">
                                   No past interviews yet.
                                 </div>
                               )}
@@ -3391,17 +3543,16 @@ const App = () => {
                       </div>
                     </div>
 
-                    {/* Centered Main Action */}
                     <div className="flex-1 flex items-center justify-center px-6">
                       <div className="text-center max-w-md">
                         <button
                           onClick={startInterview}
-                          className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-500 text-white px-12 py-5 rounded-2xl font-bold text-lg transition-all transform hover:scale-[1.02] shadow-lg shadow-indigo-500/20 flex items-center justify-center mx-auto"
+                          className="w-full sm:w-auto bg-white hover:bg-zinc-200 text-zinc-900 px-12 py-5 rounded-2xl font-bold text-lg transition-all transform hover:scale-[1.02] shadow-xl shadow-white/5 flex items-center justify-center mx-auto"
                         >
-                          <Play className="w-6 h-6 mr-3 fill-white" />
+                          <Play className="w-6 h-6 mr-3 fill-zinc-900 text-zinc-900" />
                           Start Mock Interview
                         </button>
-                        <p className="text-sm text-slate-500 mt-4">
+                        <p className="text-sm text-zinc-500 mt-4">
                           Role-specific AI interviewer with instant feedback
                         </p>
                       </div>
@@ -3413,13 +3564,13 @@ const App = () => {
                     <div className="bg-white/5 p-5 border-b border-white/5 flex justify-between items-center">
                       <div className="flex items-center space-x-3">
                         <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_#10b981]"></div>
-                        <span className="font-bold text-slate-200">AI Interviewer <span className="text-slate-500 font-normal">| {userProfile.targetRole}</span></span>
+                        <span className="font-bold text-zinc-200">AI Interviewer <span className="text-zinc-500 font-normal">| {userProfile.targetRole}</span></span>
                       </div>
                       <div className="flex items-center space-x-2 sm:space-x-4">
                         {/* Timer - Always visible, responsive sizing */}
-                        <div className="flex items-center space-x-1 sm:space-x-2 bg-slate-800 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg border border-slate-700">
-                          <Clock className={`w-3 h-3 sm:w-4 sm:h-4 ${((2100 - interviewElapsedSeconds) < 300) ? 'text-amber-400' : 'text-slate-400'}`} />
-                          <span className={`font-mono font-bold text-xs sm:text-sm ${((2100 - interviewElapsedSeconds) < 60) ? 'text-red-400 animate-pulse' : 'text-slate-300'}`}>
+                        <div className="flex items-center space-x-1 sm:space-x-2 bg-zinc-800 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg border border-zinc-700">
+                          <Clock className={`w-3 h-3 sm:w-4 sm:h-4 ${((2100 - interviewElapsedSeconds) < 300) ? 'text-amber-400' : 'text-zinc-400'}`} />
+                          <span className={`font-mono font-bold text-xs sm:text-sm ${((2100 - interviewElapsedSeconds) < 60) ? 'text-red-400 animate-pulse' : 'text-zinc-300'}`}>
                             {Math.floor((2100 - interviewElapsedSeconds) / 60).toString().padStart(2, '0')}:
                             {((2100 - interviewElapsedSeconds) % 60).toString().padStart(2, '0')}
                           </span>
@@ -3427,7 +3578,7 @@ const App = () => {
 
                         <button
                           onClick={() => setIsSpeakingEnabled(!isSpeakingEnabled)}
-                          className={`transition-colors ${isSpeakingEnabled ? 'text-indigo-400' : 'text-slate-600 hover:text-slate-400'}`}
+                          className={`transition-colors ${isSpeakingEnabled ? 'text-violet-400' : 'text-zinc-600 hover:text-zinc-400'}`}
                           title="Toggle Text-to-Speech"
                         >
                           {isSpeakingEnabled ? <Volume2 className="w-4 h-4 sm:w-5 sm:h-5" /> : <VolumeX className="w-4 h-4 sm:w-5 sm:h-5" />}
@@ -3444,8 +3595,8 @@ const App = () => {
                     <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
                       {/* Only show 'Connecting' if truly loading and no messages yet */}
                       {chatMessages?.length === 0 && isChatLoading && (
-                        <div className="flex flex-col items-center justify-center h-64 text-slate-500">
-                          <Loader2 className="w-8 h-8 animate-spin mb-4 text-indigo-500" />
+                        <div className="flex flex-col items-center justify-center h-64 text-zinc-500">
+                          <Loader2 className="w-8 h-8 animate-spin mb-4 text-violet-500" />
                           <p>Initializing interview session...</p>
                         </div>
                       )}
@@ -3453,8 +3604,8 @@ const App = () => {
                       {chatMessages?.map((msg) => (
                         <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                           <div className={`max-w-[80%] rounded-2xl p-6 shadow-lg backdrop-blur-sm ${msg.role === 'user'
-                            ? 'bg-indigo-600 text-white rounded-br-none'
-                            : 'bg-slate-800/80 border border-white/10 text-slate-200 rounded-bl-none'
+                            ? 'bg-violet-600 text-white rounded-br-none'
+                            : 'bg-zinc-800/80 border border-white/10 text-zinc-200 rounded-bl-none'
                             }`}>
                             <div className="flex items-center space-x-2 mb-2 opacity-60">
                               {msg.role === 'user' ? <User className="w-3 h-3" /> : <Bot className="w-3 h-3" />}
@@ -3466,9 +3617,9 @@ const App = () => {
                       ))}
                       {isChatLoading && chatMessages.length > 0 && (
                         <div className="flex justify-start">
-                          <div className="bg-slate-800/80 border border-white/10 rounded-2xl rounded-bl-none p-6 shadow-lg flex items-center space-x-3">
-                            <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
-                            <span className="text-xs font-medium text-slate-400">Interviewer is typing...</span>
+                          <div className="bg-zinc-800/80 border border-white/10 rounded-2xl rounded-bl-none p-6 shadow-lg flex items-center space-x-3">
+                            <Loader2 className="w-4 h-4 animate-spin text-violet-400" />
+                            <span className="text-xs font-medium text-zinc-400">Interviewer is typing...</span>
                           </div>
                         </div>
                       )}
@@ -3482,14 +3633,14 @@ const App = () => {
                           value={chatInput}
                           onChange={(e) => setChatInput(e.target.value)}
                           placeholder="Type your answer here..."
-                          className="flex-1 p-4 bg-slate-900 border border-slate-700 text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all placeholder-slate-600"
+                          className="flex-1 p-4 bg-zinc-900 border border-zinc-700 text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all placeholder-slate-600"
                           disabled={isChatLoading}
                         />
                         {isSpeechRecognitionSupported && (
                           <button
                             type="button"
                             onClick={toggleListening}
-                            className={`p-4 rounded-xl transition-all ${isListening ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/30' : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'}`}
+                            className={`p-4 rounded-xl transition-all ${isListening ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/30' : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-slate-700'}`}
                           >
                             <Mic className="w-5 h-5" />
                           </button>
@@ -3497,7 +3648,7 @@ const App = () => {
                         <button
                           type="submit"
                           disabled={!chatInput.trim() || isChatLoading}
-                          className="bg-indigo-600 text-white p-4 rounded-xl hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-indigo-500/20"
+                          className="bg-violet-600 text-white p-4 rounded-xl hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-indigo-500/20"
                         >
                           <Send className="w-5 h-5" />
                         </button>
