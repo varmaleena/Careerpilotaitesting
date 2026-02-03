@@ -8,11 +8,6 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3000,
       host: '0.0.0.0',
-      hmr: {
-        host: 'localhost',
-        port: 3000,
-        protocol: 'ws'
-      }
     },
     plugins: [react()],
     define: {
@@ -25,7 +20,7 @@ export default defineConfig(({ mode }) => {
     },
     // PERFORMANCE: Build optimizations
     build: {
-      target: 'esnext',
+      target: 'es2020',
       minify: 'esbuild',
       cssMinify: true,
       rollupOptions: {

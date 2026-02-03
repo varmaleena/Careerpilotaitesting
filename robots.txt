@@ -1,0 +1,16 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /learning-plan
+Disallow: /build-portfolio
+Disallow: /resume-architect
+Disallow: /interview-prep
+Disallow: /resume
+Disallow: /interview
+Disallow: /plan
+Disallow: /projects
+Disallow: /login
+Disallow: /signup
+Disallow: /api/
+
+Sitemap: https://careerpilotai.co.in/sitemap.xml
