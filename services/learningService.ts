@@ -152,6 +152,11 @@ export const generateProjectIdeas = async (
         ? `CRITICAL: ALREADY GENERATED: ${previousTitles.join(", ")}. DO NOT REPEAT THESE themes or titles. Generate completely NEW ideas.`
         : "";
 
+    const isBeginner = ["student", "fresher", "beginner"].includes(experienceLevel.toLowerCase());
+    const complexityInstruction = isBeginner
+        ? 'Start with doable but impressive projects. Allow CRUD if it solves a unique problem. Focus on "Finished & Deployed" over "Complex & Broken".'
+        : 'NO To-Do Lists. NO simple CRUD. Must deal with Scale, Security, or Optimization.';
+
     // 1. STRICT Prompt to prevent runaway text
     const prompt = `
     Role: Hiring Manager at ${targetCompany}.
@@ -160,7 +165,8 @@ export const generateProjectIdeas = async (
     
     GOAL: These projects must GUARANTEE an interview call by solving a REAL problem relevant to ${targetCompany}.
     - Relevance: If the company is distinct (e.g. FinTech), the project MUST be domain-specific (e.g. Ledger/Fraud Detection).
-    - Complexity: NO To-Do Lists. NO simple CRUD. Must deal with Scale, Security, or Optimization.
+    - Complexity: ${complexityInstruction}
+    - Tech Stack: **AVOID PAID SERVICES** (e.g. AWS EC2, Azure SQL) unless explicitly mentioning "Free Tier". **PREFER** Vercel, Netlify, Render, Railway, Supabase, Firebase, or LocalStack.
     ${avoidInstruction}
     
     OUTPUT RULES:
@@ -179,7 +185,8 @@ export const generateProjectIdeas = async (
         "keyFeatures": ["Feature 1", "Feature 2"],
         "resumeValue": "1 punchy sentence explaining why this impresses a recruiter.",
         "implementationFlow": ["Step 1", "Step 2", "Step 3"],
-        "learningOutcomes": ["Skill 1", "Skill 2"]
+        "learningOutcomes": ["Skill 1", "Skill 2"],
+        "referenceGithubUrl": "https://github.com/search?q=..."
       }
     ]
     `;
@@ -227,7 +234,9 @@ export const generateProjectIdeas = async (
             keyFeatures: p.keyFeatures || [],
             resumeValue: p.resumeValue || "Demonstrates core competencies.",
             implementationFlow: p.implementationFlow || ["Design", "Build", "Test"],
-            learningOutcomes: p.learningOutcomes || ["Full Stack Dev"]
+            learningOutcomes: p.learningOutcomes || ["Full Stack Dev"],
+            referenceGithubUrl: p.referenceGithubUrl || `https://github.com/search?q=${encodeURIComponent(p.title || "react project")}&type=repositories`,
+            completed: false
         }));
 
     } catch (error) {
@@ -247,7 +256,8 @@ export const generateProjectIdeas = async (
                 resumeValue: "Proves ability to handle high-throughput data processing.",
                 implementationFlow: ["Ingest Stream", "Process Buffer", "Visualize"],
                 learningOutcomes: ["Stream Processing", "Caching", "System Design"],
-                keyFeatures: ["Real-time ingestion", "Data aggregation"]
+                keyFeatures: ["Real-time ingestion", "Data aggregation"],
+                referenceGithubUrl: "https://github.com/search?q=realtime+analytics+dashboard+react+node&type=repositories"
             },
             {
                 id: "fb-2",
@@ -258,7 +268,8 @@ export const generateProjectIdeas = async (
                 resumeValue: "Demonstrates understanding of distributed systems and fault tolerance.",
                 implementationFlow: ["Leader Election", "Job Queue", "Worker Nodes"],
                 learningOutcomes: ["Distributed Consensus", "RPC", "Container Orchestration"],
-                keyFeatures: ["Fault tolerance", "Load distribution"]
+                keyFeatures: ["Fault tolerance", "Load distribution"],
+                referenceGithubUrl: "https://github.com/search?q=distributed+task+scheduler+go&type=repositories"
             },
             {
                 id: "fb-3",
@@ -269,7 +280,8 @@ export const generateProjectIdeas = async (
                 resumeValue: "Shows grasp of backend security and infrastructure patterns.",
                 implementationFlow: ["Auth Middleware", "Rate Limiter", "Proxy Logic"],
                 learningOutcomes: ["Security Patterns", "Reverse Proxy", "Middleware"],
-                keyFeatures: ["Rate limiting", "JWT Auth"]
+                keyFeatures: ["Rate limiting", "JWT Auth"],
+                referenceGithubUrl: "https://github.com/search?q=api+gateway+nodejs&type=repositories"
             }
         ];
 

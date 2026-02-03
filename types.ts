@@ -101,6 +101,8 @@ export interface ProjectIdea {
   learningOutcomes: string[]; // What the student learns
   sourcePaper?: ResearchPaperSource;
   implementationResources?: Array<{ name: string; url: string }>;
+  referenceGithubUrl?: string; // Link to a reference GitHub repository or search query
+  completed?: boolean;
 }
 
 
