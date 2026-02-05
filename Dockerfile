@@ -65,9 +65,14 @@ RUN npm install -g serve
 # Copy built assets from builder stage
 COPY --from=builder /app/dist ./dist
 
+# Copy serve.json configuration for redirects and clean URLs
+COPY serve.json ./dist/
+
 # Expose the port (Cloud Run sets this env var, default 8080)
 ENV PORT=8080
 EXPOSE 8080
 
-# Start the server listening on $PORT
-CMD ["sh", "-c", "serve -s dist -l $PORT"]
+# Start the server with serve.json configuration
+# -c serve.json: Use the configuration file for redirects, clean URLs, etc.
+CMD ["sh", "-c", "serve -s dist -l $PORT -c dist/serve.json"]
+
