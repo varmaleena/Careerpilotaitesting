@@ -356,6 +356,7 @@ const App = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [currentUserEmail, setCurrentUserEmail] = useState('');
+  const [currentUserUid, setCurrentUserUid] = useState('');
 
   // Modals & UI State
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -452,11 +453,13 @@ const App = () => {
 
   // Hydrate session on mount
   useEffect(() => {
+    const savedUid = localStorage.getItem('careerPilot_session_uid');
     const savedEmail = localStorage.getItem('careerPilot_session_email');
-    if (savedEmail) {
-      // Attempt auto-login
-      loginUser(savedEmail).catch(err => {
+    if (savedUid && savedEmail) {
+      // Attempt auto-login using stored UID + email
+      loginUser(savedUid, savedEmail).catch(err => {
         console.error("Session restoration failed", err);
+        localStorage.removeItem('careerPilot_session_uid');
         localStorage.removeItem('careerPilot_session_email');
       });
     }
@@ -464,10 +467,11 @@ const App = () => {
 
   // Save state on critical updates ONLY if logged in
   useEffect(() => {
-    if (isLoggedIn && currentUserEmail) {
-      localStorage.setItem('careerPilot_session_email', currentUserEmail); // Keep session alive
+    if (isLoggedIn && currentUserUid) {
+      localStorage.setItem('careerPilot_session_uid', currentUserUid); // Keep session alive
+      localStorage.setItem('careerPilot_session_email', currentUserEmail);
 
-      AuthService.saveUserData(currentUserEmail, {
+      AuthService.saveUserData(currentUserUid, {
         userProfile,
         analysis,
         plan,
@@ -481,6 +485,7 @@ const App = () => {
     }
   }, [
     isLoggedIn,
+    currentUserUid,
     currentUserEmail,
     userProfile,
     analysis,
@@ -658,8 +663,8 @@ const App = () => {
 
   // ... (existing state)
 
-  const loginUser = async (email: string) => {
-    const userData = await AuthService.getUserData(email);
+  const loginUser = async (uid: string, email: string) => {
+    const userData = await AuthService.getUserData(uid);
     if (userData) {
       // Calculate Streak
       const today = new Date().toDateString();
@@ -685,11 +690,12 @@ const App = () => {
         userData.userProfile.streak = newStreak;
         userData.userProfile.xp = newXp + 10; // Bonus for daily login
 
-        // Persist immediately
-        await AuthService.saveUserData(email, userData);
+        // Persist immediately using UID
+        await AuthService.saveUserData(uid, userData);
       }
 
       // Hydrate State
+      setCurrentUserUid(uid);
       setCurrentUserEmail(email);
       setIsLoggedIn(true);
       setShowAuthModal(false);
@@ -728,8 +734,10 @@ const App = () => {
 
   const handleLogout = () => {
     setIsLoggedIn(false);
+    setCurrentUserUid('');
     setCurrentUserEmail('');
-    localStorage.removeItem('careerPilot_session_email'); // Clear persistent session
+    localStorage.removeItem('careerPilot_session_uid'); // Clear persistent session
+    localStorage.removeItem('careerPilot_session_email');
 
     // Reset all local state
     setUserProfile({ name: 'User', targetRole: '' });
@@ -745,12 +753,12 @@ const App = () => {
   };
 
   const handleResetData = () => {
-    if (!currentUserEmail) return;
+    if (!currentUserUid) return;
     setShowConfirmResetModal(true);
   };
 
   const confirmResetData = async () => {
-    if (!currentUserEmail) return;
+    if (!currentUserUid) return;
 
     try {
       // Preserve critical account data
@@ -783,7 +791,7 @@ const App = () => {
       };
 
       // Save empty data to storage
-      await AuthService.saveUserData(currentUserEmail, emptyData);
+      await AuthService.saveUserData(currentUserUid, emptyData);
 
       // Hydrate state with empty data
       setUserProfile(preservedProfile);
