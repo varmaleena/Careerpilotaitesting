@@ -28,8 +28,8 @@ interface UserData {
   seenProjectTitles?: string[];
 }
 
-// In-memory cache to speed up repeated reads
-let userDataCache: { [email: string]: UserData } = {};
+// In-memory cache to speed up repeated reads (keyed by UID)
+let userDataCache: { [userId: string]: UserData } = {};
 
 export const AuthService = {
   // --- Validation Helpers ---
@@ -87,13 +87,14 @@ export const AuthService = {
     return { success: false, message: "User not found." };
   },
 
-  signup: async (email: string, password: string): Promise<{ success: boolean; message?: string }> => {
+  signup: async (email: string, password: string): Promise<{ success: boolean; message?: string; uid?: string }> => {
     // 1. Try Firebase (Real Backend)
     try {
       if (auth) {
-        await createUserWithEmailAndPassword(auth, email, password);
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const uid = userCredential.user.uid;
 
-        // Initialize user data in Firestore
+        // Initialize user data in Firestore using UID as document key
         const initialData: UserData = {
           userProfile: { name: email.split('@')[0], targetRole: '' },
           analysis: null,
@@ -104,8 +105,8 @@ export const AuthService = {
           resumeAnalysisResult: null,
           seenProjectTitles: []
         };
-        await AuthService.saveUserData(email, initialData);
-        return { success: true };
+        await AuthService.saveUserData(uid, initialData);
+        return { success: true, uid };
       }
     } catch (error: any) {
       console.warn("Firebase signup error:", error.code, error.message);
@@ -135,7 +136,7 @@ export const AuthService = {
     return { success: true };
   },
 
-  login: async (email: string, password: string): Promise<{ success: boolean; message?: string; name?: string }> => {
+  login: async (email: string, password: string): Promise<{ success: boolean; message?: string; name?: string; uid?: string }> => {
     let firebaseError = null;
 
     // 1. Try Firebase
@@ -143,7 +144,8 @@ export const AuthService = {
       if (auth) {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const name = userCredential.user.email?.split('@')[0];
-        return { success: true, name };
+        const uid = userCredential.user.uid;
+        return { success: true, name, uid };
       }
     } catch (error: any) {
       console.warn("Firebase login failed:", error.code);
@@ -177,32 +179,31 @@ export const AuthService = {
     return { success: false, message: 'User not found.' };
   },
 
-  loginWithGoogle: async (): Promise<{ success: boolean; message?: string; name?: string; email?: string }> => {
+  loginWithGoogle: async (): Promise<{ success: boolean; message?: string; name?: string; email?: string; uid?: string }> => {
     try {
       if (auth) {
         const result = await signInWithPopup(auth, googleProvider);
         const user = result.user;
+        const uid = user.uid;
         const name = user.displayName || user.email?.split('@')[0];
 
-        // Check if user data exists, if not create initial structure
-        if (user.email) {
-          const existingData = await AuthService.getUserData(user.email);
-          if (!existingData) {
-            const initialData: UserData = {
-              userProfile: { name: name || 'User', targetRole: '' },
-              analysis: null,
-              plan: null,
-              projects: [],
-              chatMessages: [],
-              interviewFeedback: null,
-              resumeAnalysisResult: null,
-              seenProjectTitles: []
-            };
-            await AuthService.saveUserData(user.email, initialData);
-          }
+        // Check if user data exists, if not create initial structure using UID
+        const existingData = await AuthService.getUserData(uid);
+        if (!existingData) {
+          const initialData: UserData = {
+            userProfile: { name: name || 'User', targetRole: '' },
+            analysis: null,
+            plan: null,
+            projects: [],
+            chatMessages: [],
+            interviewFeedback: null,
+            resumeAnalysisResult: null,
+            seenProjectTitles: []
+          };
+          await AuthService.saveUserData(uid, initialData);
         }
 
-        return { success: true, name: name, email: user.email! };
+        return { success: true, name: name, email: user.email!, uid };
       }
       return { success: false, message: "Auth not initialized" };
     } catch (error: any) {
@@ -212,44 +213,44 @@ export const AuthService = {
 
   // --- Data Management ---
 
-  saveUserData: async (email: string, data: UserData): Promise<void> => {
-    // Update cache immediately
-    userDataCache[email] = data;
+  saveUserData: async (userId: string, data: UserData): Promise<void> => {
+    // Update cache immediately (keyed by UID)
+    userDataCache[userId] = data;
 
     if (db) {
       try {
         // Firestore doesn't accept 'undefined', so we strip those fields
         const sanitizedData = JSON.parse(JSON.stringify(data));
-        await setDoc(doc(db, "users", email), sanitizedData);
+        await setDoc(doc(db, "users", userId), sanitizedData);
         return;
       } catch (e) {
         console.error("Firestore save failed:", e);
       }
     }
-    localStorage.setItem(DATA_PREFIX + email, JSON.stringify(data));
+    localStorage.setItem(DATA_PREFIX + userId, JSON.stringify(data));
   },
 
-  getUserData: async (email: string): Promise<UserData | null> => {
+  getUserData: async (userId: string): Promise<UserData | null> => {
     // Check cache first
-    if (userDataCache[email]) {
-      return userDataCache[email];
+    if (userDataCache[userId]) {
+      return userDataCache[userId];
     }
 
     if (db) {
       try {
-        const docSnap = await getDoc(doc(db, "users", email));
+        const docSnap = await getDoc(doc(db, "users", userId));
         if (docSnap.exists()) {
           const data = docSnap.data() as UserData;
-          userDataCache[email] = data; // Populate cache
+          userDataCache[userId] = data; // Populate cache
           return data;
         }
       } catch (e) {
         console.error("Firestore read failed:", e);
       }
     }
-    const data = localStorage.getItem(DATA_PREFIX + email);
+    const data = localStorage.getItem(DATA_PREFIX + userId);
     const parsed = data ? JSON.parse(data) : null;
-    if (parsed) userDataCache[email] = parsed;
+    if (parsed) userDataCache[userId] = parsed;
     return parsed;
   }
 };
