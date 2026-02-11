@@ -79,6 +79,51 @@ export class RequestLoadBalancer {
         console.log(`🔒 Key ${keyIndex} rate-limited until ${new Date(this.keyStatuses[keyIndex].rateLimitedUntil).toLocaleTimeString()}`);
     }
 
+    // Permanently remove an invalid key from rotation
+    private invalidateKeyAtIndex(keyIndex: number) {
+        const removed = this.keyStatuses.splice(keyIndex, 1);
+        console.warn(`⛔ Removed invalid key at index ${keyIndex}. ${this.keyStatuses.length} keys remain.`);
+        if (this.currentKeyIndex >= this.keyStatuses.length) {
+            this.currentKeyIndex = 0;
+        }
+    }
+
+    // Parse common Retry-After semantics from responses (header Seconds or HTTP-date)
+    private parseRetryAfterMs(error: any): number | null {
+        try {
+            const headers = error?.response?.headers || {};
+            const raw = headers['retry-after'] || headers['Retry-After'];
+            if (raw) {
+                const asInt = parseInt(raw, 10);
+                if (!Number.isNaN(asInt)) return asInt * 1000;
+                const asDate = Date.parse(raw);
+                if (!Number.isNaN(asDate)) return Math.max(0, asDate - Date.now());
+            }
+
+            // Some APIs return structured retry info in the body
+            const body = error?.response?.data || error?.response?.data?.error;
+            if (body) {
+                // Google sometimes includes details with retry metadata
+                const details = body?.details || [];
+                for (const d of details) {
+                    if (d?.retryDelayMs) return d.retryDelayMs;
+                    if (d?.retryDelay) return parseInt(d.retryDelay, 10) * 1000;
+                }
+            }
+        } catch (e) {
+            // ignore parse errors
+        }
+        return null;
+    }
+
+    // Mark a key as rate-limited for a specific duration (ms). Adds jitter.
+    private markKeyAsRateLimitedWithMs(keyIndex: number, ms?: number) {
+        const base = typeof ms === 'number' && ms > 0 ? ms : this.keyBackoffMs;
+        const jitter = Math.floor(Math.random() * 1000); // up to 1s jitter
+        this.keyStatuses[keyIndex].rateLimitedUntil = Date.now() + base + jitter;
+        console.log(`🔒 Key ${keyIndex} rate-limited for ${(base + jitter) / 1000}s until ${new Date(this.keyStatuses[keyIndex].rateLimitedUntil).toLocaleTimeString()}`);
+    }
+
     private async getWaitTimeForNextAvailableKey(): Promise<number> {
         const now = Date.now();
         const soonestTime = Math.min(...this.keyStatuses.map(s => s.rateLimitedUntil));
@@ -119,13 +164,40 @@ export class RequestLoadBalancer {
                 const result = await request.fn();
                 request.resolve(result);
             } catch (error: any) {
+                const rawMessage = error?.message || JSON.stringify(error || '');
                 const status = error.status || (error.message?.includes('429') ? 429 : error.message?.includes('404') ? 404 : 500);
 
-                if (status === 429 || error.message?.includes('quota') || error.message?.includes('RESOURCE_EXHAUSTED')) {
+                // Detect invalid API key errors from Google responses
+                const isApiKeyInvalid = rawMessage.includes('API key not valid') || rawMessage.includes('API_KEY_INVALID') || (error?.response?.data?.error?.details && JSON.stringify(error.response.data.error.details).includes('API_KEY_INVALID'));
+
+                if (isApiKeyInvalid) {
+                    console.error('❌ API key invalid. Removing key from rotation.');
+                    // Remove the currently selected key from pool
+                    this.invalidateKeyAtIndex(this.currentKeyIndex);
+                    // If no keys remain, fail immediately with a clear error
+                    if (this.keyStatuses.length === 0) {
+                        request.reject(new Error('No valid API keys remain. Please provide valid Gemini API keys.'));
+                        continue;
+                    }
+                    // Re-queue the request to try with next key
+                    this.queue.unshift(request);
+                    continue;
+                }
+
+                if (status === 429 || rawMessage.includes('quota') || rawMessage.includes('RESOURCE_EXHAUSTED')) {
                     console.warn(`⚠️ Rate limit hit (429). Attempt ${request.retries + 1}/${this.maxRetries}`);
 
-                    // Mark current key as rate-limited
-                    this.markKeyAsRateLimited(this.currentKeyIndex);
+                    // Try to honor server-provided Retry-After if present
+                    const retryAfterMs = this.parseRetryAfterMs(error);
+
+                    // Mark current key as rate-limited (using Retry-After when available)
+                    if (retryAfterMs) {
+                        this.markKeyAsRateLimitedWithMs(this.currentKeyIndex, retryAfterMs);
+                    } else {
+                        // Apply exponential backoff based on retries for this request
+                        const exponential = Math.min(this.keyBackoffMs * Math.pow(2, request.retries), 5 * 60 * 1000); // cap at 5 minutes
+                        this.markKeyAsRateLimitedWithMs(this.currentKeyIndex, exponential);
+                    }
 
                     request.keyRotations++;
 

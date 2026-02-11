@@ -41,6 +41,8 @@ export const calculatePlanStatistics = (
         0
     );
 
+    console.log(`[PlanStats] Completed Hours: ${completedHours}/${totalHours}`);
+
     const progressPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
     const remainingHours = totalHours - completedHours;
@@ -80,7 +82,7 @@ export const calculatePlanStatistics = (
  * Get a motivational message based on progress
  */
 export const getProgressMessage = (progressPercentage: number): string => {
-    if (progressPercentage === 0) return "🚀 Ready to start your journey? Let's go!";
+    if (progressPercentage === 0) return "Ready to start your journey? Let's go!";
     if (progressPercentage < 25) return "💪 Great start! Keep the momentum going!";
     if (progressPercentage < 50) return "🔥 You're making solid progress!";
     if (progressPercentage < 75) return "⭐ More than halfway there! You're crushing it!";

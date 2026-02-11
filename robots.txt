@@ -1,0 +1,48 @@
+# CareerPilot AI - Robots.txt
+# Last Updated: 2026-02-05
+
+# Allow all crawlers
+User-agent: *
+Allow: /
+
+# Block user-authenticated pages (contain private user data)
+Disallow: /dashboard
+Disallow: /onboarding
+Disallow: /plan
+Disallow: /projects
+Disallow: /resumearchitect
+Disallow: /mockinterview
+
+# Block legacy/alias URLs (these redirect via 301 anyway)
+Disallow: /learning-plan
+Disallow: /build-portfolio
+Disallow: /resume-architect
+Disallow: /interview-prep
+Disallow: /resume
+Disallow: /interview
+
+# Block authentication pages
+Disallow: /login
+Disallow: /signup
+
+# Block API endpoints (if any)
+Disallow: /api/
+
+# Block URLs with tracking parameters to prevent duplicate content issues
+# Google will still index the canonical version without these parameters
+Disallow: /*?utm_*
+Disallow: /*?fbclid=*
+Disallow: /*?gclid=*
+Disallow: /*?msclkid=*
+Disallow: /*?ref=*
+Disallow: /*?source=*
+Disallow: /*?_ga=*
+Disallow: /*?_gl=*
+Disallow: /*?mc_cid=*
+Disallow: /*?mc_eid=*
+
+# Sitemap location
+Sitemap: https://careerpilotai.co.in/sitemap.xml
+
+# Crawl delay recommendation (optional, not all crawlers respect this)
+Crawl-delay: 1

@@ -1,59 +1,51 @@
 import React from 'react';
-import { PolarAngleAxis, RadialBar, RadialBarChart, ResponsiveContainer, Tooltip } from 'recharts';
+import { PolarAngleAxis, RadialBar, RadialBarChart, ResponsiveContainer } from 'recharts';
 
 interface ScoreGaugeProps {
   score: number;
 }
 
 export const ScoreGauge: React.FC<ScoreGaugeProps> = ({ score }) => {
-  // Always show a "Potential" that is higher than current score to encourage growth
-  // If score is 0-50, potential is +40. If 50-80, potential is +15.
-  let potential = score < 60 ? score + 40 : score + 15;
-  if (potential > 100) potential = 100;
-
   const data = [
     {
-      name: 'Future Potential',
-      value: potential,
-      fill: '#818cf8', // Indigo 400 (lighter, background track)
-      opacity: 0.2
-    },
-    {
-      name: 'Starting Point',
+      name: 'Score',
       value: score,
-      fill: score > 75 ? '#10b981' : '#6366f1', // Green if high, else Indigo
-      opacity: 1
+      fill: score > 75 ? '#10b981' : score > 50 ? '#a78bfa' : '#f59e0b', // Green if high, violet mid, amber low
     }
   ];
 
+  const getScoreLabel = () => {
+    if (score >= 80) return 'Excellent';
+    if (score >= 60) return 'Good';
+    if (score >= 40) return 'Developing';
+    return 'Needs Work';
+  };
+
   return (
-    <div className="relative w-full h-48" style={{ minHeight: '200px' }}>
-      <ResponsiveContainer width="100%" height="100%" minHeight={200}>
+    <div className="relative w-full h-40">
+      <ResponsiveContainer width="100%" height="100%">
         <RadialBarChart
           cx="50%"
           cy="50%"
-          innerRadius="70%"
+          innerRadius="75%"
           outerRadius="100%"
-          barSize={15}
+          barSize={12}
           data={data}
           startAngle={180}
           endAngle={0}
         >
           <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
           <RadialBar
-            background={{ fill: '#1e293b' }}
+            background={{ fill: '#27272a' }}
             dataKey="value"
-            cornerRadius={10}
-            label={false}
+            cornerRadius={6}
           />
         </RadialBarChart>
       </ResponsiveContainer>
 
-      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/4 text-center pointer-events-none w-full">
-        <div className="text-4xl font-bold text-white tracking-tight">{score}%</div>
-        <div className="text-xs text-indigo-200 font-medium uppercase tracking-wide mt-1">Match Potential</div>
-
-        {/* Removed cluttering target badge */}
+      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/4 text-center pointer-events-none">
+        <div className="text-3xl font-bold text-white">{score}%</div>
+        <div className="text-xs text-zinc-500 font-medium mt-1">{getScoreLabel()}</div>
       </div>
     </div>
   );

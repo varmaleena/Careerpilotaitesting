@@ -219,53 +219,49 @@ directly improve interview shortlisting chances.
 /**
  * Analyzes the user's resume (Text or PDF) against a target role.
  */
-// Define return type locally or import if added to types
 export const analyzeProfile = async (
     resumeInput: { text?: string; file?: { data: string; mimeType: string } },
-    targetRole: string
-): Promise<{ analysis: CareerAnalysis; extractedProfile: Partial<UserProfile> }> => { // Changed return type
+    targetRole: string,
+    targetCompanies: string = "",
+    experienceLevel: string = "Junior"
+): Promise<{ analysis: CareerAnalysis; extractedProfile: Partial<UserProfile> }> => {
 
     const promptText = `
-    Role: Senior Career Coach.
-    Task: Analyze the candidate's profile against the target role: "${targetRole}".
-    Also, extract the candidate's contact and social profile links from the resume effectively.
-    
+    Role: Elite Technical Recruiter & Career Strategist.
+    Task: Critically analyze the candidate's profile against the target role: "${targetRole}" and target companies: "${targetCompanies || 'Tier 1 Tech Companies'}".
+    Experience level expected: "${experienceLevel}".
+
+    SCORING RUBRIC (STRICT):
+    Your readinessScore MUST be based on these brutal standards:
+    1. 0-40%: Basic resume, lack of metrics, generic skills, weak project descriptions, or no relevance to the target role.
+    2. 41-60%: Good foundation, but missing critical technologies or industry-standard projects for "${targetRole}". 
+    3. 61-80%: Strong profile with clear impact, quantified metrics (e.g., "Improved X by Y%"), and technical depth.
+    4. 81-100%: Outstanding candidate, matching elite standards for companies like ${targetCompanies || 'FAANG'}. Has niche skills, significant leadership/impact, and perfect role alignment.
+
+    CRITICAL PENALTIES:
+    - If there are NO quantified metrics (%, $, numbers) in experience/projects → Max Score: 55%.
+    - If it's a generic "Google Search Result" style resume → Max Score: 40%.
+    - If critical skills for "${targetRole}" are missing → Reduce score by 15-20 points.
+
     Output strictly in JSON format matching the schema.
-    - readinessScore: number 0-100 based on fit.
+    - readinessScore: number 0-100 based on the STRICT RUBRIC above.
     - summary: A 2-3 sentence executive summary.
     - skills: List of skills extracted, categorized, and marked as 'acquired' (found in resume) or 'missing' (required for target role).
-      CRITICAL: You MUST identify at least 5 'missing' skills that are standard for the role of "${targetRole}" but absent in the user's profile. Do not return an empty list of missing skills.
+      CRITICAL: You MUST identify at least 5 'missing' skills that are standard for the role of "${targetRole}" but absent in the user's profile.
     - strengths: Top 3 selling points.
-    - weaknesses: Top 3 gaps to fill.
+    - weaknesses: Top 3 REAL gaps to fill (be honest, don't be nice).
     - name: Candidate's full name if found.
-    - mobileNumber: Candidate's phone number if found (look for patterns like +91-XXX, (XXX) XXX-XXXX, etc.).
+    - mobileNumber: Candidate's phone number if found.
     - location: Candidate's city/country if found.
-    - githubProfile: GitHub profile URL if found. Look for patterns like:
-      * github.com/username
-      * https://github.com/username
-      * www.github.com/username
-      Extract the FULL URL including https:// if present, or prepend it if missing.
-    - linkedinProfile: LinkedIn profile URL if found. Look for patterns like:
-      * linkedin.com/in/username
-      * https://www.linkedin.com/in/username
-      * in.linkedin.com/in/username
-      Extract the FULL URL including https:// if present, or prepend it if missing.
-    - leetcodeProfile: LeetCode profile URL if found. Look for patterns like:
-      * leetcode.com/username
-      * https://leetcode.com/username
-      Extract the FULL URL including https:// if present, or prepend it if missing.
+    - githubProfile: GitHub profile URL if found.
+    - linkedinProfile: LinkedIn profile URL if found.
+    - leetcodeProfile: LeetCode profile URL if found.
 
-    CRITICAL INSTRUCTIONS FOR URL EXTRACTION:
-    - Scan the ENTIRE resume text for these URLs, including headers, footers, and contact sections.
-    - URLs may appear with or without "https://", "http://", or "www." - capture them regardless.
-    - If you find a partial URL (e.g., "github.com/john"), convert it to full format: "https://github.com/john"
-    - Return empty string "" if truly not found, but search thoroughly first.
-    
     Ensure:
     - githubProfile must include "github.com" if found.
     - linkedinProfile must include "linkedin.com" if found.
     - leetcodeProfile must include "leetcode.com" if found.
-  `;
+    `;
 
     const contents = [];
 
