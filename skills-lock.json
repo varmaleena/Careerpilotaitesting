@@ -1,0 +1,8 @@
+{
+  "skills": {
+    "supabase": {
+      "version": "latest",
+      "source": "@supabase/mcp-server-supabase"
+    }
+  }
+}
