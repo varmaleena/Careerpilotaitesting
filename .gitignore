@@ -21,3 +21,10 @@ pnpm-debug.log*
 !.vscode/extensions.json
 .idea
 .DS_Store
+
+# sensitive / local only
+serviceAccountKey.json
+users.json
+convert_to_csv.cjs
+export.cjs
+supabase_import.csv
