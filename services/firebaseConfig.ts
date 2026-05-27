@@ -19,7 +19,7 @@ const missingVars = Object.entries(firebaseConfig)
     .map(([k]) => k);
 
 if (missingVars.length > 0) {
-    console.error('❌ Missing Firebase env variables:', missingVars);
+
 }
 
 const app = initializeApp(firebaseConfig);

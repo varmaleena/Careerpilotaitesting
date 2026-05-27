@@ -103,7 +103,7 @@ export const LearningPlanView: React.FC<LearningPlanViewProps> = ({
                             const currentWeek = getCurrentWeek(plan);
                             const progressMessage = getProgressMessage(stats.progressPercentage);
 
-                            console.log(`[UI] Plan Stats Updated - Hours: ${stats.completedHours}/${stats.totalHours}`);
+
 
                             return (
                                 <div className="bg-gradient-to-br from-[#09090b] via-zinc-900 to-indigo-950/30 rounded-2xl border border-zinc-800/60 p-8 shadow-xl relative overflow-hidden group">

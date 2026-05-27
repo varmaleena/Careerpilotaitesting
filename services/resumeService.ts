@@ -112,7 +112,7 @@ Be STRICT. If it doesn't look like a resume, reject it.
 
         return { isValid: true, reason: "Valid resume detected." };
     } catch (error) {
-        console.error("Resume validation failed:", error);
+
         return { isValid: false, reason: "Failed to validate document. Please try again." };
     }
 };
@@ -346,11 +346,11 @@ export const analyzeProfile = async (
             return { analysis, extractedProfile };
 
         } catch (parseError) {
-            console.error("JSON Parse Error:", parseError, "Raw Text:", text);
+
             throw new Error("Failed to parse AI response. Please try again.");
         }
     } catch (error) {
-        console.error("Analysis failed", error);
+
         throw error;
     }
 };
@@ -565,7 +565,7 @@ Make it production-ready, no placeholders.`;
         const text = response.text || "{}";
         return JSON.parse(cleanJson(text)) as ResumeOptimizationResult;
     } catch (error) {
-        console.error("Resume Optimization Failed:", error);
+
         throw error;
     }
 };
@@ -771,7 +771,7 @@ OUTPUT: Complete JSON matching LatexResumeData schema.
         const text = response.text || "{}";
         return JSON.parse(cleanJson(text)) as LatexResumeData;
     } catch (error) {
-        console.error("Latex Data Extraction Failed:", error);
+
         throw error;
     }
 };
@@ -969,11 +969,11 @@ OUTPUT FORMAT (JSON):
             const data = JSON.parse(cleanJson(text));
             return data as ATSResumeAnalysis;
         } catch (parseError) {
-            console.error("JSON Parse Error:", parseError, "Raw Text:", text);
+
             throw new Error("Failed to parse AI response. Please try again.");
         }
     } catch (error) {
-        console.error("ATS Resume Analysis failed:", error);
+
         throw error;
     }
 };

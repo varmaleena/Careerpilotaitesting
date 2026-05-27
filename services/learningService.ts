@@ -132,7 +132,7 @@ export const generateLearningPlan = async (targetRole: string, missingSkills: st
 
         return sanitizedPlan;
     } catch (error) {
-        console.error("Plan Generation Failed:", error);
+
         throw error;
     }
 };
@@ -212,7 +212,7 @@ export const generateProjectIdeas = async (
             const lastBrace = text.lastIndexOf('}');
             if (lastBrace !== -1) {
                 text = text.substring(0, lastBrace + 1) + ']';
-                console.warn("⚠️ Repaired truncated JSON response");
+
             }
         }
 
@@ -240,7 +240,7 @@ export const generateProjectIdeas = async (
         }));
 
     } catch (error) {
-        console.error("❌ Project Generation Failed, using Fallback:", error);
+
 
         // 3. EMERGENCY FALLBACK WITH VARIATIONS
         // Use random offset to cycle through fallbacks if API fails repeatedly

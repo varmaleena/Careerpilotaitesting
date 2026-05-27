@@ -65,7 +65,7 @@ export const AuthService = {
         return { success: true, message: "Password reset link sent to your email." };
       }
     } catch (error: any) {
-      console.warn("Firebase reset failed, checking local storage fallback...", error.code);
+
       // Continue to fallback if it's a configuration/dev credential issue or user-not-found (might be local user)
     }
 
@@ -77,7 +77,7 @@ export const AuthService = {
       users[email].password = "12345678$"; // Simple default with special char to pass regex
       localStorage.setItem(USERS_DB_KEY, JSON.stringify(users));
 
-      console.log(`[DEV MODE] Password Reset for ${email} to '12345678$'`);
+
       return {
         success: true,
         message: "Dev Mode: Local password reset to '12345678$'. Try logging in now."
@@ -109,7 +109,7 @@ export const AuthService = {
         return { success: true, uid };
       }
     } catch (error: any) {
-      console.warn("Firebase signup error:", error.code, error.message);
+
       // Only return specific validation errors. For backend/network issues, fall back to local storage.
       const fatalErrors = ['auth/email-already-in-use', 'auth/invalid-email', 'auth/weak-password'];
       if (auth && fatalErrors.includes(error.code)) {
@@ -119,7 +119,7 @@ export const AuthService = {
     }
 
     // 2. Fallback to LocalStorage (Dev Mode)
-    console.warn("Firebase not configured. Using LocalStorage fallback.");
+
     await new Promise(resolve => setTimeout(resolve, 500));
     const users = JSON.parse(localStorage.getItem(USERS_DB_KEY) || '{}');
     if (users[email]) return { success: false, message: 'User already exists.' };
@@ -148,7 +148,7 @@ export const AuthService = {
         return { success: true, name, uid };
       }
     } catch (error: any) {
-      console.warn("Firebase login failed:", error.code);
+
       firebaseError = error.message;
     }
 
@@ -224,7 +224,7 @@ export const AuthService = {
         await setDoc(doc(db, "users", userId), sanitizedData);
         return;
       } catch (e) {
-        console.error("Firestore save failed:", e);
+
       }
     }
     localStorage.setItem(DATA_PREFIX + userId, JSON.stringify(data));
@@ -245,7 +245,7 @@ export const AuthService = {
           return data;
         }
       } catch (e) {
-        console.error("Firestore read failed:", e);
+
       }
     }
     const data = localStorage.getItem(DATA_PREFIX + userId);

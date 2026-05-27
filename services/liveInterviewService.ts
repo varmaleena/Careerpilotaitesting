@@ -151,7 +151,7 @@ Generate your next response as the interviewer:`;
 
         return response.text || "Could you please repeat that?";
     } catch (error) {
-        console.error("Live Interview Response Failed:", error);
+
         throw error;
     }
 };
@@ -235,7 +235,7 @@ Be brutally honest. This is their career growth.`;
 
         return JSON.parse(response.text || '{}');
     } catch (error) {
-        console.error("Interview Evaluation Failed:", error);
+
         throw error;
     }
 };

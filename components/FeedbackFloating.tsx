@@ -53,7 +53,7 @@ const FeedbackFloating: React.FC<FeedbackFloatingProps> = ({ userEmail }) => {
             }
 
         } catch (err: any) {
-            console.error("Feedback Error:", err);
+
             setError("Failed to send feedback. Please try again.");
         } finally {
             setIsSubmitting(false);

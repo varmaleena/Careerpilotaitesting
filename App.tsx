@@ -279,7 +279,7 @@ const App = () => {
     if (savedUid && savedEmail) {
       // Attempt auto-login using stored UID + email
       loginUser(savedUid, savedEmail).catch(err => {
-        console.error("Session restoration failed", err);
+
         localStorage.removeItem('careerPilot_session_uid');
         localStorage.removeItem('careerPilot_session_email');
       });
@@ -416,7 +416,7 @@ const App = () => {
 
   // --- Helpers ---
   const handleApiError = (error: any, defaultMsg: string) => {
-    console.error(error);
+
     if (error.message?.includes('429') || error.message?.includes('quota') || error.message?.includes('RESOURCE_EXHAUSTED')) {
       const msg = "🚦 AI System Busy\n\nAll API keys have reached their rate limit. This typically resets within a few minutes.\n\n✅ What to do:\n• Wait 2-3 minutes and try again\n• The system is automatically retrying with backup keys\n\nIf this persists, the daily quota may have been reached. Quotas reset at midnight Pacific Time.";
       alert(msg);
@@ -432,12 +432,12 @@ const App = () => {
     let userData = await AuthService.getUserData(uid);
 
     if (!userData && email) {
-      console.warn('No data found by UID, trying email key (legacy user):', email);
+
       userData = await AuthService.getUserData(email);
 
       // Migrate legacy email-keyed data to UID-keyed data
       if (userData) {
-        console.log('Migrating user data from email key to UID key...');
+
         await AuthService.saveUserData(uid, userData);
       }
     }
@@ -505,7 +505,7 @@ const App = () => {
         setView(AppView.ONBOARDING);
       }
     } else {
-      console.error("No user data found for uid:", uid, "or email:", email);
+
       // New user — send to onboarding instead of showing an error
       setCurrentUserUid(uid);
       setCurrentUserEmail(email);
@@ -588,7 +588,7 @@ const App = () => {
       setInterviewFeedback(null);
       setView(AppView.ONBOARDING);
     } catch (error) {
-      console.error("Reset failed:", error);
+
       alert("Failed to reset data. Please try again.");
     }
   };
@@ -638,7 +638,7 @@ const App = () => {
         };
         reader.readAsDataURL(file);
       } catch (error) {
-        console.error("Upload error:", error);
+
         alert("Failed to upload file. Please try again.");
         setIsUploadingResume(false);
       }
@@ -749,7 +749,7 @@ const App = () => {
       reader.readAsDataURL(file);
 
     } catch (error) {
-      console.error("PDF Upload Failed:", error);
+
       alert("Failed to parse PDF. Please ensure it is a valid text-based PDF.");
     }
   };
@@ -919,9 +919,9 @@ const App = () => {
       const latexData = await generateLatexData(result.optimizedContent);
 
       // Debug: Check if achievements are being extracted
-      console.log('LaTeX Data (before override):', latexData);
-      console.log('User Profile:', userProfile);
-      console.log('Current User Email:', currentUserEmail);
+
+
+
 
       // COMPREHENSIVE CLEANUP: Replace ALL placeholder values with real data
 
@@ -991,7 +991,7 @@ const App = () => {
         });
       }
 
-      console.log('LaTeX Data (after cleanup):', latexData);
+
 
       setLatexData(latexData);
       const latexContent = generateLatexDocument(latexData);
@@ -1426,7 +1426,7 @@ const App = () => {
       };
 
       recognition.onerror = (event: any) => {
-        console.error("Speech error", event.error);
+
         if (event.error === 'no-speech') {
           // Ignore
           return;
@@ -1438,14 +1438,14 @@ const App = () => {
           alert("Microphone access blocked. Please enable permissions in your browser settings.");
         } else {
           // Silent fail for other minor errors to avoid spamming alerts
-          console.warn("Speech recognition failed:", event.error);
+
         }
       };
 
       recognition.start();
       recognitionRef.current = recognition;
     } catch (e) {
-      console.error("Speech init error", e);
+
       alert("Could not start voice input.");
     }
   };

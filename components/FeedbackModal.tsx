@@ -49,7 +49,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ userEmail, onClose
             }
 
         } catch (err: any) {
-            console.error("Feedback Error:", err);
+
             setError("Failed to send feedback. Please try again.");
         } finally {
             setIsSubmitting(false);

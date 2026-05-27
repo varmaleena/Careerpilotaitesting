@@ -174,7 +174,7 @@ Make it feel like a REAL ${company} interview. Use their actual question pattern
         const rounds = JSON.parse(response.text || '[]');
         return rounds as InterviewRound[];
     } catch (error) {
-        console.error("Interview Generation Failed:", error);
+
         throw error;
     }
 };
@@ -237,7 +237,7 @@ Be constructive but honest. This is practice, so help them improve.`;
 
         return JSON.parse(response.text || '{}');
     } catch (error) {
-        console.error("Answer Evaluation Failed:", error);
+
         throw error;
     }
 };

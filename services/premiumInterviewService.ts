@@ -250,7 +250,7 @@ Generate your next response (Keep it professional, concise, and moving forward):
 
         return responseText;
     } catch (error) {
-        console.error("Premium Interview Response Failed:", error);
+
         throw error;
     }
 };
@@ -358,7 +358,7 @@ Be constructively honest to maximize learning. Frame everything as growth opport
 
         return JSON.parse(cleanJson(response.text || '{}'));
     } catch (error) {
-        console.error("Premium Interview Evaluation Failed:", error);
+
         throw error;
     }
 };

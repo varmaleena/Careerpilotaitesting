@@ -30,9 +30,9 @@ class AnalyticsService {
             }
 
             this.initialized = true;
-            console.log('✅ Analytics initialized');
+
         } catch (error) {
-            console.error('❌ Analytics initialization failed:', error);
+
         }
     }
 
@@ -45,9 +45,9 @@ class AnalyticsService {
             if (traits) {
                 mixpanel.people.set(traits);
             }
-            console.log('👤 User identified:', userId);
+
         } catch (error) {
-            console.error('Analytics identify error:', error);
+
         }
     }
 
@@ -73,9 +73,9 @@ class AnalyticsService {
                 });
             }
 
-            console.log('📊 Event tracked:', eventName, properties);
+
         } catch (error) {
-            console.error('Analytics track error:', error);
+
         }
     }
 
@@ -93,9 +93,9 @@ class AnalyticsService {
                 ReactGA.send({ hitType: 'pageview', page: pageName });
             }
 
-            console.log('📄 Page view:', pageName);
+
         } catch (error) {
-            console.error('Analytics page error:', error);
+
         }
     }
 
@@ -106,7 +106,7 @@ class AnalyticsService {
         try {
             mixpanel.people.set(properties);
         } catch (error) {
-            console.error('Analytics set properties error:', error);
+
         }
     }
 
@@ -117,7 +117,7 @@ class AnalyticsService {
         try {
             mixpanel.people.increment(property, value);
         } catch (error) {
-            console.error('Analytics increment error:', error);
+
         }
     }
 
@@ -127,9 +127,9 @@ class AnalyticsService {
 
         try {
             mixpanel.reset();
-            console.log('🔄 Analytics reset');
+
         } catch (error) {
-            console.error('Analytics reset error:', error);
+
         }
     }
 }

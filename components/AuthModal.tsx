@@ -91,7 +91,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 }
             }
         } catch (err: any) {
-            console.error('Auth error:', err);
+
             setAuthError(err?.message || "An unexpected error occurred. Check console for details.");
         } finally {
             setIsAuthLoading(false);
@@ -108,7 +108,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 setAuthError(result.message || 'Google Login failed.');
             }
         } catch (err: any) {
-            console.error('Google auth error:', err);
+
             setAuthError(err?.message || "An unexpected error occurred during Google Login.");
         }
     };

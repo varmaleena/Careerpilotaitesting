@@ -19,8 +19,8 @@ const keys = [
 // Initialize the Load Balancer
 const balancer = new RequestLoadBalancer(keys);
 
-console.log(`🔑 Loaded ${keys.length} Gemini API keys`);
-console.log(`🤖 Using model: ${GEMINI_MODEL}`);
+
+
 
 // Robust JSON cleaner
 export const cleanJson = (text: string): string => {
