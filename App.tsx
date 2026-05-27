@@ -428,7 +428,20 @@ const App = () => {
   // ... (existing state)
 
   const loginUser = async (uid: string, email: string) => {
-    const userData = await AuthService.getUserData(uid);
+    // Try by UID first (new users), then fall back to email (legacy users stored by email key)
+    let userData = await AuthService.getUserData(uid);
+
+    if (!userData && email) {
+      console.warn('No data found by UID, trying email key (legacy user):', email);
+      userData = await AuthService.getUserData(email);
+
+      // Migrate legacy email-keyed data to UID-keyed data
+      if (userData) {
+        console.log('Migrating user data from email key to UID key...');
+        await AuthService.saveUserData(uid, userData);
+      }
+    }
+
     if (userData) {
       // Calculate Streak
       const today = new Date().toDateString();
@@ -492,12 +505,16 @@ const App = () => {
         setView(AppView.ONBOARDING);
       }
     } else {
-      console.error("Critical error loading user data for uid:", uid);
-      alert("Could not load your account data. Please try logging in again.");
-      localStorage.removeItem('careerPilot_session_uid');
-      localStorage.removeItem('careerPilot_session_email');
+      console.error("No user data found for uid:", uid, "or email:", email);
+      // New user — send to onboarding instead of showing an error
+      setCurrentUserUid(uid);
+      setCurrentUserEmail(email);
+      setIsLoggedIn(true);
+      setShowAuthModal(false);
+      setView(AppView.ONBOARDING);
     }
   };
+
 
   const handleLogout = () => {
     setIsLoggedIn(false);
