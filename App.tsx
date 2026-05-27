@@ -492,7 +492,10 @@ const App = () => {
         setView(AppView.ONBOARDING);
       }
     } else {
-      setAuthError("Critical error loading user data.");
+      console.error("Critical error loading user data for uid:", uid);
+      alert("Could not load your account data. Please try logging in again.");
+      localStorage.removeItem('careerPilot_session_uid');
+      localStorage.removeItem('careerPilot_session_email');
     }
   };
 
