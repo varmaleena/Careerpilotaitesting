@@ -80,6 +80,8 @@ import { LearningPlanView } from "./components/LearningPlanView";
 import { ProjectsView } from "./components/ProjectsView";
 import { ResumeView } from "./components/ResumeView";
 import { InterviewView } from "./components/InterviewView";
+import { JobsView } from "./components/JobsView";
+import { VerifiedJob } from "./services/jobFetchers";
 import { generateLatexDocument } from './utils/latexUtils';
 
 import { AuthService } from './services/authService';
@@ -104,19 +106,21 @@ import {
   ResumeOptimizationResult,
   Skill,
   UserProfile,
-  WeeklyPlan
+  WeeklyPlan,
+  JobApplication
 } from './types';
 
 const App = () => {
   // --- Global State ---
   const [view, setView] = useState<AppView>(() => {
-    const path = window.location.pathname;
+    const path = window.location.pathname.toLowerCase();
     if (path.startsWith('/onboarding')) return AppView.ONBOARDING;
     if (path.startsWith('/dashboard')) return AppView.DASHBOARD;
     if (path.startsWith('/plan')) return AppView.PLAN;
     if (path.startsWith('/projects')) return AppView.PROJECTS;
     if (path.startsWith('/resumearchitect')) return AppView.RESUME;
     if (path.startsWith('/mockinterview')) return AppView.INTERVIEW;
+    if (path.startsWith('/jobs') || path.startsWith('/jobhub')) return AppView.JOBS;
     return AppView.LANDING;
   });
 
@@ -126,7 +130,7 @@ const App = () => {
 
   // 1. URL -> View Sync
   useEffect(() => {
-    const path = location.pathname;
+    const path = location.pathname.toLowerCase();
     let newView = AppView.LANDING;
 
     if (path === '/' || path === '') newView = AppView.LANDING;
@@ -136,6 +140,7 @@ const App = () => {
     else if (path.startsWith('/projects')) newView = AppView.PROJECTS;
     else if (path.startsWith('/resumearchitect')) newView = AppView.RESUME;
     else if (path.startsWith('/mockinterview')) newView = AppView.INTERVIEW;
+    else if (path.startsWith('/jobs') || path.startsWith('/jobhub')) newView = AppView.JOBS;
 
     // Only update if different to prevent loops
     if (view !== newView) {
@@ -154,10 +159,11 @@ const App = () => {
       case AppView.PROJECTS: targetPath = '/projects'; break;
       case AppView.RESUME: targetPath = '/resumearchitect'; break;
       case AppView.INTERVIEW: targetPath = '/mockinterview'; break;
+      case AppView.JOBS: targetPath = '/JobHub'; break;
       default: targetPath = '/';
     }
 
-    if (location.pathname !== targetPath) {
+    if (location.pathname.toLowerCase() !== targetPath.toLowerCase()) {
       navigate(targetPath);
     }
   }, [view]);
@@ -192,7 +198,7 @@ const App = () => {
 
 
   // User Data State
-  const [userProfile, setUserProfile] = useState<UserProfile>({ name: 'User', targetRole: '' });
+  const [userProfile, setUserProfile] = useState<UserProfile>({ name: 'User', targetRole: '', isPremium: true });
   const [analysis, setAnalysis] = useState<CareerAnalysis | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [validationError, setValidationError] = useState<string>('');
@@ -331,8 +337,8 @@ const App = () => {
         [USER_PROPS.TARGET_COMPANIES]: userProfile.targetCompanies,
         [USER_PROPS.LAST_ACTIVE]: new Date().toISOString(),
         [USER_PROPS.READINESS_SCORE]: analysis?.readinessScore,
-        [USER_PROPS.SKILLS_ACQUIRED]: analysis?.skills?.filter(s => s.status === 'acquired').length || 0,
-        [USER_PROPS.SKILLS_MISSING]: analysis?.skills?.filter(s => s.status === 'missing').length || 0
+        [USER_PROPS.SKILLS_ACQUIRED]: analysis?.skills?.filter(s => s.status === 'acquired')?.length || 0,
+        [USER_PROPS.SKILLS_MISSING]: analysis?.skills?.filter(s => s.status === 'missing')?.length || 0
       });
     }
   }, [isLoggedIn, currentUserEmail, userProfile, analysis]);
@@ -477,7 +483,10 @@ const App = () => {
       setIsLoggedIn(true);
       setShowAuthModal(false);
 
-      setUserProfile(userData.userProfile);
+      setUserProfile({
+        ...userData.userProfile,
+        isPremium: true
+      });
       setAnalysis(userData.analysis ? {
         ...userData.analysis,
         strengths: userData.analysis.strengths || [],
@@ -494,7 +503,7 @@ const App = () => {
       // Route Logic
       if (userData.analysis) {
         const lastView = localStorage.getItem('careerPilot_last_view') as AppView;
-        const validViews = [AppView.DASHBOARD, AppView.PLAN, AppView.PROJECTS, AppView.RESUME, AppView.INTERVIEW];
+        const validViews = [AppView.DASHBOARD, AppView.PLAN, AppView.PROJECTS, AppView.RESUME, AppView.INTERVIEW, AppView.JOBS];
 
         if (lastView && validViews.includes(lastView)) {
           setView(lastView);
@@ -522,9 +531,10 @@ const App = () => {
     setCurrentUserEmail('');
     localStorage.removeItem('careerPilot_session_uid'); // Clear persistent session
     localStorage.removeItem('careerPilot_session_email');
+    sessionStorage.removeItem('careerPilot_session_jobs_generated');
 
     // Reset all local state
-    setUserProfile({ name: 'User', targetRole: '' });
+    setUserProfile({ name: 'User', targetRole: '', isPremium: true });
     setAnalysis(null);
     setPlan(null);
     setProjects([]);
@@ -685,12 +695,43 @@ const App = () => {
     }
   };
 
+  const handleOnboardingBypass = () => {
+    setValidationError('');
+    setAnalysis({
+      readinessScore: 75,
+      summary: `Candidate profile initialized in local Demo/Bypass Mode against target role: "${userProfile.targetRole || 'Software Engineer'}".`,
+      skills: [
+        { name: "JavaScript", category: "technical", status: "acquired" },
+        { name: "TypeScript", category: "technical", status: "acquired" },
+        { name: "React", category: "technical", status: "acquired" },
+        { name: "Node.js", category: "technical", status: "acquired" },
+        { name: "System Design", category: "technical", status: "missing" },
+        { name: "Docker", category: "technical", status: "missing" },
+        { name: "Kubernetes", category: "technical", status: "missing" },
+        { name: "CI/CD", category: "technical", status: "missing" },
+        { name: "AWS", category: "technical", status: "missing" }
+      ],
+      strengths: ["Strong Frontend Skills", "Good Problem Solving", "Quick Learner"],
+      weaknesses: ["Lacks production DevOps experience", "No prior backend role", "Needs system design depth"]
+    });
+    setUserProfile(prev => ({
+      ...prev,
+      name: prev.name || "Demo User",
+      mobileNumber: prev.mobileNumber || "+1 234 567 890",
+      location: prev.location || "New York, USA",
+      githubProfile: prev.githubProfile || "https://github.com/demo",
+      linkedinProfile: prev.linkedinProfile || "https://linkedin.com/in/demo",
+      leetcodeProfile: prev.leetcodeProfile || "https://leetcode.com/demo"
+    }));
+    setView(AppView.DASHBOARD);
+  };
+
   const handleGeneratePlan = async () => {
     if (!analysis || !userProfile) return;
     setIsGeneratingPlan(true);
     try {
       // Safe access: analysis.skills might be missing if AI failed partially
-      const missingSkills = analysis.skills?.filter(s => s.status === 'missing').map(s => s.name) || [];
+      const missingSkills = analysis.skills?.filter(s => s.status === 'missing')?.map(s => s.name) || [];
       const generatedPlan = await generateLearningPlan(userProfile.targetRole, missingSkills);
 
       // Final filtering & deduplication to ensure content quality
@@ -785,12 +826,12 @@ const App = () => {
       return week;
     });
 
-    if (toggledTask) {
+    if (toggledTask && analysis) {
       const taskTitle = toggledTask.title.toLowerCase();
       const isNowCompleted = toggledTask.completed;
 
       // Update skills in analysis
-      const newSkills = analysis.skills.map(skill => {
+      const newSkills = (analysis.skills || []).map(skill => {
         const skillName = skill.name.toLowerCase();
         // Check if task title contains skill name or vice-versa
         if (taskTitle.includes(skillName) || skillName.includes(taskTitle)) {
@@ -918,11 +959,6 @@ const App = () => {
       // Generate LaTeX version
       const latexData = await generateLatexData(result.optimizedContent);
 
-      // Debug: Check if achievements are being extracted
-
-
-
-
       // COMPREHENSIVE CLEANUP: Replace ALL placeholder values with real data
 
       // Personal Info - Replace 'string', 'Unknown', empty values
@@ -1009,105 +1045,44 @@ const App = () => {
     }
   };
 
-
-
-  const handlePayment = async () => {
-    /*
-    const res = await loadScript('https://checkout.razorpay.com/v1/checkout.js');
-  
-    if (!res) {
-      alert('Razorpay SDK failed to load. Are you online?');
-      return;
-    }
-  
-    const options = {
-      key: import.meta.env.VITE_RAZORPAY_KEY_ID,
-      amount: 100,
-      currency: "INR",
-      name: "CareerPilot",
-      description: "Mock Interview Access",
-      // image: "https://example.com/your_logo",
-      handler: function (response: any) {
-        setUserProfile(prev => ({
-          ...prev,
-          isPremium: true,
-          paymentHistory: [
-            ...(prev.paymentHistory || []),
-            {
-              id: response.razorpay_payment_id || Date.now().toString(),
-              date: new Date().toISOString(),
-              amount: 1, // Store actual rupees (not paise)
-              item: 'Mock Interview',
-              status: 'success'
-            }
-          ]
-        }));
-        alert("Payment Successful! Mock Interview Unlocked.");
-      },
-      prefill: {
-        name: userProfile.name,
-        email: currentUserEmail || '',
-        contact: ""
-      },
-      notes: {
-        address: "CareerPilot Corporate Office"
-      },
-      theme: {
-        color: "#4f46e5"
-      }
+  // Job Hub Integration Handlers
+  const handleSaveJob = (job: VerifiedJob) => {
+    const newApp: JobApplication = {
+      id: Math.random().toString(36).substring(2, 9),
+      jobId: job.id,
+      company: job.company,
+      title: job.title,
+      location: job.location,
+      salary: job.salary,
+      applyLink: job.applyLink,
+      status: 'Saved',
+      dateAdded: Date.now(),
+      dateUpdated: Date.now()
     };
-  
-    const paymentObject = new (window as any).Razorpay(options);
-    paymentObject.open();
-    */
+    setUserProfile(prev => ({
+      ...prev,
+      jobApplications: [...(prev.jobApplications || []), newApp]
+    }));
   };
 
-  const handleResumePayment = async () => {
-    /*
-    const res = await loadScript('https://checkout.razorpay.com/v1/checkout.js');
-  
-    if (!res) {
-      alert('Razorpay SDK failed to load. Are you online?');
-      return;
-    }
-  
-    const options = {
-      key: import.meta.env.VITE_RAZORPAY_KEY_ID,
-      amount: 100, // 100 paise = ₹1
-      currency: "INR",
-      name: "CareerPilot",
-      description: "Resume Architect Access",
-      handler: function (response: any) {
-        setUserProfile(prev => ({
-          ...prev,
-          isResumePremium: true,
-          paymentHistory: [
-            ...(prev.paymentHistory || []),
-            {
-              id: response.razorpay_payment_id || Date.now().toString(),
-              date: new Date().toISOString(),
-              amount: 1, // Store actual rupees (not paise)
-              item: 'Resume Architect',
-              status: 'success'
-            }
-          ]
-        }));
-        alert("Payment Successful! Resume Architect Unlocked.");
-      },
-      prefill: {
-        name: userProfile.name,
-        email: currentUserEmail || '',
-        contact: ""
-      },
-      theme: {
-        color: "#10b981" // Emerald color for resume section
-      }
-    };
-  
-    const paymentObject = new (window as any).Razorpay(options);
-    paymentObject.open();
-    */
+  const handleUpdateJobStatus = (appId: string, status: JobApplication['status']) => {
+    setUserProfile(prev => ({
+      ...prev,
+      jobApplications: (prev.jobApplications || []).map(j => 
+        j.id === appId ? { ...j, status, dateUpdated: Date.now() } : j
+      )
+    }));
   };
+
+  const handleDeleteJob = (appId: string) => {
+    setUserProfile(prev => ({
+      ...prev,
+      jobApplications: (prev.jobApplications || []).filter(j => j.id !== appId)
+    }));
+  };
+
+  const handlePayment = async () => {};
+  const handleResumePayment = async () => {};
 
   const startInterview = useCallback(async () => {
     if (!userProfile?.targetRole) {
@@ -1505,6 +1480,7 @@ const App = () => {
         onLogout={handleLogout}
         onFileUpload={handleFileUpload}
         onSubmit={handleOnboardingSubmit}
+        onBypass={handleOnboardingBypass}
       />
     );
   }
@@ -1550,7 +1526,7 @@ const App = () => {
           onOpenProfile={() => setShowProfileModal(true)}
         />
 
-        <main className="flex-1 md:ml-64 p-6 md:p-10 pb-24 md:pb-10 pt-6 md:pt-10 bg-[#09090b] relative">
+        <main className="flex-1 md:ml-64 p-4 md:p-10 pb-28 md:pb-10 pt-4 md:pt-10 bg-[#09090b] relative">
 
           <div className="flex-1 flex flex-col">
             {/* Top Bar - Profile */}
@@ -1633,57 +1609,7 @@ const App = () => {
               />
             )}
 
-            {/* Resume View - Payment Gate */}
-            {/* {view === AppView.RESUME && !userProfile.isResumePremium && (
-            <div className="h-[calc(100vh-140px)] min-h-[600px] flex flex-col items-center justify-center bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 overflow-hidden shadow-2xl relative text-center px-4">
-              <div className="w-24 h-24 bg-emerald-600/20 rounded-full flex items-center justify-center mb-6 ring-4 ring-emerald-600/10">
-                <FileText className="w-10 h-10 text-emerald-400" />
-              </div>
-              <h2 className="text-3xl font-bold text-white mb-3">Resume Architect Pro</h2>
-              <p className="text-zinc-400 max-w-lg mb-8 text-lg">
-                Unlock professional resume optimization and LaTeX downloads. Land 3x more interviews with an ATS-optimized resume for just <span className="text-white font-bold">₹1</span>.
-              </p>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 text-left max-w-lg w-full">
-                <div className="bg-white/5 p-4 rounded-xl border border-white/5 flex items-center">
-                  <div className="p-2 bg-emerald-500/20 rounded-lg mr-3">
-                    <TrendingUp className="w-5 h-5 text-emerald-400" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-white text-sm">ATS Optimization</h4>
-                    <p className="text-xs text-zinc-400">Keyword injection & metric focus</p>
-                  </div>
-                </div>
-                <div className="bg-white/5 p-4 rounded-xl border border-white/5 flex items-center">
-                  <div className="p-2 bg-blue-500/20 rounded-lg mr-3">
-                    <Code className="w-5 h-5 text-blue-400" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-white text-sm">LaTeX Export</h4>
-                    <p className="text-xs text-zinc-400">Get professional PDF versions</p>
-                  </div>
-                </div>
-              </div>
-
-              <button
-                onClick={handleResumePayment}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white px-10 py-4 rounded-xl font-bold text-lg shadow-[0_0_30px_rgba(16,185,129,0.3)] hover:shadow-[0_0_50px_rgba(16,185,129,0.5)] transition-all transform hover:-translate-y-1 flex items-center"
-              >
-                Unlock Architect for ₹1
-                <ChevronRight className="w-5 h-5 ml-2" />
-              </button>
-              <p className="mt-4 text-xs text-zinc-500 flex items-center">
-                <Lock className="w-3 h-3 mr-1" /> Secure payment via Razorpay
-              </p>
-              <button
-                onClick={() => setUserProfile(p => ({ ...p, isResumePremium: true }))}
-                className="mt-8 text-[10px] text-zinc-700 hover:text-emerald-400 transition-colors"
-                title="Dev Bypass"
-              >
-                [Dev Bypass]
-              </button>
-            </div>
-          )} */}
 
             {/* Resume View */}
             {view === AppView.RESUME && (
@@ -1697,6 +1623,17 @@ const App = () => {
                 setUserProfile={setUserProfile}
                 onOptimizeResume={handleOptimizeResume}
                 onResumeUpload={handleResumeUpload}
+              />
+            )}
+
+            {/* Jobs View */}
+            {view === AppView.JOBS && (
+              <JobsView 
+                userProfile={userProfile}
+                uid={currentUserUid}
+                onSaveJob={handleSaveJob}
+                onUpdateJobStatus={handleUpdateJobStatus}
+                onDeleteJob={handleDeleteJob}
               />
             )}
 
@@ -1741,17 +1678,6 @@ const App = () => {
               </button>
               <p className="mt-4 text-xs text-zinc-500 flex items-center">
                 <Lock className="w-3 h-3 mr-1" /> Secure payment via Razorpay
-              </p>
-              <button
-                onClick={() => setUserProfile(p => ({ ...p, isPremium: true }))}
-                className="mt-8 text-[10px] text-zinc-700 hover:text-violet-400 transition-colors"
-                title="Dev Bypass"
-              >
-                [Dev Bypass]
-              </button>
-            </div>
-          )} */}
-
             {/* Interview View */}
             {view === AppView.INTERVIEW && (
               <InterviewView

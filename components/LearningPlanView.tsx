@@ -90,8 +90,13 @@ export const LearningPlanView: React.FC<LearningPlanViewProps> = ({
 
                 {isGeneratingPlan && (
                     <div className="flex flex-col items-center justify-center py-24">
-                        <Loader2 className="w-10 h-10 text-zinc-500 animate-spin mb-4" />
-                        <p className="text-zinc-400 text-sm">Designing your curriculum...</p>
+                        <div className="relative">
+                            <div className="w-16 h-16 rounded-2xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center mb-6">
+                                <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
+                            </div>
+                        </div>
+                        <p className="text-zinc-300 text-sm font-medium">Designing your curriculum...</p>
+                        <p className="text-zinc-600 text-xs mt-1">This may take a moment</p>
                     </div>
                 )}
 

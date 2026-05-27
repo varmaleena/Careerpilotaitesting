@@ -18,7 +18,7 @@ class AnalyticsService {
         try {
             // Initialize Mixpanel
             mixpanel.init(MIXPANEL_TOKEN, {
-                debug: import.meta.env.DEV,
+                debug: false,
                 track_pageview: true,
                 persistence: 'localStorage',
                 ignore_dnt: false

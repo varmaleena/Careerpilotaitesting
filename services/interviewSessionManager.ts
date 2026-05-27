@@ -303,8 +303,7 @@ function generateSessionId(): string {
  * TODO: Integrate with actual payment system
  */
 function isPremiumUser(): boolean {
-    // Placeholder - integrate with Stripe/Razorpay
-    return false;
+    return true;
 }
 
 /**

@@ -65,7 +65,7 @@ export const InterviewView: React.FC<InterviewViewProps> = ({
     isListening
 }) => {
     return (
-        <div className="h-[calc(100dvh-160px)] md:h-[calc(100vh-140px)] md:min-h-[600px] flex flex-col bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 overflow-hidden shadow-2xl relative">
+        <div className="h-[calc(100dvh-200px)] md:h-[calc(100vh-140px)] md:min-h-[600px] flex flex-col bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 overflow-hidden shadow-2xl relative">
 
             {isGeneratingFeedback ? (
                 /* Feedback Loading State */

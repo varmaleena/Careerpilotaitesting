@@ -1,4 +1,4 @@
-import { BookOpen, Code, Compass, FileText, LayoutDashboard, LogOut, Menu, MessageSquare, Trash2, TrendingUp, X } from 'lucide-react';
+import { BookOpen, Code, Compass, FileText, LayoutDashboard, LogOut, Menu, MessageSquare, Trash2, TrendingUp, X, Briefcase } from 'lucide-react';
 import React, { useState } from 'react';
 import { AppView } from '../types';
 
@@ -18,6 +18,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
     { id: AppView.PROJECTS, label: 'Build Portfolio', icon: Code },
     { id: AppView.RESUME, label: 'Resume Architect', icon: FileText },
     { id: AppView.INTERVIEW, label: 'Interview Prep', icon: MessageSquare },
+    { id: AppView.JOBS, label: 'Job Hub', icon: Briefcase },
   ];
 
   return (

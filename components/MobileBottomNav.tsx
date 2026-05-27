@@ -8,10 +8,11 @@ import {
     Compass,
     LogOut,
     X,
-    MessageSquare,
     TrendingUp,
     Trash2,
-    User
+    User,
+    Briefcase,
+    MessageSquare
 } from 'lucide-react';
 import { AppView } from '../types';
 
@@ -43,6 +44,7 @@ const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
         { id: AppView.PROJECTS, icon: Code, label: 'Portfolio' },
         { id: AppView.RESUME, icon: FileText, label: 'Resume' },
         { id: AppView.INTERVIEW, icon: MessageSquare, label: 'Interview' },
+        { id: AppView.JOBS, icon: Briefcase, label: 'Jobs' },
     ];
 
     const handleNavClick = (view: AppView) => {
@@ -66,20 +68,20 @@ const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                         <button
                             key={item.id}
                             onClick={() => handleNavClick(item.id)}
-                            className="flex flex-col items-center justify-center w-auto flex-1 h-full space-y-1 relative group"
+                            className="flex flex-col items-center justify-center w-auto flex-1 h-full gap-0.5 relative group"
                         >
                             <item.icon
-                                className={`w-5 h-5 transition-all duration-300 ${isActive(item.id)
-                                    ? 'text-violet-400 drop-shadow-[0_0_8px_rgba(167,139,250,0.5)] -translate-y-1'
-                                    : 'text-zinc-500 opacity-60 group-hover:text-zinc-300'
+                                className={`w-5 h-5 transition-all duration-200 ${isActive(item.id)
+                                    ? 'text-violet-400 drop-shadow-[0_0_8px_rgba(167,139,250,0.5)]'
+                                    : 'text-zinc-500 group-hover:text-zinc-300'
                                     }`}
                             />
-                            <span className={`text-[9px] font-medium transition-all ${isActive(item.id) ? 'text-violet-400 opacity-100' : 'text-zinc-500 opacity-0 group-hover:opacity-100'}`}>
+                            <span className={`text-[9px] font-semibold transition-all duration-200 ${isActive(item.id) ? 'text-violet-400 opacity-100' : 'text-zinc-600 opacity-70'}`}>
                                 {item.label}
                             </span>
 
                             {isActive(item.id) && (
-                                <div className="absolute top-0 w-8 h-[2px] bg-violet-500 shadow-[0_0_10px_rgba(167,139,250,1)] rounded-b-full"></div>
+                                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-[2px] bg-violet-500 shadow-[0_0_8px_rgba(167,139,250,0.8)] rounded-b-full"></div>
                             )}
                         </button>
                     ))}
@@ -87,15 +89,15 @@ const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                     {/* Menu Button */}
                     <button
                         onClick={toggleMenu}
-                        className="flex flex-col items-center justify-center w-auto flex-1 h-full space-y-1 relative group"
+                        className="flex flex-col items-center justify-center w-auto flex-1 h-full gap-0.5 relative group"
                     >
                         <Menu
-                            className={`w-5 h-5 transition-all duration-300 ${isMenuOpen
-                                ? 'text-violet-400 drop-shadow-[0_0_8px_rgba(167,139,250,0.5)] -translate-y-1'
-                                : 'text-zinc-500 opacity-60 group-hover:text-zinc-300'
+                            className={`w-5 h-5 transition-all duration-200 ${isMenuOpen
+                                ? 'text-violet-400 drop-shadow-[0_0_8px_rgba(167,139,250,0.5)]'
+                                : 'text-zinc-500 group-hover:text-zinc-300'
                                 }`}
                         />
-                        <span className={`text-[9px] font-medium transition-all ${isMenuOpen ? 'text-violet-400 opacity-100' : 'text-zinc-500 opacity-0 group-hover:opacity-100'}`}>
+                        <span className={`text-[9px] font-semibold transition-all duration-200 ${isMenuOpen ? 'text-violet-400 opacity-100' : 'text-zinc-600 opacity-70'}`}>
                             More
                         </span>
                     </button>

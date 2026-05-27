@@ -16,6 +16,8 @@ const keys = [
     import.meta.env.VITE_GEMINI_API_KEY_7
 ].filter(Boolean);
 
+export const HAS_GEMINI_KEYS = keys.length > 0;
+
 // Initialize the Load Balancer
 const balancer = new RequestLoadBalancer(keys);
 

@@ -11,6 +11,7 @@ import {
     User
 } from 'lucide-react';
 import { UserProfile } from '../types';
+import { HAS_GEMINI_KEYS } from '../services/geminiClient';
 
 interface OnboardingViewProps {
     // State
@@ -25,6 +26,7 @@ interface OnboardingViewProps {
     onLogout: () => void;
     onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onSubmit: (e: React.FormEvent) => void;
+    onBypass?: () => void;
 }
 
 export const OnboardingView: React.FC<OnboardingViewProps> = ({
@@ -36,7 +38,8 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
     setUserProfile,
     onLogout,
     onFileUpload,
-    onSubmit
+    onSubmit,
+    onBypass
 }) => {
     // Premium Full-Screen Loading State during Analysis
     if (isAnalyzing) {
@@ -272,9 +275,29 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
                         <div className="flex border-t border-white/5 pt-8 gap-4 flex-col sm:flex-row items-center">
                             {/* Error Box */}
                             {validationError && (
-                                <div className="flex-1 w-full bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex items-center gap-3">
-                                    <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                                    <p className="text-xs text-red-300 font-medium">{validationError}</p>
+                                <div className="flex-grow w-full bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex flex-col gap-3">
+                                    <div className="flex items-center gap-3">
+                                        <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                                        <p className="text-xs text-red-300 font-medium">{validationError}</p>
+                                    </div>
+                                    {onBypass && (
+                                        <button
+                                            type="button"
+                                            onClick={onBypass}
+                                            className="text-xs bg-white/10 hover:bg-white/20 text-white font-semibold py-1.5 px-3 rounded-lg transition-colors w-fit border border-white/10"
+                                        >
+                                            Bypass & Enter Demo Mode
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+
+                            {!HAS_GEMINI_KEYS && !validationError && (
+                                <div className="flex-1 w-full bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex items-center gap-3">
+                                    <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                                    <p className="text-xs text-amber-300 font-medium">
+                                        Demo Mode Active: No Gemini key in <code>.env</code>. Mock data will be used.
+                                    </p>
                                 </div>
                             )}
 

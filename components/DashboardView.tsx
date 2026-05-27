@@ -120,8 +120,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         <div>
                             <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider mb-3">Acquired</p>
                             <div className="flex flex-wrap gap-2">
-                                {analysis.skills?.filter(s => s.status === 'acquired').map(s => <SkillCard key={s.name} skill={s} />)}
-                                {analysis.skills?.filter(s => s.status === 'acquired').length === 0 && (
+                                {(analysis.skills || []).filter(s => s.status === 'acquired').map(s => <SkillCard key={s.name} skill={s} />)}
+                                {(analysis.skills || []).filter(s => s.status === 'acquired').length === 0 && (
                                     <span className="text-sm text-zinc-500 italic">No exact matches found yet.</span>
                                 )}
                             </div>
@@ -129,7 +129,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         <div>
                             <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider mb-3">Missing / To Learn</p>
                             <div className="flex flex-wrap gap-2">
-                                {analysis.skills?.filter(s => s.status === 'missing').map(s => <SkillCard key={s.name} skill={s} />)}
+                                {(analysis.skills || []).filter(s => s.status === 'missing').map(s => <SkillCard key={s.name} skill={s} />)}
                             </div>
                         </div>
                     </div>
