@@ -68,7 +68,7 @@ import Sidebar from "./components/Sidebar";
 import MobileBottomNav from "./components/MobileBottomNav";
 import { SkillCard } from "./components/SkillCard";
 import { ShareSuccessModal } from "./components/ShareSuccessModal";
-import { DailyQuest } from "./components/DailyQuest";
+
 import { InterviewAnalysisView } from "./components/InterviewAnalysisView";
 import { ConfirmResetModal } from "./components/ConfirmResetModal";
 import { ProfileModal } from "./components/ProfileModal";
@@ -420,10 +420,126 @@ const App = () => {
     }
   };
 
+  // --- Gated View Switching ---
+  const handleViewChange = (newView: AppView) => {
+    if (newView === AppView.LANDING || newView === AppView.DASHBOARD || newView === AppView.ONBOARDING) {
+      setView(newView);
+    } else {
+      if (isLoggedIn) {
+        setView(newView);
+      } else {
+        setAuthMode('signup');
+        setShowAuthModal(true);
+      }
+    }
+  };
+
+  const handleLandingPageUpload = async (file: File, targetRole: string) => {
+    setIsAnalyzing(true);
+    setValidationError('');
+    try {
+      // 1. Extract Text
+      const text = await extractTextFromPdf(file);
+
+      // 2. Convert to Base64 (Using Promise for unified error handling)
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const b64 = (reader.result as string).split(',')[1];
+          resolve(b64);
+        };
+        reader.onerror = () => reject(new Error("Failed to read file"));
+        reader.readAsDataURL(file);
+      });
+      
+      const profileUpdates = {
+        resumeText: text,
+        resumeFile: {
+          data: base64,
+          mimeType: file.type
+        },
+        targetRole: targetRole
+      };
+
+      // 3. Validate
+      const validation = await validateResumeContent({ text: profileUpdates.resumeText, file: profileUpdates.resumeFile });
+      if (!validation.isValid) {
+        setValidationError(validation.reason || 'The document does not appear to be a valid resume.');
+        setView(AppView.ONBOARDING);
+        setIsAnalyzing(false);
+        return;
+      }
+
+      // 4. Analyze
+      const result = await analyzeProfile(
+        { text: profileUpdates.resumeText, file: profileUpdates.resumeFile },
+        targetRole,
+        "",
+        "Student/Fresher"
+      );
+
+      setAnalysis(result.analysis);
+      setUserProfile(prev => ({
+        ...prev,
+        ...result.extractedProfile,
+        resumeText: text,
+        resumeFile: {
+          data: base64,
+          mimeType: file.type
+        },
+        targetRole: targetRole
+      }));
+
+      setView(AppView.DASHBOARD);
+      setIsAnalyzing(false);
+    } catch (error: any) {
+      handleApiError(error, "Resume analysis failed");
+      setIsAnalyzing(false);
+    }
+  };
+
   // ... (existing state)
 
+<<<<<<< Updated upstream
   const loginUser = async (email: string) => {
     const userData = await AuthService.getUserData(email);
+=======
+  const loginUser = async (uid: string, email: string) => {
+    // Try by UID first (new users), then fall back to email (legacy users stored by email key)
+    let userData = await AuthService.getUserData(uid);
+
+    if (!userData && email) {
+
+      userData = await AuthService.getUserData(email);
+
+      // Migrate legacy email-keyed data to UID-keyed data
+      if (userData) {
+
+        await AuthService.saveUserData(uid, userData);
+      }
+    }
+
+    // Save guest progress to database for new users
+    if (!userData && analysis) {
+      userData = {
+        userProfile: {
+          ...userProfile,
+          lastLoginDate: new Date().toISOString(),
+          streak: 1,
+          xp: 10
+        },
+        analysis,
+        plan,
+        projects,
+        chatMessages,
+        interviewFeedback,
+        resumeAnalysisResult,
+        seenProjectTitles
+      };
+      await AuthService.saveUserData(uid, userData);
+    }
+
+>>>>>>> Stashed changes
     if (userData) {
       // Calculate Streak
       const today = new Date().toDateString();
@@ -658,6 +774,11 @@ const App = () => {
   };
 
   const handleGeneratePlan = async () => {
+    if (!isLoggedIn) {
+      setAuthMode('signup');
+      setShowAuthModal(true);
+      return;
+    }
     if (!analysis || !userProfile) return;
     setIsGeneratingPlan(true);
     try {
@@ -1453,12 +1574,15 @@ const App = () => {
               setShowAuthModal(true);
             }
           }}
+          onUploadResume={handleLandingPageUpload}
+          isAnalyzing={isAnalyzing}
         />
         <AuthModal
           isOpen={showAuthModal}
           initialMode={authMode}
           onClose={() => setShowAuthModal(false)}
           onAuthSuccess={loginUser}
+          hasGuestAnalysis={!!analysis && !isLoggedIn}
         />
       </>
     );
@@ -1486,14 +1610,14 @@ const App = () => {
     <>
       {/* Navigation Loading Overlay */}
       {isNavigating && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[9999] flex items-center justify-center">
-          <div className="bg-zinc-900/90 backdrop-blur-xl rounded-2xl p-6 border border-white/10 shadow-2xl">
-            <Loader2 className="w-8 h-8 animate-spin text-violet-500 mx-auto" />
+        <div className="fixed inset-0 bg-zinc-900/10 backdrop-blur-sm z-[9999] flex items-center justify-center">
+          <div className="bg-white rounded-2xl p-6 border border-[#e3e1dc] shadow-xl animate-in fade-in duration-200">
+            <Loader2 className="w-8 h-8 animate-spin text-zinc-800 mx-auto" />
           </div>
         </div>
       )}
 
-      <div className="min-h-screen bg-[#09090b] flex text-zinc-100 font-sans">
+      <div className="min-h-screen flex text-zinc-800 font-sans bg-[#f5f4f2]">
         {showShareModal && analysis && (
           <ShareSuccessModal
             score={analysis.readinessScore}
@@ -1505,7 +1629,7 @@ const App = () => {
 
         <Sidebar
           currentView={view}
-          onChangeView={setView}
+          onChangeView={handleViewChange}
           onLogout={handleLogout}
           onSwitchTrack={handleSwitchTrack}
           onResetData={handleResetData}
@@ -1514,7 +1638,7 @@ const App = () => {
 
         <MobileBottomNav
           currentView={view}
-          onChangeView={setView}
+          onChangeView={handleViewChange}
           onLogout={handleLogout}
           onSwitchTrack={handleSwitchTrack}
           onResetData={handleResetData}
@@ -1522,33 +1646,37 @@ const App = () => {
           onOpenProfile={() => setShowProfileModal(true)}
         />
 
+<<<<<<< Updated upstream
         <main className="flex-1 md:ml-64 p-6 md:p-10 pb-24 md:pb-10 pt-6 md:pt-10 bg-[#09090b] relative">
+=======
+        <main className="flex-1 md:ml-64 p-4 md:p-6 pb-28 md:pb-6 pt-4 md:pt-6 bg-transparent relative flex flex-col">
+>>>>>>> Stashed changes
 
           <div className="flex-1 flex flex-col">
             {/* Top Bar - Profile */}
             <header className="flex justify-between md:justify-end items-center px-4 md:px-6 py-3">
               {/* Mobile Logo */}
               <div className="flex items-center gap-2 md:hidden">
-                <div className="w-10 h-10 rounded-lg overflow-hidden shadow-lg shadow-violet-500/20 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg overflow-hidden shadow-md flex items-center justify-center bg-white border border-[#e3e1dc]">
                   <img src="/logo.png" alt="CareerPilot Logo" className="initial w-full h-full object-contain" />
                 </div>
-                <span className="font-bold text-lg text-white tracking-tight">CareerPilot</span>
+                <span className="font-bold text-lg text-zinc-900 tracking-tight">CareerPilot</span>
               </div>
               {isLoggedIn && (
                 <div className="flex items-center space-x-3">
-                  <div className="flex items-center gap-2 px-2 md:px-3 py-1 md:py-1.5 bg-zinc-900/50 border border-amber-500/20 rounded-full shadow-[0_0_10px_rgba(245,158,11,0.1)] hover:shadow-[0_0_15px_rgba(245,158,11,0.2)] transition-all group cursor-default">
+                  <div className="flex items-center gap-2 px-3 py-1 md:py-1.5 bg-white border border-[#e3e1dc] rounded-full shadow-sm hover:shadow hover:border-zinc-400 transition-all group cursor-default">
                     <div className="bg-amber-500/10 p-1 rounded-full group-hover:bg-amber-500/20 transition-colors">
-                      <Flame className="w-3 h-3 md:w-3.5 md:h-3.5 text-amber-500 fill-amber-500 animate-[pulse_3s_ease-in-out_infinite]" />
+                      <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
                     </div>
                     <div className="flex flex-col leading-none">
-                      <span className="text-xs md:text-sm font-bold text-zinc-200 group-hover:text-white transition-colors">
-                        {userProfile.streak || 1} <span className="text-amber-500">Days</span>
+                      <span className="text-xs md:text-sm font-bold text-zinc-700 group-hover:text-zinc-900 transition-colors">
+                        {userProfile.streak || 1} <span className="text-amber-600">Days</span>
                       </span>
                     </div>
                   </div>
                   <button
                     onClick={() => setShowProfileModal(true)}
-                    className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-zinc-950 font-bold text-sm shadow-lg shadow-white/20 hover:shadow-white/40 hover:scale-105 transition-all cursor-pointer ring-2 ring-zinc-500/20"
+                    className="w-10 h-10 rounded-full bg-white border border-[#e3e1dc] flex items-center justify-center text-zinc-800 font-bold text-sm shadow-sm hover:bg-zinc-50 hover:scale-105 transition-all cursor-pointer"
                     title="View Profile"
                   >
                     {userProfile.name?.[0]?.toUpperCase() || 'U'}
@@ -1556,6 +1684,9 @@ const App = () => {
                 </div>
               )}
             </header>
+
+            {/* Main Content Area in Clean Floating Panel */}
+            <div className="flex-1 bg-white border border-[#e3e1dc] rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.03)] flex flex-col overflow-hidden">
 
             {/* Dashboard View */}
             {view === AppView.DASHBOARD && analysis && (
@@ -1566,7 +1697,7 @@ const App = () => {
                 isGeneratingPlan={isGeneratingPlan}
                 onShowShareModal={() => setShowShareModal(true)}
                 onGeneratePlan={handleGeneratePlan}
-                onNavigate={setView}
+                onNavigate={handleViewChange}
               />
             )}
 
@@ -1752,7 +1883,7 @@ const App = () => {
               />
             )}
 
-
+            </div>
           </div>
         </main >
         {/* Render Feedback Modal */}
@@ -1782,7 +1913,7 @@ const App = () => {
           isLoggedIn && (
             <MobileBottomNav
               currentView={view}
-              onChangeView={setView}
+              onChangeView={handleViewChange}
               onLogout={handleLogout}
               onSwitchTrack={() => setView(AppView.ONBOARDING)}
               onResetData={handleResetData}
@@ -1797,6 +1928,15 @@ const App = () => {
           isOpen={showConfirmResetModal}
           onClose={() => setShowConfirmResetModal(false)}
           onConfirm={confirmResetData}
+        />
+
+        {/* Auth Modal for Gated Dashboard Views */}
+        <AuthModal
+          isOpen={showAuthModal}
+          initialMode={authMode}
+          onClose={() => setShowAuthModal(false)}
+          onAuthSuccess={loginUser}
+          hasGuestAnalysis={!!analysis && !isLoggedIn}
         />
       </div >
     </>

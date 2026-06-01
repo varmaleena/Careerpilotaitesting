@@ -1,10 +1,8 @@
-import { getDocument } from 'pdfjs-dist';
-
-// Ensure the worker is set up correctly for the browser environment
-import { GlobalWorkerOptions } from 'pdfjs-dist';
-// Use the CDN worker for simplicity in client-side React without complex build config
-GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 import * as pdfjs from 'pdfjs-dist';
+import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
+
+// Ensure the worker is set up correctly for the browser environment using the jsdelivr CDN
+GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 /**
  * Extracts plain text from a PDF file (Blob/File).
@@ -94,7 +92,11 @@ export const extractTextFromPdf = async (file: File): Promise<string> => {
 
         return fullText.trim();
     } catch (error) {
+<<<<<<< Updated upstream
         console.error("PDF Parse Error:", error);
+=======
+        console.error("PDF Parsing Error:", error);
+>>>>>>> Stashed changes
         throw new Error("Failed to extract text from PDF. Please upload a clear PDF file.");
     }
 };

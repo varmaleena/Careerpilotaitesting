@@ -14,14 +14,20 @@ interface AuthModalProps {
     isOpen: boolean;
     initialMode: 'login' | 'signup';
     onClose: () => void;
+<<<<<<< Updated upstream
     onAuthSuccess: (email: string) => Promise<void>;
+=======
+    onAuthSuccess: (uid: string, email: string) => Promise<void>;
+    hasGuestAnalysis?: boolean;
+>>>>>>> Stashed changes
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
     isOpen,
     initialMode,
     onClose,
-    onAuthSuccess
+    onAuthSuccess,
+    hasGuestAnalysis = false
 }) => {
     // Form State
     const [authMode, setAuthMode] = useState<'login' | 'signup'>(initialMode);
@@ -90,8 +96,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     setAuthError(result.message || 'Login failed.');
                 }
             }
+<<<<<<< Updated upstream
         } catch (err) {
             setAuthError("An unexpected error occurred.");
+=======
+        } catch (err: any) {
+            setAuthError(err?.message || "An unexpected error occurred. Check console for details.");
+>>>>>>> Stashed changes
         } finally {
             setIsAuthLoading(false);
         }
@@ -106,8 +117,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             } else {
                 setAuthError(result.message || 'Google Login failed.');
             }
+<<<<<<< Updated upstream
         } catch (err) {
             setAuthError("An unexpected error occurred during Google Login.");
+=======
+        } catch (err: any) {
+            setAuthError(err?.message || "An unexpected error occurred during Google Login.");
+>>>>>>> Stashed changes
         }
     };
 
@@ -123,93 +139,100 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
-            <div className="bg-[#0a0a0a] border border-zinc-800 rounded-2xl p-8 max-w-md w-full shadow-2xl relative">
+        <div className="fixed inset-0 bg-zinc-950/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-[fadeIn_0.2s_ease-out]">
+            <div className="bg-white/95 backdrop-blur-lg border border-zinc-200/80 rounded-2xl p-7 max-w-sm w-full shadow-2xl relative text-left">
                 <button
                     onClick={handleClose}
-                    className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"
+                    className="absolute top-4.5 right-4.5 text-zinc-400 hover:text-zinc-900 transition-colors cursor-pointer bg-transparent border-0"
                 >
-                    <X className="w-5 h-5" />
+                    <X className="w-4 h-4" />
                 </button>
 
                 <div className="mb-6 text-center">
-                    <h2 className="text-2xl font-bold text-white mb-2">
-                        {authMode === 'login' ? 'Welcome Back' : 'Create Account'}
+                    <h2 className="text-xl font-bold text-zinc-900 mb-1.5">
+                        {authMode === 'login' 
+                            ? 'Welcome Back' 
+                            : hasGuestAnalysis 
+                                ? 'Save Your Analysis' 
+                                : 'Create Account'}
                     </h2>
-                    <p className="text-zinc-400 text-sm">
+                    <p className="text-zinc-500 text-xs font-light leading-relaxed">
                         {authMode === 'login'
-                            ? 'Enter your credentials to access your career plan.'
-                            : 'Join CareerPilot to start your journey.'}
+                            ? 'Enter your credentials to access your career roadmap.'
+                            : hasGuestAnalysis
+                                ? 'Sign up for a free account to save your resume analysis, unlock your custom learning plan, and start interview practice.'
+                                : 'Join CareerPilot to start tracking your readiness score.'}
                     </p>
                 </div>
 
                 <form onSubmit={handleAuthSubmit} className="space-y-4">
                     <div>
-                        <label className="block text-xs font-medium text-zinc-400 mb-1 ml-1">Email Address</label>
+                        <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5 ml-0.5">Email Address</label>
                         <div className="relative">
-                            <Mail className="absolute left-3 top-3.5 w-4 h-4 text-zinc-500" />
-                            <input
-                                type="email"
-                                required
-                                value={emailInput}
-                                onChange={(e) => {
-                                    setEmailInput(e.target.value);
-                                    if (emailError && AuthService.isValidEmail(e.target.value)) {
-                                        setEmailError('');
-                                    }
-                                }}
-                                onBlur={() => {
-                                    if (emailInput.trim() && !AuthService.isValidEmail(emailInput)) {
-                                        setEmailError('Please enter a valid email address');
-                                    } else {
-                                        setEmailError('');
-                                    }
-                                }}
-                                className={`w-full bg-zinc-900 border rounded-xl p-3 pl-10 text-white outline-none focus:ring-2 focus:ring-violet-500 transition-all placeholder-zinc-600 ${emailError ? 'border-red-500' : 'border-zinc-800'}`}
-                                placeholder="you@example.com"
-                            />
+                           <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                           <input
+                              type="email"
+                              required
+                              value={emailInput}
+                              onChange={(e) => {
+                                 setEmailInput(e.target.value);
+                                 if (emailError && AuthService.isValidEmail(e.target.value)) {
+                                    setEmailError('');
+                                 }
+                              }}
+                              onBlur={() => {
+                                 if (emailInput.trim() && !AuthService.isValidEmail(emailInput)) {
+                                    setEmailError('Please enter a valid email address');
+                                 } else {
+                                    setEmailError('');
+                                 }
+                              }}
+                              className={`w-full bg-white/60 border rounded-xl p-2.5 pl-10 text-xs text-zinc-800 outline-none focus:border-zinc-400 focus:bg-white transition-all placeholder-zinc-400 shadow-sm ${emailError ? 'border-red-400' : 'border-zinc-200/80'}`}
+                              placeholder="you@example.com"
+                           />
                         </div>
                         {emailError && (
-                            <p className="text-red-400 text-xs mt-1 ml-1">{emailError}</p>
+                           <p className="text-red-500 text-[10px] mt-1 ml-0.5">{emailError}</p>
                         )}
                     </div>
+                    
                     <div>
-                        <label className="block text-xs font-medium text-zinc-400 mb-1 ml-1">Password</label>
+                        <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5 ml-0.5">Password</label>
                         <div className="relative">
-                            <Lock className="absolute left-3 top-3.5 w-4 h-4 text-zinc-500" />
-                            <input
-                                type="password"
-                                required
-                                value={passwordInput}
-                                onChange={(e) => setPasswordInput(e.target.value)}
-                                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 pl-10 text-white outline-none focus:ring-2 focus:ring-violet-500 transition-all placeholder-zinc-600"
-                                placeholder="••••••••"
-                            />
+                           <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                           <input
+                              type="password"
+                              required
+                              value={passwordInput}
+                              onChange={(e) => setPasswordInput(e.target.value)}
+                              className="w-full bg-white/60 border border-zinc-200/80 rounded-xl p-2.5 pl-10 text-xs text-zinc-800 outline-none focus:border-zinc-400 focus:bg-white transition-all placeholder-zinc-400 shadow-sm"
+                              placeholder="••••••••"
+                           />
                         </div>
                         {authMode === 'signup' && (
-                            <div className="mt-2 text-xs text-zinc-500 space-y-0.5">
-                                <p className="text-zinc-400 font-medium mb-1">Password requirements:</p>
-                                <p className={passwordInput.length >= 8 ? 'text-emerald-400' : ''}>• Minimum 8 characters</p>
-                                <p className={/\d/.test(passwordInput) ? 'text-emerald-400' : ''}>• At least one number (0-9)</p>
-                                <p className={/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(passwordInput) ? 'text-emerald-400' : ''}>• At least one special character (!@#$%^&*...)</p>
-                            </div>
+                           <div className="mt-2.5 text-[10px] text-zinc-400 space-y-0.5 ml-0.5">
+                              <p className="text-zinc-500 font-bold mb-1 uppercase tracking-wider">Password Requirements:</p>
+                              <p className={passwordInput.length >= 8 ? 'text-zinc-800 font-medium' : 'text-zinc-400 font-light'}>• Minimum 8 characters</p>
+                              <p className={/\d/.test(passwordInput) ? 'text-zinc-800 font-medium' : 'text-zinc-400 font-light'}>• At least one number (0-9)</p>
+                              <p className={/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(passwordInput) ? 'text-zinc-800 font-medium' : 'text-zinc-400 font-light'}>• At least one special character (!@#...)</p>
+                           </div>
                         )}
                         {authMode === 'login' && (
-                            <div className="flex justify-end mt-2">
-                                <button
-                                    type="button"
-                                    onClick={handleForgotPassword}
-                                    className="text-xs text-violet-400 hover:text-violet-300 transition-colors"
-                                >
-                                    Forgot Password?
-                                </button>
-                            </div>
+                           <div className="flex justify-end mt-1.5 ml-0.5">
+                              <button
+                                 type="button"
+                                 onClick={handleForgotPassword}
+                                 className="text-[10px] text-zinc-500 hover:text-zinc-900 transition-colors bg-transparent border-0 cursor-pointer"
+                              >
+                                 Forgot Password?
+                              </button>
+                           </div>
                         )}
                     </div>
 
                     {authError && (
-                        <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center space-x-2 text-red-400 text-sm">
-                            <AlertCircle className="w-4 h-4 shrink-0" />
+                        <div className="p-3 bg-red-50 border border-red-100 rounded-lg flex items-center space-x-2 text-red-800 text-xs">
+                            <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
                             <span>{authError}</span>
                         </div>
                     )}
@@ -217,36 +240,36 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <button
                         type="submit"
                         disabled={isAuthLoading}
-                        className="w-full bg-violet-600 hover:bg-violet-500 text-white font-semibold py-3 rounded-xl transition-all duration-200 shadow-lg shadow-violet-500/20 flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                        className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-semibold py-2.5 rounded-xl transition-all duration-200 flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed shadow-sm border-0 cursor-pointer"
                     >
                         {isAuthLoading ? (
                             <>
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                                <span>{authMode === 'login' ? 'Signing In...' : 'Creating Account...'}</span>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                <span className="text-xs">{authMode === 'login' ? 'Signing In...' : 'Creating Account...'}</span>
                             </>
                         ) : (
                             <>
-                                {authMode === 'login' ? <LogIn className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
-                                <span>{authMode === 'login' ? 'Sign In' : 'Create Account'}</span>
+                                {authMode === 'login' ? <LogIn className="w-3.5 h-3.5" /> : <UserPlus className="w-3.5 h-3.5" />}
+                                <span className="text-xs font-bold">{authMode === 'login' ? 'Sign In' : 'Create Account'}</span>
                             </>
                         )}
                     </button>
 
                     <div className="relative my-4">
                         <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-zinc-800"></div>
+                            <div className="w-full border-t border-zinc-200"></div>
                         </div>
-                        <div className="relative flex justify-center text-xs uppercase">
-                            <span className="bg-[#0a0a0a] px-2 text-zinc-500">Or continue with</span>
+                        <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-widest">
+                            <span className="bg-white px-2 text-zinc-400">Or continue with</span>
                         </div>
                     </div>
 
                     <button
                         type="button"
                         onClick={handleGoogleLogin}
-                        className="w-full bg-white text-zinc-900 font-semibold py-3 rounded-xl transition-all hover:bg-zinc-100 flex items-center justify-center space-x-2"
+                        className="w-full bg-white hover:bg-zinc-50 text-zinc-700 border border-zinc-200/80 font-semibold py-2.5 rounded-xl transition-all flex items-center justify-center space-x-2 shadow-sm cursor-pointer"
                     >
-                        <svg className="w-5 h-5" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4" viewBox="0 0 24 24">
                             <path
                                 d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
                                 fill="#4285F4"
@@ -264,17 +287,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                                 fill="#EA4335"
                             />
                         </svg>
-                        <span>Google</span>
+                        <span className="text-xs font-bold">Google</span>
                     </button>
                 </form>
 
-                <div className="mt-6 pt-6 border-t border-zinc-800 text-center">
+                <div className="mt-5 pt-5 border-t border-zinc-200 text-center">
                     <button
                         onClick={() => {
                             setAuthMode(authMode === 'login' ? 'signup' : 'login');
                             setAuthError('');
                         }}
-                        className="text-sm text-zinc-400 hover:text-violet-400 transition-colors"
+                        className="text-xs text-zinc-500 hover:text-zinc-900 font-semibold transition-colors bg-transparent border-0 cursor-pointer"
                     >
                         {authMode === 'login' ? "Don't have an account? Sign up" : "Already have an account? Log in"}
                     </button>
