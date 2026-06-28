@@ -89,18 +89,6 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
 
 
 
-                {/* Empty State */}
-                {!isGeneratingProjects && (!projects || projects.length === 0) && (
-                    <EmptyState
-                        icon={Code}
-                        title="No Projects Yet"
-                        description="Generate your first portfolio project tailored to your target role. We'll give you the tech stack, features, and difficulty level."
-                        actionLabel="Generate New Ideas"
-                        onAction={onGenerateProjects}
-                        color="indigo"
-                    />
-                )}
-
                 {/* Projects Grid */}
                 {projects?.length > 0 && (
                     <>
