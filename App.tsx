@@ -73,6 +73,7 @@ import { DailyQuest } from "./components/DailyQuest";
 import { ConfirmResetModal } from "./components/ConfirmResetModal";
 import { EmptyState } from "./components/EmptyState";
 import { ShareSuccessModal } from "./components/ShareSuccessModal";
+import { LoadingOverlay } from "./components/LoadingOverlay";
 
 // ── Lazy-loaded: split into separate async chunks ────────────────────────────
 // These are large views never needed on initial render (landing / login page)
@@ -1561,14 +1562,44 @@ const App = () => {
       </div>
     }>
     <>
-      {/* Navigation Loading Overlay */}
-      {isNavigating && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[9999] flex items-center justify-center">
-          <div className="bg-zinc-900/90 backdrop-blur-xl rounded-2xl p-6 border border-white/10 shadow-2xl">
-            <Loader2 className="w-8 h-8 animate-spin text-violet-500 mx-auto" />
-          </div>
-        </div>
-      )}
+
+      {/* ── Global Loading Overlays — hover over every page with blur ──── */}
+
+      {/* 1. Resume / Profile Analysis (onboarding) */}
+      <LoadingOverlay
+        isVisible={isAnalyzing}
+        message="Analysing Your Profile"
+        submessage="Extracting skills, strengths & gaps from your resume"
+      />
+
+      {/* 2. Learning Plan generation */}
+      <LoadingOverlay
+        isVisible={isGeneratingPlan && !isAnalyzing}
+        message="Building Your Learning Roadmap"
+        submessage="Personalising week-by-week tasks for your target role"
+      />
+
+      {/* 3. Project ideas generation */}
+      <LoadingOverlay
+        isVisible={isGeneratingProjects && !isAnalyzing && !isGeneratingPlan}
+        message="Crafting Your Perfect Projects"
+        submessage="Generating portfolio ideas tailored to your skills"
+      />
+
+      {/* 4. Resume optimisation */}
+      <LoadingOverlay
+        isVisible={isOptimizingResume}
+        message="Optimising Your Resume"
+        submessage="Boosting ATS score and rewriting impact statements"
+      />
+
+      {/* 5. Interview feedback generation */}
+      <LoadingOverlay
+        isVisible={isGeneratingFeedback}
+        message="Evaluating Your Interview"
+        submessage="Scoring communication, technical depth & hiring bar"
+      />
+
 
       <div className="min-h-screen bg-[#09090b] flex text-zinc-100 font-sans">
         {showShareModal && analysis && (
