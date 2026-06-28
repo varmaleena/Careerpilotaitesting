@@ -69,7 +69,7 @@ export const LearningPlanView: React.FC<LearningPlanViewProps> = ({
 
             {/* Main Content */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
-                {!plan && !isGeneratingPlan && (
+                {!plan && (
                     <div className="text-center py-16">
                         <div className="w-14 h-14 bg-zinc-900 rounded-xl flex items-center justify-center mx-auto mb-4 border border-zinc-800">
                             <BookOpen className="w-7 h-7 text-zinc-500" />
@@ -88,17 +88,6 @@ export const LearningPlanView: React.FC<LearningPlanViewProps> = ({
                     </div>
                 )}
 
-                {isGeneratingPlan && (
-                    <div className="flex flex-col items-center justify-center py-24">
-                        <div className="relative">
-                            <div className="w-16 h-16 rounded-2xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center mb-6">
-                                <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
-                            </div>
-                        </div>
-                        <p className="text-zinc-300 text-sm font-medium">Designing your curriculum...</p>
-                        <p className="text-zinc-600 text-xs mt-1">This may take a moment</p>
-                    </div>
-                )}
 
                 {plan && (
                     <>

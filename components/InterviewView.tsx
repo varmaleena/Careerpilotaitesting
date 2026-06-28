@@ -67,14 +67,7 @@ export const InterviewView: React.FC<InterviewViewProps> = ({
     return (
         <div className="h-[calc(100dvh-200px)] md:h-[calc(100vh-140px)] md:min-h-[600px] flex flex-col bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 overflow-hidden shadow-2xl relative">
 
-            {isGeneratingFeedback ? (
-                /* Feedback Loading State */
-                <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-                    <Loader2 className="w-12 h-12 text-violet-500 animate-spin mb-6" />
-                    <h3 className="text-2xl font-bold text-white mb-2">Analyzing Performance</h3>
-                    <p className="text-zinc-400 max-w-md">Our AI is reviewing your answers, tone, and technical accuracy to generate a personalized report.</p>
-                </div>
-            ) : interviewFeedback ? (
+            {interviewFeedback ? (
                 /* Feedback Report */
                 <InterviewAnalysisView
                     feedback={interviewFeedback}

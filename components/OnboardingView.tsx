@@ -41,34 +41,6 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
     onSubmit,
     onBypass
 }) => {
-    // Premium Full-Screen Loading State during Analysis
-    if (isAnalyzing) {
-        return (
-            <div className="min-h-screen bg-[#09090b] flex flex-col items-center justify-center p-4">
-                <div className="flex flex-col items-center text-center space-y-8">
-                    {/* Logo Container */}
-                    <div className="w-24 h-24 bg-zinc-900 rounded-3xl border border-zinc-700 flex items-center justify-center shadow-xl">
-                        <TrendingUp className="w-12 h-12 text-violet-400" />
-                    </div>
-
-                    <div className="space-y-3 max-w-md">
-                        <h2 className="text-3xl font-bold text-white tracking-tight">
-                            Initializing Pilot...
-                        </h2>
-                        <p className="text-zinc-400 text-lg">
-                            Analyzing your resume and building your custom roadmap.
-                        </p>
-                    </div>
-
-                    {/* Progress Bar */}
-                    <div className="w-64 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 w-1/2 rounded-full"></div>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
     return (
         <>
             {/* Navigation Loading Overlay */}
