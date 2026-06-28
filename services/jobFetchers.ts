@@ -1,24 +1,82 @@
 import axios from 'axios';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from './firebaseConfig';
 
-// Normalized Job Schema used for internal processing
+
+
 export interface VerifiedJob {
+    id: string;
     title: string;
     company: string;
     location: string;
     applyLink: string;
     postedAt: string;
-    sourceType: "ATS" | "OFFICIAL" | "STARTUP" | "STUDENT_PLATFORM";
+    sourceType: "Adzuna" | "Remotive" | "Greenhouse" | "Lever";
     description?: string;
-    isRemote?: boolean;
+    salary?: string;
 }
+
+// ─── Service-level in-memory job cache ───────────────────────────────────────
+// Key: "uid:role" → { jobs, timestamp }. Avoids ANY network/Firestore hit when
+// the user navigates away from Job Hub and returns within the same tab session.
+const _serviceJobCache = new Map<string, { jobs: VerifiedJob[]; ts: number }>();
+const SERVICE_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour (matches Firestore cache TTL)
+// ─────────────────────────────────────────────────────────────────────────────
+
+
+// Extract meaningful keywords from target role, filtering out generic career/role terms
+const getRoleKeywords = (role: string): string[] => {
+    const genericWords = new Set([
+        'senior', 'junior', 'developer', 'engineer', 'designer', 'architect', 
+        'lead', 'staff', 'principal', 'manager', 'intern', 'co-op', 'associate', 
+        'analyst', 'consultant', 'specialist', 'executive', 'tech', 'technology', 
+        'software', 'role', 'jobs', 'job', 'hiring', 'recruiting', 'in', 'at', 'for'
+    ]);
+    return role.toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .map(w => w.trim())
+        .filter(w => w.length > 1 && !genericWords.has(w));
+};
+
+// Match job title/description against target role keywords
+export const matchJobToRole = (jobTitle: string, jobDescription: string, targetRole: string): boolean => {
+    const title = jobTitle.toLowerCase();
+    const desc = (jobDescription || '').toLowerCase();
+    const roleLower = targetRole.toLowerCase();
+
+    // 1. Get meaningful keywords (excluding generic roles)
+    const keywords = getRoleKeywords(targetRole);
+
+    // 2. If we have meaningful keywords, match them (at least one keyword matches)
+    if (keywords.length > 0) {
+        return keywords.some(keyword => title.includes(keyword) || desc.includes(keyword));
+    }
+
+    // 3. Fallback: match targetRole words (e.g. "software", "engineer")
+    const fallbackWords = roleLower.split(/\s+/).filter(w => w.length > 1);
+    if (fallbackWords.length > 0) {
+        return fallbackWords.some(w => title.includes(w) || desc.includes(w));
+    }
+
+    // 4. Ultimate fallback: string includes
+    return title.includes(roleLower) || desc.includes(roleLower);
+};
 
 // Helper: Approx date string
 const getRelativeTime = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return `${diffDays} days ago`;
+    try {
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return "Recently";
+        const now = new Date();
+        const diffTime = Math.abs(now.getTime() - date.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays === 0) return "Today";
+        if (diffDays === 1) return "1 day ago";
+        return `${diffDays} days ago`;
+    } catch {
+        return "Recently";
+    }
 };
 
 // Multi-proxy fallback helper to bypass CORS blocks and recover from 429 Rate Limits
@@ -124,7 +182,6 @@ const fetchGreenhouseJobs = async (targetRole: string): Promise<VerifiedJob[]> =
     const companies = ['stripe', 'airbnb', 'twitch', 'dropbox', 'reddit'];
     const jobs: VerifiedJob[] = [];
 
-    // Parallel fetch
     const promises = companies.map(async (company) => {
         try {
             const url = `https://boards-api.greenhouse.io/v1/boards/${company}/jobs`;
@@ -132,20 +189,21 @@ const fetchGreenhouseJobs = async (targetRole: string): Promise<VerifiedJob[]> =
             const listings = data.jobs || [];
 
             listings.forEach((job: any) => {
-                if (job.title.toLowerCase().includes(targetRole.toLowerCase())) {
+                if (matchJobToRole(job.title, '', targetRole)) {
                     jobs.push({
+                        id: `greenhouse_${job.id}`,
                         title: job.title,
                         company: company.charAt(0).toUpperCase() + company.slice(1),
-                        location: job.location.name,
+                        location: job.location?.name || "Remote",
                         applyLink: job.absolute_url,
                         postedAt: getRelativeTime(job.updated_at),
-                        sourceType: "ATS",
-                        description: "Verified Greenhouse Listing"
+                        sourceType: "Greenhouse",
+                        description: "ATS Listing"
                     });
                 }
             });
         } catch (e) {
-            // diverse failure modes (CORS, 404, etc)
+            // Ignore individual company failures
         }
     });
 
@@ -153,13 +211,10 @@ const fetchGreenhouseJobs = async (targetRole: string): Promise<VerifiedJob[]> =
     return jobs;
 };
 
-// --- 2. Lever Fetcher ---
-export const fetchLeverJobs = async (targetRole: string): Promise<VerifiedJob[]> => {
-    const companies = ['netflix', 'atlassian', 'figma', 'notion', 'linear']; // Example Lever companies
+// --- 4. Lever (Direct call with Proxy Fallback) ---
+const fetchLeverJobs = async (targetRole: string): Promise<VerifiedJob[]> => {
+    const companies = ['leverdemo', 'palantir', 'wealthfront'];
     const jobs: VerifiedJob[] = [];
-
-    // Lever has a CORS friendly API often? Let's try.
-    // Endpoint: https://api.lever.co/v0/postings/{company}?mode=json
 
     const promises = companies.map(async (company) => {
         try {
@@ -167,21 +222,22 @@ export const fetchLeverJobs = async (targetRole: string): Promise<VerifiedJob[]>
             const listings = await fetchWithProxy(url);
 
             listings.forEach((job: any) => {
-                if (job.text.toLowerCase().includes(targetRole.toLowerCase())) {
+                const desc = job.descriptionPlain || '';
+                if (matchJobToRole(job.text, desc, targetRole)) {
                     jobs.push({
+                        id: `lever_${job.id}`,
                         title: job.text,
                         company: company.charAt(0).toUpperCase() + company.slice(1),
                         location: job.categories?.location || "Remote",
                         applyLink: job.hostedUrl,
                         postedAt: getRelativeTime(new Date(job.createdAt).toISOString()),
-                        sourceType: "ATS",
-                        description: job.descriptionPlain || "Verified Lever Listing"
+                        sourceType: "Lever",
+                        description: desc.substring(0, 200) + "..." || "ATS Listing"
                     });
                 }
             });
-
         } catch (e) {
-            // ignore
+            // Ignore individual company failures
         }
     });
 
@@ -189,109 +245,77 @@ export const fetchLeverJobs = async (targetRole: string): Promise<VerifiedJob[]>
     return jobs;
 };
 
-// --- 3. YC Jobs (Hacker News) ---
-// YC doesn't have a simple public JSON API for all jobs without scraping, 
-// using Algolia API is the standard way to get "Who is Hiring" posts.
-export const fetchYCJobs = async (targetRole: string): Promise<VerifiedJob[]> => {
-    // Implementation would use Algolia search for "Who is Hiring"
-    // For this iteration, we return a deterministic set of "Featured YC Jobs" for the role
-    // to ensure 100% no hallucinations.
-
-    // Mocking a live fetch for safety in this demo environment
-    return [
-        {
-            title: "Software Engineer (YC W24)",
-            company: "Retell AI",
-            location: "San Francisco / Remote",
-            applyLink: "https://www.ycombinator.com/companies/retell-ai/jobs",
-            postedAt: "2 days ago",
-            sourceType: "STARTUP",
-            description: "Building voice AI infrastructure. Backed by YC."
-        },
-        {
-            title: "Full Stack Developer",
-            company: "Globe",
-            location: "Remote",
-            applyLink: "https://www.ycombinator.com/companies/globe/jobs",
-            postedAt: "5 days ago",
-            sourceType: "STARTUP",
-            description: "High speed exchange for residential real estate."
-        }
-    ].filter(j => j.title.toLowerCase().includes(targetRole.toLowerCase()) || targetRole === 'Software Engineer');
-};
-
-// --- 4. Official Career Pages (Google/Microsoft) ---
-// These usually require huge scraping infrastructure. 
-// We will use a known "Safe List" of direct links to their careers search pages.
-export const fetchCompanyCareerPages = async (targetRole: string): Promise<VerifiedJob[]> => {
-    return [
-        {
-            title: `Search ${targetRole} Roles at Google`,
-            company: "Google",
-            location: "Global",
-            applyLink: `https://www.google.com/about/careers/applications/jobs/results?q=${encodeURIComponent(targetRole)}`,
-            postedAt: "Live",
-            sourceType: "OFFICIAL"
-        },
-        {
-            title: `Search ${targetRole} Roles at Microsoft`,
-            company: "Microsoft",
-            location: "Global",
-            applyLink: `https://jobs.careers.microsoft.com/global/en/search?q=${encodeURIComponent(targetRole)}`,
-            postedAt: "Live",
-            sourceType: "OFFICIAL"
-        },
-        {
-            title: `Search ${targetRole} Roles at Amazon`,
-            company: "Amazon",
-            location: "Global",
-            applyLink: `https://www.amazon.jobs/en/search?base_query=${encodeURIComponent(targetRole)}`,
-            postedAt: "Live",
-            sourceType: "OFFICIAL"
-        }
-    ];
-};
-
-// --- 5. Student / Fresher Platforms ---
-export const fetchStudentJobs = async (targetRole: string): Promise<VerifiedJob[]> => {
-    // Deterministic links to platforms
-    return [
-        {
-            title: `${targetRole} - Freshers Hiring`,
-            company: "Unstop",
-            location: "India",
-            applyLink: `https://unstop.com/job-portal?jobs=${encodeURIComponent(targetRole)}`,
-            postedAt: "Live Platform",
-            sourceType: "STUDENT_PLATFORM"
-        },
-        {
-            title: `${targetRole} Internships`,
-            company: "Internshala",
-            location: "India",
-            applyLink: `https://internshala.com/internships/${encodeURIComponent(targetRole)}-internship`,
-            postedAt: "Live Platform",
-            sourceType: "STUDENT_PLATFORM"
-        }
-    ];
-};
-
 /**
- * Main Aggregator
+ * Main Aggregator with 1-Hour Firestore Caching & Multi-Source Filtering
  */
-export const fetchAllVerifiedJobs = async (targetRole: string): Promise<VerifiedJob[]> => {
-    // In a real backend, these would run in parallel with proper timeouts
-    // For this client-side demo, we'll try best effort
+export const fetchAllVerifiedJobs = async (targetRole: string, uid: string, forceRefresh = false): Promise<VerifiedJob[]> => {
+    if (!targetRole || !uid) return [];
+    
+    const safeRole = targetRole.toLowerCase().trim();
+    const cacheKey = `${uid}:${safeRole}`;
+    const cacheDocRef = doc(db, 'users', uid, 'jobs_cache', 'latest');
 
-    // We prioritize Lever/Greenhouse as they might actually work via CORS or provide "Real" individual listings
-    // Then we append the "Safe Search" links from Big Tech and Student Platforms as reliable fallbacks
+    // 1. Check service-level in-memory cache (fastest — zero latency)
+    if (!forceRefresh) {
+        const mem = _serviceJobCache.get(cacheKey);
+        if (mem && (Date.now() - mem.ts) < SERVICE_CACHE_TTL_MS && mem.jobs.length > 0) {
+            return mem.jobs;
+        }
+    }
 
-    const [lever, yc, official, student] = await Promise.all([
-        fetchLeverJobs(targetRole), // Likely to work or fail silently
-        fetchYCJobs(targetRole),    // Mocked deterministic
-        fetchCompanyCareerPages(targetRole), // Static verified links
-        fetchStudentJobs(targetRole) // Static verified links
+    // 2. Check Firestore cache
+    if (!forceRefresh) {
+        try {
+            const cacheSnap = await getDoc(cacheDocRef);
+            if (cacheSnap.exists()) {
+                const data = cacheSnap.data();
+                if (data.role === safeRole && Array.isArray(data.jobs) && data.jobs.length > 0) {
+                    // Warm the in-memory cache for subsequent calls
+                    _serviceJobCache.set(cacheKey, { jobs: data.jobs, ts: Date.now() });
+                    return data.jobs;
+                }
+            }
+        } catch (error) {
+            // Read failed
+        }
+    }
+
+    // 2. Fetch Fresh Data (Parallel)
+    const [adzuna, remotive, greenhouse, lever] = await Promise.all([
+        fetchAdzunaJobs(targetRole),
+        fetchRemotiveJobs(targetRole),
+        fetchGreenhouseJobs(targetRole),
+        fetchLeverJobs(targetRole)
     ]);
 
-    // Flatten
-    return [...lever, ...yc, ...official, ...student];
+    // Flatten all sources
+    const combinedJobs = [...adzuna, ...remotive, ...greenhouse, ...lever];
+
+    // Filter by matching target role keywords
+    const matchedJobs = combinedJobs.filter(job => 
+        matchJobToRole(job.title, job.description || '', targetRole)
+    );
+
+    // Fallback: If filtering is too restrictive and leaves 0 jobs, return the combined jobs
+    const finalJobsList = matchedJobs.length > 0 ? matchedJobs : combinedJobs;
+
+    // Shuffle slightly to mix sources and limit to 50 jobs
+    const allJobs = finalJobsList
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 50);
+
+    // 4. Save to Firestore + warm in-memory cache
+    try {
+        await setDoc(cacheDocRef, {
+            role: safeRole,
+            timestamp: Date.now(),
+            jobs: allJobs
+        });
+        _serviceJobCache.set(cacheKey, { jobs: allJobs, ts: Date.now() });
+    } catch (error) {
+        // Write failed — still warm in-memory so session stays fast
+        _serviceJobCache.set(cacheKey, { jobs: allJobs, ts: Date.now() });
+    }
+
+    return allJobs;
 };

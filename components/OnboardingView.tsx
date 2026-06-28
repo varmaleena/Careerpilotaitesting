@@ -11,6 +11,7 @@ import {
     User
 } from 'lucide-react';
 import { UserProfile } from '../types';
+import { HAS_GEMINI_KEYS } from '../services/geminiClient';
 
 interface OnboardingViewProps {
     // State
@@ -25,6 +26,7 @@ interface OnboardingViewProps {
     onLogout: () => void;
     onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onSubmit: (e: React.FormEvent) => void;
+    onBypass?: () => void;
 }
 
 export const OnboardingView: React.FC<OnboardingViewProps> = ({
@@ -36,7 +38,8 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
     setUserProfile,
     onLogout,
     onFileUpload,
-    onSubmit
+    onSubmit,
+    onBypass
 }) => {
     // Premium Full-Screen Loading State during Analysis
     if (isAnalyzing) {

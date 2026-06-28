@@ -69,7 +69,7 @@ export const LearningPlanView: React.FC<LearningPlanViewProps> = ({
 
             {/* Main Content */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
-                {!plan && !isGeneratingPlan && (
+                {!plan && (
                     <div className="text-center py-16">
                         <div className="w-14 h-14 bg-zinc-50 rounded-xl flex items-center justify-center mx-auto mb-4 border border-[#e3e1dc]">
                             <BookOpen className="w-7 h-7 text-zinc-550" />

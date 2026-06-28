@@ -34,9 +34,9 @@ export class RequestLoadBalancer {
         const validKeys = keys.filter(Boolean);
         this.keyStatuses = validKeys.map(key => ({ key, rateLimitedUntil: 0 }));
         if (this.keyStatuses.length === 0) {
-            console.error("❌ No API keys provided to Load Balancer");
+
         }
-        console.log(`⚖️ Load Balancer initialized with ${this.keyStatuses.length} keys`);
+
     }
 
     public async execute<T>(requestFn: (apiKey: string) => Promise<T>, priority: number = 0): Promise<T> {
@@ -76,13 +76,13 @@ export class RequestLoadBalancer {
 
     private markKeyAsRateLimited(keyIndex: number) {
         this.keyStatuses[keyIndex].rateLimitedUntil = Date.now() + this.keyBackoffMs;
-        console.log(`🔒 Key ${keyIndex} rate-limited until ${new Date(this.keyStatuses[keyIndex].rateLimitedUntil).toLocaleTimeString()}`);
+
     }
 
     // Permanently remove an invalid key from rotation
     private invalidateKeyAtIndex(keyIndex: number) {
         const removed = this.keyStatuses.splice(keyIndex, 1);
-        console.warn(`⛔ Removed invalid key at index ${keyIndex}. ${this.keyStatuses.length} keys remain.`);
+
         if (this.currentKeyIndex >= this.keyStatuses.length) {
             this.currentKeyIndex = 0;
         }
@@ -121,7 +121,7 @@ export class RequestLoadBalancer {
         const base = typeof ms === 'number' && ms > 0 ? ms : this.keyBackoffMs;
         const jitter = Math.floor(Math.random() * 1000); // up to 1s jitter
         this.keyStatuses[keyIndex].rateLimitedUntil = Date.now() + base + jitter;
-        console.log(`🔒 Key ${keyIndex} rate-limited for ${(base + jitter) / 1000}s until ${new Date(this.keyStatuses[keyIndex].rateLimitedUntil).toLocaleTimeString()}`);
+
     }
 
     private async getWaitTimeForNextAvailableKey(): Promise<number> {
@@ -132,7 +132,7 @@ export class RequestLoadBalancer {
 
     private rotateKey() {
         this.currentKeyIndex = (this.currentKeyIndex + 1) % this.keyStatuses.length;
-        console.log(`🔄 Rotated to key index: ${this.currentKeyIndex}`);
+
     }
 
     private async processQueue() {
@@ -171,7 +171,7 @@ export class RequestLoadBalancer {
                 const isApiKeyInvalid = rawMessage.includes('API key not valid') || rawMessage.includes('API_KEY_INVALID') || (error?.response?.data?.error?.details && JSON.stringify(error.response.data.error.details).includes('API_KEY_INVALID'));
 
                 if (isApiKeyInvalid) {
-                    console.error('❌ API key invalid. Removing key from rotation.');
+
                     // Remove the currently selected key from pool
                     this.invalidateKeyAtIndex(this.currentKeyIndex);
                     // If no keys remain, fail immediately with a clear error
@@ -185,7 +185,7 @@ export class RequestLoadBalancer {
                 }
 
                 if (status === 429 || rawMessage.includes('quota') || rawMessage.includes('RESOURCE_EXHAUSTED')) {
-                    console.warn(`⚠️ Rate limit hit (429). Attempt ${request.retries + 1}/${this.maxRetries}`);
+
 
                     // Try to honor server-provided Retry-After if present
                     const retryAfterMs = this.parseRetryAfterMs(error);
@@ -207,7 +207,7 @@ export class RequestLoadBalancer {
                         request.keyRotations = 0;
 
                         if (request.retries >= this.maxRetries) {
-                            console.error(`❌ All ${this.maxRetries} retries exhausted. Request failed.`);
+
                             request.reject(error);
                             continue;
                         }
@@ -220,10 +220,10 @@ export class RequestLoadBalancer {
                     this.queue.unshift(request);
 
                 } else if (status === 404) {
-                    console.error("❌ Model not found (404). This might be a version mismatch or model name issue.");
+
                     request.reject(error);
                 } else {
-                    console.error("❌ Request failed:", error.message);
+
                     request.retries++;
                     if (request.retries < 3) {
                         this.queue.push(request);

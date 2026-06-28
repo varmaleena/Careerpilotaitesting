@@ -9,10 +9,11 @@ import {
     Compass,
     LogOut,
     X,
-    MessageSquare,
     TrendingUp,
     Trash2,
-    User
+    User,
+    Briefcase,
+    MessageSquare
 } from 'lucide-react';
 import { AppView } from '../types';
 

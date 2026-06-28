@@ -77,8 +77,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             if (authMode === 'signup') {
                 const result = await AuthService.signup(emailInput, passwordInput);
                 if (result.success) {
-                    // Auto login after signup
-                    await onAuthSuccess(emailInput);
+                    // Auto login after signup — use UID for Firestore, fall back to email for dev mode
+                    await onAuthSuccess(result.uid || emailInput, emailInput);
                     handleClose();
                 } else {
                     setAuthError(result.message || 'Signup failed.');
@@ -86,7 +86,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             } else {
                 const result = await AuthService.login(emailInput, passwordInput);
                 if (result.success) {
-                    await onAuthSuccess(emailInput);
+                    await onAuthSuccess(result.uid || emailInput, emailInput);
                     handleClose();
                 } else {
                     setAuthError(result.message || 'Login failed.');
@@ -102,8 +102,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     const handleGoogleLogin = async () => {
         try {
             const result = await AuthService.loginWithGoogle();
-            if (result.success && result.email) {
-                await onAuthSuccess(result.email);
+            if (result.success && result.email && result.uid) {
+                await onAuthSuccess(result.uid, result.email);
                 handleClose();
             } else {
                 setAuthError(result.message || 'Google Login failed.');

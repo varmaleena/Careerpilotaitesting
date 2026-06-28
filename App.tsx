@@ -61,8 +61,10 @@ import {
   Activity
 } from 'lucide-react';
 
+// ── Critical path: always included in initial bundle ────────────────────────
 import LandingPage from "./components/LandingPage";
-import { FeedbackModal } from './components/FeedbackModal';
+import { AuthModal } from "./components/AuthModal";
+import { DashboardView } from "./components/DashboardView";
 import { ScoreGauge } from "./components/ScoreGauge";
 import Sidebar from "./components/Sidebar";
 import MobileBottomNav from "./components/MobileBottomNav";
@@ -70,8 +72,8 @@ import { SkillCard } from "./components/SkillCard";
 import { ShareSuccessModal } from "./components/ShareSuccessModal";
 
 import { InterviewAnalysisView } from "./components/InterviewAnalysisView";
+import { DailyQuest } from "./components/DailyQuest";
 import { ConfirmResetModal } from "./components/ConfirmResetModal";
-import { ProfileModal } from "./components/ProfileModal";
 import { EmptyState } from "./components/EmptyState";
 import { AuthModal } from "./components/AuthModal";
 import { OnboardingView } from "./components/OnboardingView";
@@ -81,9 +83,25 @@ import { ProjectsView } from "./components/ProjectsView";
 import { ResumeView } from "./components/ResumeView";
 import { InterviewView } from "./components/InterviewView";
 import { JobsView } from "./components/JobsView";
+import { ShareSuccessModal } from "./components/ShareSuccessModal";
+import { LoadingOverlay } from "./components/LoadingOverlay";
+
+// ── Lazy-loaded: split into separate async chunks ────────────────────────────
+// These are large views never needed on initial render (landing / login page)
+const FeedbackModal     = React.lazy(() => import('./components/FeedbackModal').then(m => ({ default: m.FeedbackModal })));
+const InterviewAnalysisView = React.lazy(() => import('./components/InterviewAnalysisView').then(m => ({ default: m.InterviewAnalysisView })));
+const ProfileModal      = React.lazy(() => import('./components/ProfileModal').then(m => ({ default: m.ProfileModal })));
+const OnboardingView    = React.lazy(() => import('./components/OnboardingView').then(m => ({ default: m.OnboardingView })));
+const LearningPlanView  = React.lazy(() => import('./components/LearningPlanView').then(m => ({ default: m.LearningPlanView })));
+const ProjectsView      = React.lazy(() => import('./components/ProjectsView').then(m => ({ default: m.ProjectsView })));
+const ResumeView        = React.lazy(() => import('./components/ResumeView').then(m => ({ default: m.ResumeView })));
+const InterviewView     = React.lazy(() => import('./components/InterviewView').then(m => ({ default: m.InterviewView })));
+const JobsView          = React.lazy(() => import('./components/JobsView').then(m => ({ default: m.JobsView })));
+
 import { generateLatexDocument } from './utils/latexUtils';
 
 import { AuthService } from './services/authService';
+import { clearAICache } from './services/aiCache';
 import { canStartNewInterview } from './services/interviewSessionManager';
 import { generateLearningPlan, generateProjectIdeas } from './services/learningService';
 import { calculatePlanStatistics, getProgressMessage, getCurrentWeek } from './services/planStatistics';
@@ -112,13 +130,14 @@ import {
 const App = () => {
   // --- Global State ---
   const [view, setView] = useState<AppView>(() => {
-    const path = window.location.pathname;
+    const path = window.location.pathname.toLowerCase();
     if (path.startsWith('/onboarding')) return AppView.ONBOARDING;
     if (path.startsWith('/dashboard')) return AppView.DASHBOARD;
     if (path.startsWith('/plan')) return AppView.PLAN;
     if (path.startsWith('/projects')) return AppView.PROJECTS;
     if (path.startsWith('/resumearchitect')) return AppView.RESUME;
     if (path.startsWith('/mockinterview')) return AppView.INTERVIEW;
+    if (path.startsWith('/jobs') || path.startsWith('/jobhub')) return AppView.JOBS;
     return AppView.LANDING;
   });
 
@@ -128,7 +147,7 @@ const App = () => {
 
   // 1. URL -> View Sync
   useEffect(() => {
-    const path = location.pathname;
+    const path = location.pathname.toLowerCase();
     let newView = AppView.LANDING;
 
     if (path === '/' || path === '') newView = AppView.LANDING;
@@ -138,6 +157,7 @@ const App = () => {
     else if (path.startsWith('/projects')) newView = AppView.PROJECTS;
     else if (path.startsWith('/resumearchitect')) newView = AppView.RESUME;
     else if (path.startsWith('/mockinterview')) newView = AppView.INTERVIEW;
+    else if (path.startsWith('/jobs') || path.startsWith('/jobhub')) newView = AppView.JOBS;
 
     // Only update if different to prevent loops
     if (view !== newView) {
@@ -156,10 +176,11 @@ const App = () => {
       case AppView.PROJECTS: targetPath = '/projects'; break;
       case AppView.RESUME: targetPath = '/resumearchitect'; break;
       case AppView.INTERVIEW: targetPath = '/mockinterview'; break;
+      case AppView.JOBS: targetPath = '/JobHub'; break;
       default: targetPath = '/';
     }
 
-    if (location.pathname !== targetPath) {
+    if (location.pathname.toLowerCase() !== targetPath.toLowerCase()) {
       navigate(targetPath);
     }
   }, [view]);
@@ -183,6 +204,7 @@ const App = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [currentUserEmail, setCurrentUserEmail] = useState('');
+  const [currentUserUid, setCurrentUserUid] = useState('');
 
   // Modals & UI State
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -193,7 +215,7 @@ const App = () => {
 
 
   // User Data State
-  const [userProfile, setUserProfile] = useState<UserProfile>({ name: 'User', targetRole: '' });
+  const [userProfile, setUserProfile] = useState<UserProfile>({ name: 'User', targetRole: '', isPremium: true });
   const [analysis, setAnalysis] = useState<CareerAnalysis | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [validationError, setValidationError] = useState<string>('');
@@ -309,46 +331,67 @@ const App = () => {
 
   // Hydrate session on mount
   useEffect(() => {
+    const savedUid = localStorage.getItem('careerPilot_session_uid');
     const savedEmail = localStorage.getItem('careerPilot_session_email');
-    if (savedEmail) {
-      // Attempt auto-login
-      loginUser(savedEmail).catch(err => {
-        console.error("Session restoration failed", err);
+    if (savedUid && savedEmail) {
+      loginUser(savedUid, savedEmail).catch(() => {
+        localStorage.removeItem('careerPilot_session_uid');
         localStorage.removeItem('careerPilot_session_email');
       });
     }
   }, []);
 
-  // Save state on critical updates ONLY if logged in
+  // PERF: Keep session tokens alive (no Firestore write needed here)
   useEffect(() => {
-    if (isLoggedIn && currentUserEmail) {
-      localStorage.setItem('careerPilot_session_email', currentUserEmail); // Keep session alive
-
-      AuthService.saveUserData(currentUserEmail, {
-        userProfile,
-        analysis,
-        plan,
-        projects,
-
-        chatMessages,
-        interviewFeedback,
-        resumeAnalysisResult,
-        seenProjectTitles
-      });
+    if (isLoggedIn && currentUserUid) {
+      localStorage.setItem('careerPilot_session_uid', currentUserUid);
+      localStorage.setItem('careerPilot_session_email', currentUserEmail);
     }
-  }, [
-    isLoggedIn,
-    currentUserEmail,
-    userProfile,
-    analysis,
-    plan,
-    projects,
+  }, [isLoggedIn, currentUserUid, currentUserEmail]);
 
-    chatMessages,
-    interviewFeedback,
-    resumeAnalysisResult,
-    seenProjectTitles
-  ]);
+  // PERF: Granular save — analysis only (fires when analysis changes)
+  useEffect(() => {
+    if (isLoggedIn && currentUserUid && analysis) {
+      AuthService.saveAnalysis(currentUserUid, analysis);
+    }
+  }, [analysis, isLoggedIn, currentUserUid]);
+
+  // PERF: Granular save — plan only
+  useEffect(() => {
+    if (isLoggedIn && currentUserUid && plan) {
+      AuthService.savePlan(currentUserUid, plan);
+    }
+  }, [plan, isLoggedIn, currentUserUid]);
+
+  // PERF: Granular save — projects + seen titles
+  useEffect(() => {
+    if (isLoggedIn && currentUserUid) {
+      AuthService.saveProjects(currentUserUid, projects, seenProjectTitles);
+    }
+  }, [projects, seenProjectTitles, isLoggedIn, currentUserUid]);
+
+  // PERF: Granular save — profile with 1s debounce (avoids write per keystroke)
+  useEffect(() => {
+    if (!isLoggedIn || !currentUserUid) return;
+    const timer = setTimeout(() => {
+      AuthService.saveProfile(currentUserUid, userProfile);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [userProfile, isLoggedIn, currentUserUid]);
+
+  // PERF: Granular save — interview feedback
+  useEffect(() => {
+    if (isLoggedIn && currentUserUid && interviewFeedback) {
+      AuthService.saveInterviewFeedback(currentUserUid, interviewFeedback);
+    }
+  }, [interviewFeedback, isLoggedIn, currentUserUid]);
+
+  // PERF: Granular save — resume analysis result
+  useEffect(() => {
+    if (isLoggedIn && currentUserUid && resumeAnalysisResult) {
+      AuthService.saveResumeAnalysis(currentUserUid, resumeAnalysisResult);
+    }
+  }, [resumeAnalysisResult, isLoggedIn, currentUserUid]);
 
   // Analytics: Identify user and track properties
   useEffect(() => {
@@ -362,8 +405,8 @@ const App = () => {
         [USER_PROPS.TARGET_COMPANIES]: userProfile.targetCompanies,
         [USER_PROPS.LAST_ACTIVE]: new Date().toISOString(),
         [USER_PROPS.READINESS_SCORE]: analysis?.readinessScore,
-        [USER_PROPS.SKILLS_ACQUIRED]: analysis?.skills?.filter(s => s.status === 'acquired').length || 0,
-        [USER_PROPS.SKILLS_MISSING]: analysis?.skills?.filter(s => s.status === 'missing').length || 0
+        [USER_PROPS.SKILLS_ACQUIRED]: analysis?.skills?.filter(s => s.status === 'acquired')?.length || 0,
+        [USER_PROPS.SKILLS_MISSING]: analysis?.skills?.filter(s => s.status === 'missing')?.length || 0
       });
     }
   }, [isLoggedIn, currentUserEmail, userProfile, analysis]);
@@ -447,7 +490,7 @@ const App = () => {
 
   // --- Helpers ---
   const handleApiError = (error: any, defaultMsg: string) => {
-    console.error(error);
+
     if (error.message?.includes('429') || error.message?.includes('quota') || error.message?.includes('RESOURCE_EXHAUSTED')) {
       const msg = "🚦 AI System Busy\n\nAll API keys have reached their rate limit. This typically resets within a few minutes.\n\n✅ What to do:\n• Wait 2-3 minutes and try again\n• The system is automatically retrying with backup keys\n\nIf this persists, the daily quota may have been reached. Quotas reset at midnight Pacific Time.";
       alert(msg);
@@ -569,7 +612,6 @@ const App = () => {
       let newXp = userData.userProfile.xp || 0;
 
       if (lastLogin !== today) {
-        // New day login
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
         const yesterdayStr = yesterday.toDateString();
@@ -577,23 +619,18 @@ const App = () => {
         if (lastLogin === yesterdayStr) {
           newStreak += 1;
         } else {
-          newStreak = 1; // broken streak
+          newStreak = 1;
         }
-        // Save new login date
         userData.userProfile.lastLoginDate = new Date().toISOString();
         userData.userProfile.streak = newStreak;
-        userData.userProfile.xp = newXp + 10; // Bonus for daily login
+        userData.userProfile.xp = newXp + 10;
 
-        // Persist immediately
-        await AuthService.saveUserData(email, userData);
+        // PERF: Save streak update with granular method — fire-and-forget
+        AuthService.saveProfile(uid, userData.userProfile);
       }
 
-      // Hydrate State
-      setCurrentUserEmail(email);
-      setIsLoggedIn(true);
-      setShowAuthModal(false);
-
-      setUserProfile(userData.userProfile);
+      // Hydrate State — all in one batch
+      setUserProfile({ ...userData.userProfile, isPremium: true });
       setAnalysis(userData.analysis ? {
         ...userData.analysis,
         strengths: userData.analysis.strengths || [],
@@ -602,41 +639,46 @@ const App = () => {
       setPlan(userData.plan);
       setProjects(userData.projects || []);
       setSeenProjectTitles(userData.seenProjectTitles || []);
-
       setChatMessages(userData.chatMessages || []);
       setInterviewFeedback(userData.interviewFeedback);
       setResumeAnalysisResult(userData.resumeAnalysisResult || null);
 
-      // Route Logic
+      // Route Logic — navigate instantly
       if (userData.analysis) {
         const lastView = localStorage.getItem('careerPilot_last_view') as AppView;
-        const validViews = [AppView.DASHBOARD, AppView.PLAN, AppView.PROJECTS, AppView.RESUME, AppView.INTERVIEW];
-
-        if (lastView && validViews.includes(lastView)) {
-          setView(lastView);
-        } else {
-          setView(AppView.DASHBOARD);
-        }
+        const validViews = [AppView.DASHBOARD, AppView.PLAN, AppView.PROJECTS, AppView.RESUME, AppView.INTERVIEW, AppView.JOBS];
+        setView(lastView && validViews.includes(lastView) ? lastView : AppView.DASHBOARD);
       } else {
         setView(AppView.ONBOARDING);
       }
     } else {
-      setAuthError("Critical error loading user data.");
+      // New user — send to onboarding
+      setView(AppView.ONBOARDING);
     }
   };
 
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setCurrentUserEmail('');
-    localStorage.removeItem('careerPilot_session_email'); // Clear persistent session
 
-    // Reset all local state
-    setUserProfile({ name: 'User', targetRole: '' });
+  const handleLogout = () => {
+    const uidToEvict = currentUserUid;
+
+    // PERF: Clear session AI cache so stale data isn't served to a new user
+    clearAICache();
+
+    // PERF: Evict this user from the in-memory AuthService cache
+    if (uidToEvict) AuthService.clearUserCache(uidToEvict);
+
+    setIsLoggedIn(false);
+    setCurrentUserUid('');
+    setCurrentUserEmail('');
+    localStorage.removeItem('careerPilot_session_uid');
+    localStorage.removeItem('careerPilot_session_email');
+    sessionStorage.removeItem('careerPilot_session_jobs_generated');
+
+    setUserProfile({ name: 'User', targetRole: '', isPremium: true });
     setAnalysis(null);
     setPlan(null);
     setProjects([]);
     setSeenProjectTitles([]);
-
     setChatMessages([]);
     setInterviewFeedback(null);
 
@@ -644,12 +686,12 @@ const App = () => {
   };
 
   const handleResetData = () => {
-    if (!currentUserEmail) return;
+    if (!currentUserUid) return;
     setShowConfirmResetModal(true);
   };
 
   const confirmResetData = async () => {
-    if (!currentUserEmail) return;
+    if (!currentUserUid) return;
 
     try {
       // Preserve critical account data
@@ -682,7 +724,7 @@ const App = () => {
       };
 
       // Save empty data to storage
-      await AuthService.saveUserData(currentUserEmail, emptyData);
+      await AuthService.saveUserData(currentUserUid, emptyData);
 
       // Hydrate state with empty data
       setUserProfile(preservedProfile);
@@ -695,7 +737,7 @@ const App = () => {
       setInterviewFeedback(null);
       setView(AppView.ONBOARDING);
     } catch (error) {
-      console.error("Reset failed:", error);
+
       alert("Failed to reset data. Please try again.");
     }
   };
@@ -745,7 +787,7 @@ const App = () => {
         };
         reader.readAsDataURL(file);
       } catch (error) {
-        console.error("Upload error:", error);
+
         alert("Failed to upload file. Please try again.");
         setIsUploadingResume(false);
       }
@@ -757,39 +799,122 @@ const App = () => {
     if ((!userProfile?.resumeText && !userProfile?.resumeFile) || !userProfile?.targetRole) return;
 
     setIsAnalyzing(true);
-    setValidationError(''); // Clear any previous error
+    setValidationError('');
     try {
-      // Step 1: Validate document is a real resume before analysis
+      // Step 1: Validate document is a real resume
       const validation = await validateResumeContent({
         text: userProfile.resumeText,
         file: userProfile.resumeFile
       });
 
       if (!validation.isValid) {
-        // Use the specific reason from the AI validator (e.g. "This looks like an invoice, not a resume")
         setValidationError(validation.reason || 'The uploaded document does not appear to be a valid resume. Please upload a professional CV.');
         setIsAnalyzing(false);
         return;
       }
 
-      // Step 2: Only proceed with analysis if validation passed
+      // Step 2: Run profile analysis (cached — same resume+role returns instantly on retry)
       const result = await analyzeProfile(
         { text: userProfile.resumeText, file: userProfile.resumeFile },
         userProfile.targetRole,
         userProfile.targetCompanies,
         userProfile.experienceLevel
       );
+
+      // PERF: Update state and navigate to dashboard IMMEDIATELY
+      // Plan + projects will generate in the background
+      const updatedProfile = { ...userProfile, ...result.extractedProfile };
       setAnalysis(result.analysis);
-      setUserProfile(prev => ({
-        ...prev,
-        ...result.extractedProfile
-      }));
+      setUserProfile(prev => ({ ...prev, ...result.extractedProfile }));
       setView(AppView.DASHBOARD);
+      setIsAnalyzing(false);
+
+      // PERF: Fire plan + project generation in PARALLEL, non-blocking
+      // UI is already on dashboard — user sees analysis results while these generate
+      const missingSkills = result.analysis.skills
+        ?.filter(s => s.status === 'missing')
+        ?.map(s => s.name) || [];
+
+      Promise.all([
+        // Generate learning plan in background
+        (async () => {
+          try {
+            setIsGeneratingPlan(true);
+            const generatedPlan = await generateLearningPlan(updatedProfile.targetRole, missingSkills);
+            const uniquePlan = generatedPlan.reduce((acc, current) => {
+              const isDuplicate = acc.find(w => w.theme.toLowerCase() === current.theme.toLowerCase());
+              if (!isDuplicate && current.tasks?.length > 0 && current.theme?.trim().length > 2) {
+                acc.push(current);
+              }
+              return acc;
+            }, [] as WeeklyPlan[]);
+            if (uniquePlan.length > 0) setPlan(uniquePlan);
+          } catch (err) {
+            // Plan generation failure is non-blocking — user can retry from dashboard
+          } finally {
+            setIsGeneratingPlan(false);
+          }
+        })(),
+
+        // Generate projects in background
+        (async () => {
+          try {
+            setIsGeneratingProjects(true);
+            const focusTopics = missingSkills.slice(0, 3);
+            const standardProjects = await generateProjectIdeas(
+              updatedProfile.targetRole,
+              focusTopics,
+              updatedProfile.targetCompanies || 'Tech Company',
+              generationDifficulty,
+              seenProjectTitles
+            );
+            const newProjects = standardProjects.slice(0, 3);
+            setProjects(newProjects);
+            setSeenProjectTitles(prev => [...prev, ...newProjects.map(p => p.title)]);
+          } catch (err) {
+            // Project generation failure is non-blocking
+          } finally {
+            setIsGeneratingProjects(false);
+          }
+        })()
+      ]);
+
+      return; // Analysis done, background tasks running, function exits
     } catch (error: any) {
       handleApiError(error, "Analysis failed");
-    } finally {
       setIsAnalyzing(false);
     }
+  };
+
+  const handleOnboardingBypass = () => {
+    setValidationError('');
+    setAnalysis({
+      readinessScore: 75,
+      summary: `Candidate profile initialized in local Demo/Bypass Mode against target role: "${userProfile.targetRole || 'Software Engineer'}".`,
+      skills: [
+        { name: "JavaScript", category: "technical", status: "acquired" },
+        { name: "TypeScript", category: "technical", status: "acquired" },
+        { name: "React", category: "technical", status: "acquired" },
+        { name: "Node.js", category: "technical", status: "acquired" },
+        { name: "System Design", category: "technical", status: "missing" },
+        { name: "Docker", category: "technical", status: "missing" },
+        { name: "Kubernetes", category: "technical", status: "missing" },
+        { name: "CI/CD", category: "technical", status: "missing" },
+        { name: "AWS", category: "technical", status: "missing" }
+      ],
+      strengths: ["Strong Frontend Skills", "Good Problem Solving", "Quick Learner"],
+      weaknesses: ["Lacks production DevOps experience", "No prior backend role", "Needs system design depth"]
+    });
+    setUserProfile(prev => ({
+      ...prev,
+      name: prev.name || "Demo User",
+      mobileNumber: prev.mobileNumber || "+1 234 567 890",
+      location: prev.location || "New York, USA",
+      githubProfile: prev.githubProfile || "https://github.com/demo",
+      linkedinProfile: prev.linkedinProfile || "https://linkedin.com/in/demo",
+      leetcodeProfile: prev.leetcodeProfile || "https://leetcode.com/demo"
+    }));
+    setView(AppView.DASHBOARD);
   };
 
   const handleGeneratePlan = async () => {
@@ -802,7 +927,7 @@ const App = () => {
     setIsGeneratingPlan(true);
     try {
       // Safe access: analysis.skills might be missing if AI failed partially
-      const missingSkills = analysis.skills?.filter(s => s.status === 'missing').map(s => s.name) || [];
+      const missingSkills = analysis.skills?.filter(s => s.status === 'missing')?.map(s => s.name) || [];
       const generatedPlan = await generateLearningPlan(userProfile.targetRole, missingSkills);
 
       // Final filtering & deduplication to ensure content quality
@@ -861,7 +986,7 @@ const App = () => {
       reader.readAsDataURL(file);
 
     } catch (error) {
-      console.error("PDF Upload Failed:", error);
+
       alert("Failed to parse PDF. Please ensure it is a valid text-based PDF.");
     }
   };
@@ -897,12 +1022,12 @@ const App = () => {
       return week;
     });
 
-    if (toggledTask) {
+    if (toggledTask && analysis) {
       const taskTitle = toggledTask.title.toLowerCase();
       const isNowCompleted = toggledTask.completed;
 
       // Update skills in analysis
-      const newSkills = analysis.skills.map(skill => {
+      const newSkills = (analysis.skills || []).map(skill => {
         const skillName = skill.name.toLowerCase();
         // Check if task title contains skill name or vice-versa
         if (taskTitle.includes(skillName) || skillName.includes(taskTitle)) {
@@ -1030,11 +1155,6 @@ const App = () => {
       // Generate LaTeX version
       const latexData = await generateLatexData(result.optimizedContent);
 
-      // Debug: Check if achievements are being extracted
-      console.log('LaTeX Data (before override):', latexData);
-      console.log('User Profile:', userProfile);
-      console.log('Current User Email:', currentUserEmail);
-
       // COMPREHENSIVE CLEANUP: Replace ALL placeholder values with real data
 
       // Personal Info - Replace 'string', 'Unknown', empty values
@@ -1103,7 +1223,7 @@ const App = () => {
         });
       }
 
-      console.log('LaTeX Data (after cleanup):', latexData);
+
 
       setLatexData(latexData);
       const latexContent = generateLatexDocument(latexData);
@@ -1121,105 +1241,44 @@ const App = () => {
     }
   };
 
-
-
-  const handlePayment = async () => {
-    /*
-    const res = await loadScript('https://checkout.razorpay.com/v1/checkout.js');
-  
-    if (!res) {
-      alert('Razorpay SDK failed to load. Are you online?');
-      return;
-    }
-  
-    const options = {
-      key: import.meta.env.VITE_RAZORPAY_KEY_ID,
-      amount: 100,
-      currency: "INR",
-      name: "CareerPilot",
-      description: "Mock Interview Access",
-      // image: "https://example.com/your_logo",
-      handler: function (response: any) {
-        setUserProfile(prev => ({
-          ...prev,
-          isPremium: true,
-          paymentHistory: [
-            ...(prev.paymentHistory || []),
-            {
-              id: response.razorpay_payment_id || Date.now().toString(),
-              date: new Date().toISOString(),
-              amount: 1, // Store actual rupees (not paise)
-              item: 'Mock Interview',
-              status: 'success'
-            }
-          ]
-        }));
-        alert("Payment Successful! Mock Interview Unlocked.");
-      },
-      prefill: {
-        name: userProfile.name,
-        email: currentUserEmail || '',
-        contact: ""
-      },
-      notes: {
-        address: "CareerPilot Corporate Office"
-      },
-      theme: {
-        color: "#4f46e5"
-      }
+  // Job Hub Integration Handlers
+  const handleSaveJob = (job: VerifiedJob) => {
+    const newApp: JobApplication = {
+      id: Math.random().toString(36).substring(2, 9),
+      jobId: job.id,
+      company: job.company,
+      title: job.title,
+      location: job.location,
+      salary: job.salary,
+      applyLink: job.applyLink,
+      status: 'Saved',
+      dateAdded: Date.now(),
+      dateUpdated: Date.now()
     };
-  
-    const paymentObject = new (window as any).Razorpay(options);
-    paymentObject.open();
-    */
+    setUserProfile(prev => ({
+      ...prev,
+      jobApplications: [...(prev.jobApplications || []), newApp]
+    }));
   };
 
-  const handleResumePayment = async () => {
-    /*
-    const res = await loadScript('https://checkout.razorpay.com/v1/checkout.js');
-  
-    if (!res) {
-      alert('Razorpay SDK failed to load. Are you online?');
-      return;
-    }
-  
-    const options = {
-      key: import.meta.env.VITE_RAZORPAY_KEY_ID,
-      amount: 100, // 100 paise = ₹1
-      currency: "INR",
-      name: "CareerPilot",
-      description: "Resume Architect Access",
-      handler: function (response: any) {
-        setUserProfile(prev => ({
-          ...prev,
-          isResumePremium: true,
-          paymentHistory: [
-            ...(prev.paymentHistory || []),
-            {
-              id: response.razorpay_payment_id || Date.now().toString(),
-              date: new Date().toISOString(),
-              amount: 1, // Store actual rupees (not paise)
-              item: 'Resume Architect',
-              status: 'success'
-            }
-          ]
-        }));
-        alert("Payment Successful! Resume Architect Unlocked.");
-      },
-      prefill: {
-        name: userProfile.name,
-        email: currentUserEmail || '',
-        contact: ""
-      },
-      theme: {
-        color: "#10b981" // Emerald color for resume section
-      }
-    };
-  
-    const paymentObject = new (window as any).Razorpay(options);
-    paymentObject.open();
-    */
+  const handleUpdateJobStatus = (appId: string, status: JobApplication['status']) => {
+    setUserProfile(prev => ({
+      ...prev,
+      jobApplications: (prev.jobApplications || []).map(j => 
+        j.id === appId ? { ...j, status, dateUpdated: Date.now() } : j
+      )
+    }));
   };
+
+  const handleDeleteJob = (appId: string) => {
+    setUserProfile(prev => ({
+      ...prev,
+      jobApplications: (prev.jobApplications || []).filter(j => j.id !== appId)
+    }));
+  };
+
+  const handlePayment = async () => {};
+  const handleResumePayment = async () => {};
 
   const startInterview = useCallback(async () => {
     if (!userProfile?.targetRole) {
@@ -1538,7 +1597,7 @@ const App = () => {
       };
 
       recognition.onerror = (event: any) => {
-        console.error("Speech error", event.error);
+
         if (event.error === 'no-speech') {
           // Ignore
           return;
@@ -1550,14 +1609,14 @@ const App = () => {
           alert("Microphone access blocked. Please enable permissions in your browser settings.");
         } else {
           // Silent fail for other minor errors to avoid spamming alerts
-          console.warn("Speech recognition failed:", event.error);
+
         }
       };
 
       recognition.start();
       recognitionRef.current = recognition;
     } catch (e) {
-      console.error("Speech init error", e);
+
       alert("Could not start voice input.");
     }
   };
@@ -1610,22 +1669,34 @@ const App = () => {
   // --- Onboarding View ---
   if (view === AppView.ONBOARDING) {
     return (
-      <OnboardingView
-        userProfile={userProfile}
-        isAnalyzing={isAnalyzing}
-        isNavigating={isNavigating}
-        isUploadingResume={isUploadingResume}
-        validationError={validationError}
-        setUserProfile={setUserProfile}
-        onLogout={handleLogout}
-        onFileUpload={handleFileUpload}
-        onSubmit={handleOnboardingSubmit}
-      />
+      <React.Suspense fallback={
+        <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-violet-500" />
+        </div>
+      }>
+        <OnboardingView
+          userProfile={userProfile}
+          isAnalyzing={isAnalyzing}
+          isNavigating={isNavigating}
+          isUploadingResume={isUploadingResume}
+          validationError={validationError}
+          setUserProfile={setUserProfile}
+          onLogout={handleLogout}
+          onFileUpload={handleFileUpload}
+          onSubmit={handleOnboardingSubmit}
+          onBypass={handleOnboardingBypass}
+        />
+      </React.Suspense>
     );
   }
 
   // --- Main App Layout ---
   return (
+    <React.Suspense fallback={
+      <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-violet-500" />
+      </div>
+    }>
     <>
       {/* Navigation Loading Overlay */}
       {isNavigating && (
@@ -1751,57 +1822,7 @@ const App = () => {
               />
             )}
 
-            {/* Resume View - Payment Gate */}
-            {/* {view === AppView.RESUME && !userProfile.isResumePremium && (
-            <div className="h-[calc(100vh-140px)] min-h-[600px] flex flex-col items-center justify-center bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 overflow-hidden shadow-2xl relative text-center px-4">
-              <div className="w-24 h-24 bg-emerald-600/20 rounded-full flex items-center justify-center mb-6 ring-4 ring-emerald-600/10">
-                <FileText className="w-10 h-10 text-emerald-400" />
-              </div>
-              <h2 className="text-3xl font-bold text-white mb-3">Resume Architect Pro</h2>
-              <p className="text-zinc-400 max-w-lg mb-8 text-lg">
-                Unlock professional resume optimization and LaTeX downloads. Land 3x more interviews with an ATS-optimized resume for just <span className="text-white font-bold">₹1</span>.
-              </p>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 text-left max-w-lg w-full">
-                <div className="bg-white/5 p-4 rounded-xl border border-white/5 flex items-center">
-                  <div className="p-2 bg-emerald-500/20 rounded-lg mr-3">
-                    <TrendingUp className="w-5 h-5 text-emerald-400" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-white text-sm">ATS Optimization</h4>
-                    <p className="text-xs text-zinc-400">Keyword injection & metric focus</p>
-                  </div>
-                </div>
-                <div className="bg-white/5 p-4 rounded-xl border border-white/5 flex items-center">
-                  <div className="p-2 bg-blue-500/20 rounded-lg mr-3">
-                    <Code className="w-5 h-5 text-blue-400" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-white text-sm">LaTeX Export</h4>
-                    <p className="text-xs text-zinc-400">Get professional PDF versions</p>
-                  </div>
-                </div>
-              </div>
-
-              <button
-                onClick={handleResumePayment}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white px-10 py-4 rounded-xl font-bold text-lg shadow-[0_0_30px_rgba(16,185,129,0.3)] hover:shadow-[0_0_50px_rgba(16,185,129,0.5)] transition-all transform hover:-translate-y-1 flex items-center"
-              >
-                Unlock Architect for ₹1
-                <ChevronRight className="w-5 h-5 ml-2" />
-              </button>
-              <p className="mt-4 text-xs text-zinc-500 flex items-center">
-                <Lock className="w-3 h-3 mr-1" /> Secure payment via Razorpay
-              </p>
-              <button
-                onClick={() => setUserProfile(p => ({ ...p, isResumePremium: true }))}
-                className="mt-8 text-[10px] text-zinc-700 hover:text-emerald-400 transition-colors"
-                title="Dev Bypass"
-              >
-                [Dev Bypass]
-              </button>
-            </div>
-          )} */}
 
             {/* Resume View */}
             {view === AppView.RESUME && (
@@ -1870,17 +1891,6 @@ const App = () => {
               </button>
               <p className="mt-4 text-xs text-zinc-500 flex items-center">
                 <Lock className="w-3 h-3 mr-1" /> Secure payment via Razorpay
-              </p>
-              <button
-                onClick={() => setUserProfile(p => ({ ...p, isPremium: true }))}
-                className="mt-8 text-[10px] text-zinc-700 hover:text-violet-400 transition-colors"
-                title="Dev Bypass"
-              >
-                [Dev Bypass]
-              </button>
-            </div>
-          )} */}
-
             {/* Interview View */}
             {view === AppView.INTERVIEW && (
               <InterviewView
@@ -1966,6 +1976,7 @@ const App = () => {
         />
       </div >
     </>
+    </React.Suspense>
   );
 };
 

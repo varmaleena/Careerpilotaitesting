@@ -1,7 +1,7 @@
 import { Type } from "@google/genai";
 import axios from "axios";
 import { ATSResumeAnalysis, CareerAnalysis, LatexResumeData, ResumeOptimizationResult, UserProfile } from "../types";
-import { cleanJson, GEMINI_MODEL, generateWithRetry } from "./geminiClient";
+import { cleanJson, GEMINI_MODEL, generateWithRetry, HAS_GEMINI_KEYS } from "./geminiClient";
 
 const API_URL = "https://api.example.com/resume";
 
@@ -26,6 +26,11 @@ export const validateResumeFileType = (mimeType: string): boolean => {
 export const validateResumeContent = async (
     resumeInput: { text?: string; file?: { data: string; mimeType: string } }
 ): Promise<{ isValid: boolean; reason: string }> => {
+
+    if (!HAS_GEMINI_KEYS) {
+        console.warn("No Gemini API keys found. Using mock resume validation for local demo.");
+        return { isValid: true, reason: "Valid resume detected (Local Mock Bypass)." };
+    }
 
     // First validate file type
     if (resumeInput.file && !validateResumeFileType(resumeInput.file.mimeType)) {
@@ -112,7 +117,7 @@ Be STRICT. If it doesn't look like a resume, reject it.
 
         return { isValid: true, reason: "Valid resume detected." };
     } catch (error) {
-        console.error("Resume validation failed:", error);
+
         return { isValid: false, reason: "Failed to validate document. Please try again." };
     }
 };
@@ -225,6 +230,36 @@ export const analyzeProfile = async (
     targetCompanies: string = "",
     experienceLevel: string = "Junior"
 ): Promise<{ analysis: CareerAnalysis; extractedProfile: Partial<UserProfile> }> => {
+
+    if (!HAS_GEMINI_KEYS) {
+        console.warn("No Gemini API keys found. Using mock profile analysis for local demo.");
+        const mockAnalysis: CareerAnalysis = {
+            readinessScore: 75,
+            summary: `Candidate profile analyzed against target role: "${targetRole}" and companies: "${targetCompanies || 'top companies'}" (Local Mock Mode).`,
+            skills: [
+                { name: "JavaScript", category: "technical", status: "acquired" },
+                { name: "TypeScript", category: "technical", status: "acquired" },
+                { name: "React", category: "technical", status: "acquired" },
+                { name: "Node.js", category: "technical", status: "acquired" },
+                { name: "System Design", category: "technical", status: "missing" },
+                { name: "Docker", category: "technical", status: "missing" },
+                { name: "Kubernetes", category: "technical", status: "missing" },
+                { name: "CI/CD", category: "technical", status: "missing" },
+                { name: "AWS", category: "technical", status: "missing" }
+            ],
+            strengths: ["Strong Frontend Skills", "Good Problem Solving", "Quick Learner"],
+            weaknesses: ["Lacks production DevOps experience", "No prior backend role", "Needs system design depth"]
+        };
+        const mockExtractedProfile: Partial<UserProfile> = {
+            name: "John Doe",
+            mobileNumber: "+1 234 567 890",
+            location: "New York, USA",
+            githubProfile: "https://github.com/demo",
+            linkedinProfile: "https://linkedin.com/in/demo",
+            leetcodeProfile: "https://leetcode.com/demo"
+        };
+        return { analysis: mockAnalysis, extractedProfile: mockExtractedProfile };
+    }
 
     const promptText = `
     Role: Elite Technical Recruiter & Career Strategist.
@@ -346,11 +381,11 @@ export const analyzeProfile = async (
             return { analysis, extractedProfile };
 
         } catch (parseError) {
-            console.error("JSON Parse Error:", parseError, "Raw Text:", text);
+
             throw new Error("Failed to parse AI response. Please try again.");
         }
     } catch (error) {
-        console.error("Analysis failed", error);
+
         throw error;
     }
 };
@@ -360,6 +395,37 @@ export const optimizeResume = async (
     targetRole: string,
     jobDescription?: string
 ): Promise<ResumeOptimizationResult> => {
+
+    if (!HAS_GEMINI_KEYS) {
+        console.warn("No Gemini API keys found. Using mock resume optimization for local demo.");
+        return {
+            originalContent: "Original resume content summary.",
+            optimizedContent: "# Optimized Resume (Local Mock Mode)\n\n- Improved bullet points with action verbs and metrics.",
+            atsScore: {
+                before: 60,
+                after: 85,
+                breakdown: {
+                    keywordMatch: 80,
+                    quantification: 85,
+                    actionVerbs: 90,
+                    formatting: 85,
+                    relevance: 85
+                }
+            },
+            keyImprovements: [
+                {
+                    category: "Quantification",
+                    suggestion: "Add metrics to show impact.",
+                    originalSnippet: "Built React features.",
+                    improvedSnippet: "Built React features, improving page load speed by 25% for 10k users.",
+                    impact: "high"
+                }
+            ],
+            missingKeywordsAdded: ["TypeScript", "CI/CD"],
+            weaknessesAddressed: ["Lack of metrics"],
+            nextSteps: ["Review LaTeX format", "Download PDF"]
+        };
+    }
 
     // Ultra-compressed prompt - optimized for speed (60% token reduction)
     const jdSnippet = jobDescription
@@ -565,7 +631,7 @@ Make it production-ready, no placeholders.`;
         const text = response.text || "{}";
         return JSON.parse(cleanJson(text)) as ResumeOptimizationResult;
     } catch (error) {
-        console.error("Resume Optimization Failed:", error);
+
         throw error;
     }
 };
@@ -573,6 +639,70 @@ Make it production-ready, no placeholders.`;
 export const generateLatexData = async (
     resumeText: string
 ): Promise<LatexResumeData> => {
+
+    if (!HAS_GEMINI_KEYS) {
+        console.warn("No Gemini API keys found. Using mock LaTeX data generation for local demo.");
+        return {
+            personalInfo: {
+                fullName: "John Doe",
+                email: "johndoe@example.com",
+                phone: "+1 234 567 890",
+                location: "New York, USA",
+                linkedin: "linkedin.com/in/demo",
+                website: "github.com/demo"
+            },
+            summary: "Experienced software engineer specializing in frontend development.",
+            skills: {
+                languages: ["JavaScript", "TypeScript", "Python"],
+                technologies: ["React", "Node.js", "Express", "TailwindCSS"],
+                tools: ["Git", "Docker", "VS Code"]
+            },
+            experience: [
+                {
+                    title: "Software Engineer",
+                    company: "Tech Corp",
+                    location: "New York, USA",
+                    dates: "2023 - Present",
+                    bullets: [
+                        "Developed responsive user interfaces using React and TypeScript, boosting engagement by 20%.",
+                        "Collaborated with cross-functional teams to deliver scalable web applications on time."
+                    ]
+                }
+            ],
+            education: [
+                {
+                    degree: "Bachelor of Science in Computer Science",
+                    university: "State University",
+                    location: "New York, USA",
+                    dates: "2019 - 2023",
+                    gpa: "3.8 GPA"
+                }
+            ],
+            projects: [
+                {
+                    name: "CareerPilot",
+                    technologies: "React, Vite, Firebase",
+                    date: "2025",
+                    bullets: [
+                        "Created an AI career strategist app with a personalized dashboard and real-time job tracker."
+                    ]
+                }
+            ],
+            certifications: [
+                {
+                    name: "AWS Certified Developer",
+                    issuer: "Amazon Web Services",
+                    date: "2024"
+                }
+            ],
+            achievements: [
+                {
+                    title: "Dean's List",
+                    description: "Awarded Dean's List for academic excellence (2020-2023)."
+                }
+            ]
+        };
+    }
     const promptText = `
 You are a Senior Resume Architect. Extract ALL resume data into JSON format.
 
@@ -771,7 +901,7 @@ OUTPUT: Complete JSON matching LatexResumeData schema.
         const text = response.text || "{}";
         return JSON.parse(cleanJson(text)) as LatexResumeData;
     } catch (error) {
-        console.error("Latex Data Extraction Failed:", error);
+
         throw error;
     }
 };
@@ -969,11 +1099,11 @@ OUTPUT FORMAT (JSON):
             const data = JSON.parse(cleanJson(text));
             return data as ATSResumeAnalysis;
         } catch (parseError) {
-            console.error("JSON Parse Error:", parseError, "Raw Text:", text);
+
             throw new Error("Failed to parse AI response. Please try again.");
         }
     } catch (error) {
-        console.error("ATS Resume Analysis failed:", error);
+
         throw error;
     }
 };

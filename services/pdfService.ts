@@ -34,10 +34,10 @@ export const extractTextFromPdf = async (file: File): Promise<string> => {
             // Extract annotations (hyperlinks)
             try {
                 const annotations = await page.getAnnotations();
-                console.log(`Page ${i} annotations:`, annotations); // Debug log
+
 
                 for (const annotation of annotations) {
-                    console.log('Annotation details:', annotation); // Debug each annotation
+
 
                     // Check if it's a link annotation
                     if (annotation.subtype === 'Link') {
@@ -50,7 +50,7 @@ export const extractTextFromPdf = async (file: File): Promise<string> => {
 
                         // Check for dest (internal links sometimes have external refs)
                         if (!url && annotation.dest) {
-                            console.log('Found dest:', annotation.dest);
+
                         }
 
                         if (url) {
@@ -69,15 +69,15 @@ export const extractTextFromPdf = async (file: File): Promise<string> => {
 
                             if (!isGeneric) {
                                 extractedLinks.push(url);
-                                console.log('Extracted URL:', url); // Debug successful extraction
+
                             } else {
-                                console.warn('Skipped generic URL:', url);
+
                             }
                         }
                     }
                 }
             } catch (annotError) {
-                console.warn(`Could not extract annotations from page ${i}:`, annotError);
+
             }
         }
 
@@ -85,9 +85,9 @@ export const extractTextFromPdf = async (file: File): Promise<string> => {
         if (extractedLinks.length > 0) {
             fullText += '\n\n--- PROFILE LINKS ---\n';
             fullText += extractedLinks.join('\n');
-            console.log('Total extracted links:', extractedLinks); // Debug final list
+
         } else {
-            console.warn('No valid links extracted from PDF');
+
         }
 
         return fullText.trim();

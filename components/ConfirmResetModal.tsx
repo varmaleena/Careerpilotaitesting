@@ -22,7 +22,7 @@ export const ConfirmResetModal: React.FC<ConfirmResetModalProps> = ({
             await onConfirm();
             onClose();
         } catch (error) {
-            console.error("Reset failed", error);
+
         } finally {
             setIsLoading(false);
         }

@@ -1,11 +1,39 @@
 import { Type } from "@google/genai";
 import { WeeklyPlan, ProjectIdea } from "../types";
-import { cleanJson, generateWithRetry, GEMINI_MODEL } from "./geminiClient";
+import { cleanJson, generateWithRetry, GEMINI_MODEL, HAS_GEMINI_KEYS } from "./geminiClient";
 
 /**
  * Generates a personalized learning plan.
  */
 export const generateLearningPlan = async (targetRole: string, missingSkills: string[]): Promise<WeeklyPlan[]> => {
+
+    const getFallbackPlan = (): WeeklyPlan[] => [
+        {
+            weekNumber: 1,
+            theme: "Foundations & Environment Setup",
+            tasks: [
+                { id: "task-1-1", title: `Setup Development Environment for ${targetRole}`, description: "Install required compilers, IDEs, and tools.", type: "reading", estimatedHours: 2, completed: false, videoQuery: `${targetRole} development environment setup` },
+                { id: "task-1-2", title: "Review Core Language Features", description: `Deep dive into advanced syntax and paradigms of ${targetRole} languages.`, type: "course", estimatedHours: 5, completed: false, videoQuery: `${targetRole} advanced programming concepts` },
+                { id: "task-1-3", title: "Study Basic Architecture Patterns", description: "Learn MVC, RESTful APIs, and basic client-server data flow.", type: "reading", estimatedHours: 3, completed: false, videoQuery: "REST API architecture basics" },
+                { id: "task-1-4", title: "Version Control Best Practices", description: "Master Git branching, commits, and pull request workflows.", type: "course", estimatedHours: 3, completed: false, videoQuery: "Git branching workflow tutorial" }
+            ]
+        },
+        {
+            weekNumber: 2,
+            theme: "Applied Skills & Mini Projects",
+            tasks: [
+                { id: "task-2-1", title: "Build a Simple CRUD Application", description: "Create a basic functional app to practice core operations.", type: "project", estimatedHours: 8, completed: false, videoQuery: `build CRUD app ${targetRole}` },
+                { id: "task-2-2", title: "Authentication & Security Basics", description: "Implement session-based or token-based authentication.", type: "course", estimatedHours: 6, completed: false, videoQuery: "JWT authentication backend tutorial" },
+                { id: "task-2-3", title: "Database Integration & Schema Design", description: "Connect database and design schema for application entities.", type: "project", estimatedHours: 6, completed: false, videoQuery: "Database schema normalization tutorial" },
+                { id: "task-2-4", title: "Unit Testing Fundamentals", description: "Write unit tests for the core logic and endpoints.", type: "reading", estimatedHours: 4, completed: false, videoQuery: "Introduction to unit testing tutorial" }
+            ]
+        }
+    ];
+
+    if (!HAS_GEMINI_KEYS) {
+        console.warn("No Gemini API keys found. Using mock learning plan for local demo.");
+        return getFallbackPlan();
+    }
     const focusSkills = missingSkills.length > 0
         ? missingSkills.slice(0, 5).join(', ')
         : `core modern competencies for ${targetRole}`;
@@ -87,7 +115,23 @@ export const generateLearningPlan = async (targetRole: string, missingSkills: st
             }
         );
 
-        const rawPlan = JSON.parse(cleanJson(response.text || "[]")) as WeeklyPlan[];
+        let text = response.text || "[]";
+        
+        // REPAIR Truncated JSON
+        if (!text.trim().endsWith(']')) {
+            const lastBrace = text.lastIndexOf('}');
+            if (lastBrace !== -1) {
+                text = text.substring(0, lastBrace + 1) + ']';
+            }
+        }
+        
+        let rawPlan: WeeklyPlan[] = [];
+        try {
+            rawPlan = JSON.parse(cleanJson(text)) as WeeklyPlan[];
+        } catch (parseError) {
+            console.error("Failed to parse learning plan JSON, using fallback", parseError);
+            return getFallbackPlan();
+        }
 
         // Enhanced Post-processing
         const filteredPlan = rawPlan.filter(week =>
@@ -132,7 +176,7 @@ export const generateLearningPlan = async (targetRole: string, missingSkills: st
 
         return sanitizedPlan;
     } catch (error) {
-        console.error("Plan Generation Failed:", error);
+
         throw error;
     }
 };
@@ -212,7 +256,7 @@ export const generateProjectIdeas = async (
             const lastBrace = text.lastIndexOf('}');
             if (lastBrace !== -1) {
                 text = text.substring(0, lastBrace + 1) + ']';
-                console.warn("⚠️ Repaired truncated JSON response");
+
             }
         }
 
@@ -240,7 +284,7 @@ export const generateProjectIdeas = async (
         }));
 
     } catch (error) {
-        console.error("❌ Project Generation Failed, using Fallback:", error);
+
 
         // 3. EMERGENCY FALLBACK WITH VARIATIONS
         // Use random offset to cycle through fallbacks if API fails repeatedly
