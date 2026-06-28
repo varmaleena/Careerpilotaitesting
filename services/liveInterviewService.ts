@@ -143,10 +143,11 @@ Generate your next response as the interviewer:`;
             {
                 contents: systemPrompt,
                 config: {
-                    temperature: 0.8, // More natural, human-like responses
+                    temperature: 0.8,
                     thinkingConfig: { thinkingBudget: 0 }
                 }
-            }
+            },
+            true // skipCache — interview turns must be unique
         );
 
         return response.text || "Could you please repeat that?";
@@ -230,7 +231,8 @@ Be brutally honest. This is their career growth.`;
                     responseMimeType: "application/json",
                     thinkingConfig: { thinkingBudget: 0 }
                 }
-            }
+            },
+            true // skipCache — evaluation must be fresh
         );
 
         return JSON.parse(response.text || '{}');

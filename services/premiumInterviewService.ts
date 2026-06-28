@@ -234,14 +234,16 @@ Review the conversation history above.
 Generate your next response (Keep it professional, concise, and moving forward):`;
 
     try {
+        // skipCache=true: interview responses must be unique per turn, never reuse cached output
         const response = await generateWithRetry(
             GEMINI_MODEL,
             {
                 contents: systemPrompt,
                 config: {
-                    temperature: 0.7, // Professional but natural
+                    temperature: 0.7,
                 }
-            }
+            },
+            true // skipCache
         );
 
         // Strip "Interviewer:" prefix if AI adds it (prevents duplication in UI)
@@ -346,6 +348,7 @@ IF DATA IS LIMITED/INTERVIEW CUT SHORT:
 Be constructively honest to maximize learning. Frame everything as growth opportunities, not failures.`;
 
     try {
+        // skipCache=true: evaluation must reflect the actual conversation, not a cached result
         const response = await generateWithRetry(
             GEMINI_MODEL,
             {
@@ -353,7 +356,8 @@ Be constructively honest to maximize learning. Frame everything as growth opport
                 config: {
                     responseMimeType: "application/json",
                 }
-            }
+            },
+            true // skipCache
         );
 
         return JSON.parse(cleanJson(response.text || '{}'));

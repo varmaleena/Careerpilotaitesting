@@ -61,30 +61,35 @@ import {
   Activity
 } from 'lucide-react';
 
+// ── Critical path: always included in initial bundle ────────────────────────
 import LandingPage from "./components/LandingPage";
-import { FeedbackModal } from './components/FeedbackModal';
+import { AuthModal } from "./components/AuthModal";
+import { DashboardView } from "./components/DashboardView";
 import { ScoreGauge } from "./components/ScoreGauge";
 import Sidebar from "./components/Sidebar";
 import MobileBottomNav from "./components/MobileBottomNav";
 import { SkillCard } from "./components/SkillCard";
-import { ShareSuccessModal } from "./components/ShareSuccessModal";
 import { DailyQuest } from "./components/DailyQuest";
-import { InterviewAnalysisView } from "./components/InterviewAnalysisView";
 import { ConfirmResetModal } from "./components/ConfirmResetModal";
-import { ProfileModal } from "./components/ProfileModal";
 import { EmptyState } from "./components/EmptyState";
-import { AuthModal } from "./components/AuthModal";
-import { OnboardingView } from "./components/OnboardingView";
-import { DashboardView } from "./components/DashboardView";
-import { LearningPlanView } from "./components/LearningPlanView";
-import { ProjectsView } from "./components/ProjectsView";
-import { ResumeView } from "./components/ResumeView";
-import { InterviewView } from "./components/InterviewView";
-import { JobsView } from "./components/JobsView";
-import { VerifiedJob } from "./services/jobFetchers";
+import { ShareSuccessModal } from "./components/ShareSuccessModal";
+
+// ── Lazy-loaded: split into separate async chunks ────────────────────────────
+// These are large views never needed on initial render (landing / login page)
+const FeedbackModal     = React.lazy(() => import('./components/FeedbackModal').then(m => ({ default: m.FeedbackModal })));
+const InterviewAnalysisView = React.lazy(() => import('./components/InterviewAnalysisView').then(m => ({ default: m.InterviewAnalysisView })));
+const ProfileModal      = React.lazy(() => import('./components/ProfileModal').then(m => ({ default: m.ProfileModal })));
+const OnboardingView    = React.lazy(() => import('./components/OnboardingView').then(m => ({ default: m.OnboardingView })));
+const LearningPlanView  = React.lazy(() => import('./components/LearningPlanView').then(m => ({ default: m.LearningPlanView })));
+const ProjectsView      = React.lazy(() => import('./components/ProjectsView').then(m => ({ default: m.ProjectsView })));
+const ResumeView        = React.lazy(() => import('./components/ResumeView').then(m => ({ default: m.ResumeView })));
+const InterviewView     = React.lazy(() => import('./components/InterviewView').then(m => ({ default: m.InterviewView })));
+const JobsView          = React.lazy(() => import('./components/JobsView').then(m => ({ default: m.JobsView })));
+
 import { generateLatexDocument } from './utils/latexUtils';
 
 import { AuthService } from './services/authService';
+import { clearAICache } from './services/aiCache';
 import { canStartNewInterview } from './services/interviewSessionManager';
 import { generateLearningPlan, generateProjectIdeas } from './services/learningService';
 import { calculatePlanStatistics, getProgressMessage, getCurrentWeek } from './services/planStatistics';
@@ -283,47 +288,64 @@ const App = () => {
     const savedUid = localStorage.getItem('careerPilot_session_uid');
     const savedEmail = localStorage.getItem('careerPilot_session_email');
     if (savedUid && savedEmail) {
-      // Attempt auto-login using stored UID + email
-      loginUser(savedUid, savedEmail).catch(err => {
-
+      loginUser(savedUid, savedEmail).catch(() => {
         localStorage.removeItem('careerPilot_session_uid');
         localStorage.removeItem('careerPilot_session_email');
       });
     }
   }, []);
 
-  // Save state on critical updates ONLY if logged in
+  // PERF: Keep session tokens alive (no Firestore write needed here)
   useEffect(() => {
     if (isLoggedIn && currentUserUid) {
-      localStorage.setItem('careerPilot_session_uid', currentUserUid); // Keep session alive
+      localStorage.setItem('careerPilot_session_uid', currentUserUid);
       localStorage.setItem('careerPilot_session_email', currentUserEmail);
-
-      AuthService.saveUserData(currentUserUid, {
-        userProfile,
-        analysis,
-        plan,
-        projects,
-
-        chatMessages,
-        interviewFeedback,
-        resumeAnalysisResult,
-        seenProjectTitles
-      });
     }
-  }, [
-    isLoggedIn,
-    currentUserUid,
-    currentUserEmail,
-    userProfile,
-    analysis,
-    plan,
-    projects,
+  }, [isLoggedIn, currentUserUid, currentUserEmail]);
 
-    chatMessages,
-    interviewFeedback,
-    resumeAnalysisResult,
-    seenProjectTitles
-  ]);
+  // PERF: Granular save — analysis only (fires when analysis changes)
+  useEffect(() => {
+    if (isLoggedIn && currentUserUid && analysis) {
+      AuthService.saveAnalysis(currentUserUid, analysis);
+    }
+  }, [analysis, isLoggedIn, currentUserUid]);
+
+  // PERF: Granular save — plan only
+  useEffect(() => {
+    if (isLoggedIn && currentUserUid && plan) {
+      AuthService.savePlan(currentUserUid, plan);
+    }
+  }, [plan, isLoggedIn, currentUserUid]);
+
+  // PERF: Granular save — projects + seen titles
+  useEffect(() => {
+    if (isLoggedIn && currentUserUid) {
+      AuthService.saveProjects(currentUserUid, projects, seenProjectTitles);
+    }
+  }, [projects, seenProjectTitles, isLoggedIn, currentUserUid]);
+
+  // PERF: Granular save — profile with 1s debounce (avoids write per keystroke)
+  useEffect(() => {
+    if (!isLoggedIn || !currentUserUid) return;
+    const timer = setTimeout(() => {
+      AuthService.saveProfile(currentUserUid, userProfile);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [userProfile, isLoggedIn, currentUserUid]);
+
+  // PERF: Granular save — interview feedback
+  useEffect(() => {
+    if (isLoggedIn && currentUserUid && interviewFeedback) {
+      AuthService.saveInterviewFeedback(currentUserUid, interviewFeedback);
+    }
+  }, [interviewFeedback, isLoggedIn, currentUserUid]);
+
+  // PERF: Granular save — resume analysis result
+  useEffect(() => {
+    if (isLoggedIn && currentUserUid && resumeAnalysisResult) {
+      AuthService.saveResumeAnalysis(currentUserUid, resumeAnalysisResult);
+    }
+  }, [resumeAnalysisResult, isLoggedIn, currentUserUid]);
 
   // Analytics: Identify user and track properties
   useEffect(() => {
@@ -434,17 +456,20 @@ const App = () => {
   // ... (existing state)
 
   const loginUser = async (uid: string, email: string) => {
+    // PERF: Set auth state and close modal immediately — don't block on data fetch
+    setCurrentUserUid(uid);
+    setCurrentUserEmail(email);
+    setIsLoggedIn(true);
+    setShowAuthModal(false);
+
     // Try by UID first (new users), then fall back to email (legacy users stored by email key)
     let userData = await AuthService.getUserData(uid);
 
     if (!userData && email) {
-
       userData = await AuthService.getUserData(email);
-
       // Migrate legacy email-keyed data to UID-keyed data
       if (userData) {
-
-        await AuthService.saveUserData(uid, userData);
+        AuthService.saveUserData(uid, userData); // fire-and-forget migration
       }
     }
 
@@ -458,7 +483,6 @@ const App = () => {
       let newXp = userData.userProfile.xp || 0;
 
       if (lastLogin !== today) {
-        // New day login
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
         const yesterdayStr = yesterday.toDateString();
@@ -466,27 +490,18 @@ const App = () => {
         if (lastLogin === yesterdayStr) {
           newStreak += 1;
         } else {
-          newStreak = 1; // broken streak
+          newStreak = 1;
         }
-        // Save new login date
         userData.userProfile.lastLoginDate = new Date().toISOString();
         userData.userProfile.streak = newStreak;
-        userData.userProfile.xp = newXp + 10; // Bonus for daily login
+        userData.userProfile.xp = newXp + 10;
 
-        // Persist immediately using UID
-        await AuthService.saveUserData(uid, userData);
+        // PERF: Save streak update with granular method — fire-and-forget
+        AuthService.saveProfile(uid, userData.userProfile);
       }
 
-      // Hydrate State
-      setCurrentUserUid(uid);
-      setCurrentUserEmail(email);
-      setIsLoggedIn(true);
-      setShowAuthModal(false);
-
-      setUserProfile({
-        ...userData.userProfile,
-        isPremium: true
-      });
+      // Hydrate State — all in one batch
+      setUserProfile({ ...userData.userProfile, isPremium: true });
       setAnalysis(userData.analysis ? {
         ...userData.analysis,
         strengths: userData.analysis.strengths || [],
@@ -495,51 +510,46 @@ const App = () => {
       setPlan(userData.plan);
       setProjects(userData.projects || []);
       setSeenProjectTitles(userData.seenProjectTitles || []);
-
       setChatMessages(userData.chatMessages || []);
       setInterviewFeedback(userData.interviewFeedback);
       setResumeAnalysisResult(userData.resumeAnalysisResult || null);
 
-      // Route Logic
+      // Route Logic — navigate instantly
       if (userData.analysis) {
         const lastView = localStorage.getItem('careerPilot_last_view') as AppView;
         const validViews = [AppView.DASHBOARD, AppView.PLAN, AppView.PROJECTS, AppView.RESUME, AppView.INTERVIEW, AppView.JOBS];
-
-        if (lastView && validViews.includes(lastView)) {
-          setView(lastView);
-        } else {
-          setView(AppView.DASHBOARD);
-        }
+        setView(lastView && validViews.includes(lastView) ? lastView : AppView.DASHBOARD);
       } else {
         setView(AppView.ONBOARDING);
       }
     } else {
-
-      // New user — send to onboarding instead of showing an error
-      setCurrentUserUid(uid);
-      setCurrentUserEmail(email);
-      setIsLoggedIn(true);
-      setShowAuthModal(false);
+      // New user — send to onboarding
       setView(AppView.ONBOARDING);
     }
   };
 
 
   const handleLogout = () => {
+    const uidToEvict = currentUserUid;
+
+    // PERF: Clear session AI cache so stale data isn't served to a new user
+    clearAICache();
+
+    // PERF: Evict this user from the in-memory AuthService cache
+    if (uidToEvict) AuthService.clearUserCache(uidToEvict);
+
     setIsLoggedIn(false);
     setCurrentUserUid('');
     setCurrentUserEmail('');
-    localStorage.removeItem('careerPilot_session_uid'); // Clear persistent session
+    localStorage.removeItem('careerPilot_session_uid');
     localStorage.removeItem('careerPilot_session_email');
     sessionStorage.removeItem('careerPilot_session_jobs_generated');
 
-    // Reset all local state
     setUserProfile({ name: 'User', targetRole: '', isPremium: true });
     setAnalysis(null);
     setPlan(null);
     setProjects([]);
     setSeenProjectTitles([]);
-
     setChatMessages([]);
     setInterviewFeedback(null);
 
@@ -660,37 +670,89 @@ const App = () => {
     if ((!userProfile?.resumeText && !userProfile?.resumeFile) || !userProfile?.targetRole) return;
 
     setIsAnalyzing(true);
-    setValidationError(''); // Clear any previous error
+    setValidationError('');
     try {
-      // Step 1: Validate document is a real resume before analysis
+      // Step 1: Validate document is a real resume
       const validation = await validateResumeContent({
         text: userProfile.resumeText,
         file: userProfile.resumeFile
       });
 
       if (!validation.isValid) {
-        // Use the specific reason from the AI validator (e.g. "This looks like an invoice, not a resume")
         setValidationError(validation.reason || 'The uploaded document does not appear to be a valid resume. Please upload a professional CV.');
         setIsAnalyzing(false);
         return;
       }
 
-      // Step 2: Only proceed with analysis if validation passed
+      // Step 2: Run profile analysis (cached — same resume+role returns instantly on retry)
       const result = await analyzeProfile(
         { text: userProfile.resumeText, file: userProfile.resumeFile },
         userProfile.targetRole,
         userProfile.targetCompanies,
         userProfile.experienceLevel
       );
+
+      // PERF: Update state and navigate to dashboard IMMEDIATELY
+      // Plan + projects will generate in the background
+      const updatedProfile = { ...userProfile, ...result.extractedProfile };
       setAnalysis(result.analysis);
-      setUserProfile(prev => ({
-        ...prev,
-        ...result.extractedProfile
-      }));
+      setUserProfile(prev => ({ ...prev, ...result.extractedProfile }));
       setView(AppView.DASHBOARD);
+      setIsAnalyzing(false);
+
+      // PERF: Fire plan + project generation in PARALLEL, non-blocking
+      // UI is already on dashboard — user sees analysis results while these generate
+      const missingSkills = result.analysis.skills
+        ?.filter(s => s.status === 'missing')
+        ?.map(s => s.name) || [];
+
+      Promise.all([
+        // Generate learning plan in background
+        (async () => {
+          try {
+            setIsGeneratingPlan(true);
+            const generatedPlan = await generateLearningPlan(updatedProfile.targetRole, missingSkills);
+            const uniquePlan = generatedPlan.reduce((acc, current) => {
+              const isDuplicate = acc.find(w => w.theme.toLowerCase() === current.theme.toLowerCase());
+              if (!isDuplicate && current.tasks?.length > 0 && current.theme?.trim().length > 2) {
+                acc.push(current);
+              }
+              return acc;
+            }, [] as WeeklyPlan[]);
+            if (uniquePlan.length > 0) setPlan(uniquePlan);
+          } catch (err) {
+            // Plan generation failure is non-blocking — user can retry from dashboard
+          } finally {
+            setIsGeneratingPlan(false);
+          }
+        })(),
+
+        // Generate projects in background
+        (async () => {
+          try {
+            setIsGeneratingProjects(true);
+            const focusTopics = missingSkills.slice(0, 3);
+            const standardProjects = await generateProjectIdeas(
+              updatedProfile.targetRole,
+              focusTopics,
+              updatedProfile.targetCompanies || 'Tech Company',
+              generationDifficulty,
+              seenProjectTitles
+            );
+            const newProjects = standardProjects.slice(0, 3);
+            setProjects(newProjects);
+            setSeenProjectTitles(prev => [...prev, ...newProjects.map(p => p.title)]);
+          } catch (err) {
+            // Project generation failure is non-blocking
+          } finally {
+            setIsGeneratingProjects(false);
+          }
+        })()
+      ]);
+
+      return; // Analysis done, background tasks running, function exits
     } catch (error: any) {
       handleApiError(error, "Analysis failed");
-    } finally {
       setIsAnalyzing(false);
     }
   };
@@ -1470,23 +1532,34 @@ const App = () => {
   // --- Onboarding View ---
   if (view === AppView.ONBOARDING) {
     return (
-      <OnboardingView
-        userProfile={userProfile}
-        isAnalyzing={isAnalyzing}
-        isNavigating={isNavigating}
-        isUploadingResume={isUploadingResume}
-        validationError={validationError}
-        setUserProfile={setUserProfile}
-        onLogout={handleLogout}
-        onFileUpload={handleFileUpload}
-        onSubmit={handleOnboardingSubmit}
-        onBypass={handleOnboardingBypass}
-      />
+      <React.Suspense fallback={
+        <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-violet-500" />
+        </div>
+      }>
+        <OnboardingView
+          userProfile={userProfile}
+          isAnalyzing={isAnalyzing}
+          isNavigating={isNavigating}
+          isUploadingResume={isUploadingResume}
+          validationError={validationError}
+          setUserProfile={setUserProfile}
+          onLogout={handleLogout}
+          onFileUpload={handleFileUpload}
+          onSubmit={handleOnboardingSubmit}
+          onBypass={handleOnboardingBypass}
+        />
+      </React.Suspense>
     );
   }
 
   // --- Main App Layout ---
   return (
+    <React.Suspense fallback={
+      <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-violet-500" />
+      </div>
+    }>
     <>
       {/* Navigation Loading Overlay */}
       {isNavigating && (
@@ -1754,6 +1827,7 @@ const App = () => {
         />
       </div >
     </>
+    </React.Suspense>
   );
 };
 
