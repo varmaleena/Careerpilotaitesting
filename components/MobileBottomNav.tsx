@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+    Briefcase,
     LayoutDashboard,
     BookOpen,
     Code,
@@ -43,6 +44,7 @@ const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
         { id: AppView.PROJECTS, icon: Code, label: 'Portfolio' },
         { id: AppView.RESUME, icon: FileText, label: 'Resume' },
         { id: AppView.INTERVIEW, icon: MessageSquare, label: 'Interview' },
+        { id: AppView.JOBS, icon: Briefcase, label: 'Jobs' },
     ];
 
     const handleNavClick = (view: AppView) => {
@@ -66,17 +68,6 @@ const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                         <button
                             key={item.id}
                             onClick={() => handleNavClick(item.id)}
-<<<<<<< Updated upstream
-                            className="flex flex-col items-center justify-center w-auto flex-1 h-full space-y-1 relative group"
-                        >
-                            <item.icon
-                                className={`w-5 h-5 transition-all duration-300 ${isActive(item.id)
-                                    ? 'text-violet-400 drop-shadow-[0_0_8px_rgba(167,139,250,0.5)] -translate-y-1'
-                                    : 'text-zinc-500 opacity-60 group-hover:text-zinc-300'
-                                    }`}
-                            />
-                            <span className={`text-[9px] font-medium transition-all ${isActive(item.id) ? 'text-violet-400 opacity-100' : 'text-zinc-500 opacity-0 group-hover:opacity-100'}`}>
-=======
                             className="flex flex-col items-center justify-center w-auto flex-1 h-full gap-0.5 relative group cursor-pointer border-0 bg-transparent"
                         >
                             <item.icon
@@ -86,16 +77,11 @@ const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                                     }`}
                             />
                             <span className={`text-[9px] font-semibold transition-all duration-200 ${isActive(item.id) ? 'text-zinc-900 opacity-100' : 'text-zinc-500 opacity-70'}`}>
->>>>>>> Stashed changes
                                 {item.label}
                             </span>
 
                             {isActive(item.id) && (
-<<<<<<< Updated upstream
-                                <div className="absolute top-0 w-8 h-[2px] bg-violet-500 shadow-[0_0_10px_rgba(167,139,250,1)] rounded-b-full"></div>
-=======
                                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-[2px] bg-zinc-900 rounded-b-full"></div>
->>>>>>> Stashed changes
                             )}
                         </button>
                     ))}
@@ -103,17 +89,6 @@ const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                     {/* Menu Button */}
                     <button
                         onClick={toggleMenu}
-<<<<<<< Updated upstream
-                        className="flex flex-col items-center justify-center w-auto flex-1 h-full space-y-1 relative group"
-                    >
-                        <Menu
-                            className={`w-5 h-5 transition-all duration-300 ${isMenuOpen
-                                ? 'text-violet-400 drop-shadow-[0_0_8px_rgba(167,139,250,0.5)] -translate-y-1'
-                                : 'text-zinc-500 opacity-60 group-hover:text-zinc-300'
-                                }`}
-                        />
-                        <span className={`text-[9px] font-medium transition-all ${isMenuOpen ? 'text-violet-400 opacity-100' : 'text-zinc-500 opacity-0 group-hover:opacity-100'}`}>
-=======
                         className="flex flex-col items-center justify-center w-auto flex-1 h-full gap-0.5 relative group cursor-pointer border-0 bg-transparent"
                     >
                         <Menu
@@ -123,7 +98,6 @@ const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                                 }`}
                         />
                         <span className={`text-[9px] font-semibold transition-all duration-200 ${isMenuOpen ? 'text-zinc-900 opacity-100' : 'text-zinc-500 opacity-70'}`}>
->>>>>>> Stashed changes
                             More
                         </span>
                     </button>

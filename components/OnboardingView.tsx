@@ -296,11 +296,6 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
                         <div className="flex border-t border-[#e3e1dc] pt-8 gap-4 flex-col sm:flex-row items-center">
                             {/* Error Box */}
                             {validationError && (
-<<<<<<< Updated upstream
-                                <div className="flex-1 w-full bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex items-center gap-3">
-                                    <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                                    <p className="text-xs text-red-300 font-medium">{validationError}</p>
-=======
                                 <div className="flex-grow w-full bg-zinc-50/50 border border-[#e3e1dc] rounded-xl p-4 flex flex-col gap-3">
                                     <div className="flex items-center gap-3">
                                         <AlertCircle className="w-4 h-4 text-zinc-700 flex-shrink-0" />
@@ -324,7 +319,6 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
                                     <p className="text-xs text-zinc-650 font-medium">
                                         Demo Mode Active: No Gemini key in <code>.env</code>. Mock data will be used.
                                     </p>
->>>>>>> Stashed changes
                                 </div>
                             )}
 

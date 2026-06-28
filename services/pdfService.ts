@@ -92,11 +92,7 @@ export const extractTextFromPdf = async (file: File): Promise<string> => {
 
         return fullText.trim();
     } catch (error) {
-<<<<<<< Updated upstream
-        console.error("PDF Parse Error:", error);
-=======
         console.error("PDF Parsing Error:", error);
->>>>>>> Stashed changes
         throw new Error("Failed to extract text from PDF. Please upload a clear PDF file.");
     }
 };

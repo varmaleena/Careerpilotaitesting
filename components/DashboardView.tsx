@@ -172,32 +172,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         </div>
                     </div>
 
-<<<<<<< Updated upstream
-                {/* Skills Matrix */}
-                <div className="bg-zinc-900/50 rounded-xl border border-white/5 p-6">
-                    <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-sm font-bold text-white">Skills Breakdown</h3>
-                        <span className="text-[11px] font-bold px-2.5 py-1 bg-zinc-800 rounded text-zinc-400">
-                            {analysis.skills?.length || 0} skills tracked
-                        </span>
-                    </div>
-
-                    <div className="grid md:grid-cols-2 gap-6">
-                        <div>
-                            <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider mb-3">Acquired</p>
-                            <div className="flex flex-wrap gap-2">
-                                {analysis.skills?.filter(s => s.status === 'acquired').map(s => <SkillCard key={s.name} skill={s} />)}
-                                {analysis.skills?.filter(s => s.status === 'acquired').length === 0 && (
-                                    <span className="text-sm text-zinc-500 italic">No exact matches found yet.</span>
-                                )}
-                            </div>
-                        </div>
-                        <div>
-                            <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider mb-3">Missing / To Learn</p>
-                            <div className="flex flex-wrap gap-2">
-                                {analysis.skills?.filter(s => s.status === 'missing').map(s => <SkillCard key={s.name} skill={s} />)}
-                            </div>
-=======
                     {/* Role Compatibility */}
                     <div className="bg-white rounded-2xl border border-[#e3e1dc] p-7 shadow-sm hover:-translate-y-1 hover:shadow-lg transition-all duration-300 animate-slide-up" style={{ animationDelay: '400ms' }}>
                         <h3 className="text-sm font-bold text-zinc-900 mb-8 text-center flex items-center justify-center">
@@ -206,7 +180,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         </h3>
                         <div className="scale-110 mb-4">
                             <ScoreGauge score={analysis.readinessScore} />
->>>>>>> Stashed changes
                         </div>
                     </div>
 

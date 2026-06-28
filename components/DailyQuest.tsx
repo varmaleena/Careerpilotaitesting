@@ -31,11 +31,7 @@ export const DailyQuest: React.FC<DailyQuestProps> = ({ streak, xp, onNavigate }
     }, []);
 
     return (
-<<<<<<< Updated upstream
-        <div className="bg-zinc-900/80 rounded-xl border border-zinc-800 p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm mb-2">
-=======
         <div className="bg-zinc-50 rounded-xl border border-zinc-200/80 p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm">
->>>>>>> Stashed changes
             <div className="flex items-center gap-4 flex-1">
                 <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0 border border-amber-500/20">
                     <Zap className="w-5 h-5 text-amber-600" />

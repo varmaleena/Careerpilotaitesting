@@ -17,6 +17,7 @@ import {
   Download,
   ExternalLink,
   FileText,
+  Flame,
   Layers,
   Link,
   Loader2,
@@ -56,7 +57,6 @@ import {
   Zap,
   Share2,
   Sparkles,
-  Flame,
   Calendar,
   Activity
 } from 'lucide-react';
@@ -80,6 +80,7 @@ import { LearningPlanView } from "./components/LearningPlanView";
 import { ProjectsView } from "./components/ProjectsView";
 import { ResumeView } from "./components/ResumeView";
 import { InterviewView } from "./components/InterviewView";
+import { JobsView } from "./components/JobsView";
 import { generateLatexDocument } from './utils/latexUtils';
 
 import { AuthService } from './services/authService';
@@ -99,12 +100,13 @@ import {
   InterviewFeedback,
   LatexResumeData,
   LearningTask,
-  PastInterview,
+  PaymentTransaction,
   ProjectIdea,
   ResumeOptimizationResult,
   Skill,
   UserProfile,
-  WeeklyPlan
+  WeeklyPlan,
+  JobApplication
 } from './types';
 
 const App = () => {
@@ -219,8 +221,42 @@ const App = () => {
   const [projects, setProjects] = useState<ProjectIdea[]>([]);
   const [seenProjectTitles, setSeenProjectTitles] = useState<string[]>([]);
   const [isGeneratingProjects, setIsGeneratingProjects] = useState(false);
-  const [projectFilter, setProjectFilter] = useState<'All' | 'Beginner' | 'Intermediate' | 'Advanced'>('All');
-  const [generationDifficulty, setGenerationDifficulty] = useState<string>('Intermediate');
+  const [generationDifficulty, setGenerationDifficulty] = useState<'Beginner' | 'Intermediate' | 'Advanced'>('Intermediate');
+  const [projectFilter, setProjectFilter] = useState<'all' | 'completed' | 'in-progress'>('all');
+
+  const handleSaveJob = useCallback((job: VerifiedJob) => {
+    setUserProfile(prev => ({
+      ...prev,
+      jobApplications: [
+        ...(prev.jobApplications || []),
+        {
+          id: Date.now().toString(),
+          jobId: job.id || Date.now().toString(),
+          title: job.title,
+          company: job.company,
+          location: job.location,
+          applyLink: job.applyLink,
+          status: 'Saved',
+          dateSaved: Date.now(),
+          dateUpdated: Date.now()
+        }
+      ]
+    }));
+  }, []);
+
+  const handleUpdateJobStatus = useCallback((id: string, status: JobApplication['status']) => {
+    setUserProfile(prev => ({
+      ...prev,
+      jobApplications: prev.jobApplications?.map(j => j.id === id ? { ...j, status, dateUpdated: Date.now() } : j)
+    }));
+  }, []);
+
+  const handleDeleteJob = useCallback((id: string) => {
+    setUserProfile(prev => ({
+      ...prev,
+      jobApplications: prev.jobApplications?.filter(j => j.id !== id)
+    }));
+  }, []);
 
   // Premium Interview System
   const [interviewStartTime, setInterviewStartTime] = useState<number | null>(null);
@@ -500,24 +536,8 @@ const App = () => {
 
   // ... (existing state)
 
-<<<<<<< Updated upstream
   const loginUser = async (email: string) => {
-    const userData = await AuthService.getUserData(email);
-=======
-  const loginUser = async (uid: string, email: string) => {
-    // Try by UID first (new users), then fall back to email (legacy users stored by email key)
-    let userData = await AuthService.getUserData(uid);
-
-    if (!userData && email) {
-
-      userData = await AuthService.getUserData(email);
-
-      // Migrate legacy email-keyed data to UID-keyed data
-      if (userData) {
-
-        await AuthService.saveUserData(uid, userData);
-      }
-    }
+    let userData = await AuthService.getUserData(email);
 
     // Save guest progress to database for new users
     if (!userData && analysis) {
@@ -536,10 +556,9 @@ const App = () => {
         resumeAnalysisResult,
         seenProjectTitles
       };
-      await AuthService.saveUserData(uid, userData);
+      await AuthService.saveUserData(email, userData);
     }
 
->>>>>>> Stashed changes
     if (userData) {
       // Calculate Streak
       const today = new Date().toDateString();
@@ -1646,11 +1665,7 @@ const App = () => {
           onOpenProfile={() => setShowProfileModal(true)}
         />
 
-<<<<<<< Updated upstream
-        <main className="flex-1 md:ml-64 p-6 md:p-10 pb-24 md:pb-10 pt-6 md:pt-10 bg-[#09090b] relative">
-=======
         <main className="flex-1 md:ml-64 p-4 md:p-6 pb-28 md:pb-6 pt-4 md:pt-6 bg-transparent relative flex flex-col">
->>>>>>> Stashed changes
 
           <div className="flex-1 flex flex-col">
             {/* Top Bar - Profile */}
@@ -1800,6 +1815,17 @@ const App = () => {
                 setUserProfile={setUserProfile}
                 onOptimizeResume={handleOptimizeResume}
                 onResumeUpload={handleResumeUpload}
+              />
+            )}
+
+            {/* Jobs View */}
+            {view === AppView.JOBS && (
+              <JobsView
+                userProfile={userProfile}
+                uid={currentUserEmail || 'guest'}
+                onSaveJob={handleSaveJob}
+                onUpdateJobStatus={handleUpdateJobStatus}
+                onDeleteJob={handleDeleteJob}
               />
             )}
 

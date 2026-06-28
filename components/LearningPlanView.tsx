@@ -90,10 +90,6 @@ export const LearningPlanView: React.FC<LearningPlanViewProps> = ({
 
                 {isGeneratingPlan && (
                     <div className="flex flex-col items-center justify-center py-24">
-<<<<<<< Updated upstream
-                        <Loader2 className="w-10 h-10 text-zinc-500 animate-spin mb-4" />
-                        <p className="text-zinc-400 text-sm">Designing your curriculum...</p>
-=======
                         <div className="relative">
                             <div className="w-16 h-16 rounded-2xl bg-white border border-[#e3e1dc] flex items-center justify-center mb-6 shadow-sm">
                                 <Loader2 className="w-8 h-8 text-zinc-800 animate-spin" />
@@ -101,7 +97,6 @@ export const LearningPlanView: React.FC<LearningPlanViewProps> = ({
                         </div>
                         <p className="text-zinc-800 text-sm font-medium">Designing your curriculum...</p>
                         <p className="text-zinc-500 text-xs mt-1">This may take a moment</p>
->>>>>>> Stashed changes
                     </div>
                 )}
 
@@ -113,11 +108,6 @@ export const LearningPlanView: React.FC<LearningPlanViewProps> = ({
                             const currentWeek = getCurrentWeek(plan);
                             const progressMessage = getProgressMessage(stats.progressPercentage);
 
-<<<<<<< Updated upstream
-                            console.log(`[UI] Plan Stats Updated - Hours: ${stats.completedHours}/${stats.totalHours}`);
-
-=======
->>>>>>> Stashed changes
                             return (
                                 <div className="bg-white rounded-2xl border border-[#e3e1dc] p-8 shadow-[0_4px_20px_-2px_rgba(0,0,0,0.02)] relative overflow-hidden group">
                                     {/* Top Row - Progress */}

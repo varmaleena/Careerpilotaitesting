@@ -65,11 +65,7 @@ export const InterviewView: React.FC<InterviewViewProps> = ({
     isListening
 }) => {
     return (
-<<<<<<< Updated upstream
-        <div className="h-[calc(100dvh-160px)] md:h-[calc(100vh-140px)] md:min-h-[600px] flex flex-col bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 overflow-hidden shadow-2xl relative">
-=======
         <div className="h-[calc(100dvh-200px)] md:h-[calc(100vh-140px)] md:min-h-[600px] flex flex-col bg-white rounded-3xl border border-zinc-200/80 overflow-hidden shadow-sm relative">
->>>>>>> Stashed changes
 
             {isGeneratingFeedback ? (
                 /* Feedback Loading State */

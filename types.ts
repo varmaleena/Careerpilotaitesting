@@ -5,7 +5,8 @@ export enum AppView {
   PLAN = 'PLAN',
   INTERVIEW = 'INTERVIEW',
   PROJECTS = 'PROJECTS',
-  RESUME = 'RESUME'
+  RESUME = 'RESUME',
+  JOBS = 'JOBS'
 }
 
 export interface UserProfile {
@@ -32,6 +33,19 @@ export interface UserProfile {
   streak?: number;
   lastLoginDate?: string;
   xp?: number;
+  jobApplications?: JobApplication[];
+}
+
+export interface JobApplication {
+  id: string;
+  jobId: string;
+  title: string;
+  company: string;
+  location: string;
+  applyLink: string;
+  status: 'Saved' | 'Applied' | 'Interviewing' | 'Offer' | 'Rejected';
+  dateSaved: number;
+  dateUpdated: number;
 }
 
 export interface PaymentTransaction {

@@ -21,13 +21,6 @@ const getRelativeTime = (dateStr: string) => {
     return `${diffDays} days ago`;
 };
 
-<<<<<<< Updated upstream
-// --- 1. Greenhouse Fetcher ---
-// Uses public board APIs where possible or known endpoints
-export const fetchGreenhouseJobs = async (targetRole: string): Promise<VerifiedJob[]> => {
-    // List of known tech companies using Greenhouse
-    const companies = ['stripe', 'airbnb', 'twitch', 'dropbox', 'lyft', 'reddit', 'pinterest'];
-=======
 // Multi-proxy fallback helper to bypass CORS blocks and recover from 429 Rate Limits
 const fetchWithProxy = async (url: string): Promise<any> => {
     // 1. Try direct fetch first
@@ -129,26 +122,14 @@ const fetchRemotiveJobs = async (targetRole: string): Promise<VerifiedJob[]> => 
 // --- 3. Greenhouse (Direct call with Proxy Fallback) ---
 const fetchGreenhouseJobs = async (targetRole: string): Promise<VerifiedJob[]> => {
     const companies = ['stripe', 'airbnb', 'twitch', 'dropbox', 'reddit'];
->>>>>>> Stashed changes
     const jobs: VerifiedJob[] = [];
 
     // Parallel fetch
     const promises = companies.map(async (company) => {
         try {
-<<<<<<< Updated upstream
-            // Note: This often requires a backend proxy due to CORS. 
-            // Since we are client-side only, we will try to use a CORS proxy or fallback to a simulated "Verified Index" if this fails.
-            // For this implementation, we will assume a proxy is available or valid headers.
-            // If CORS fails (likely in browser), we catch and return empty or mock data for DEMO purposes.
-            // P.S. User requested "Create separate backend fetchers", implying we should write the logic as if it runs in a backend environment.
-
-            const response = await axios.get(`https://boards-api.greenhouse.io/v1/boards/${company}/jobs`);
-            const listings = response.data.jobs || [];
-=======
             const url = `https://boards-api.greenhouse.io/v1/boards/${company}/jobs`;
             const data = await fetchWithProxy(url);
             const listings = data.jobs || [];
->>>>>>> Stashed changes
 
             listings.forEach((job: any) => {
                 if (job.title.toLowerCase().includes(targetRole.toLowerCase())) {
@@ -182,13 +163,8 @@ export const fetchLeverJobs = async (targetRole: string): Promise<VerifiedJob[]>
 
     const promises = companies.map(async (company) => {
         try {
-<<<<<<< Updated upstream
-            const response = await axios.get(`https://api.lever.co/v0/postings/${company}?mode=json`);
-            const listings = response.data || [];
-=======
             const url = `https://api.lever.co/v0/postings/${company}?mode=json`;
             const listings = await fetchWithProxy(url);
->>>>>>> Stashed changes
 
             listings.forEach((job: any) => {
                 if (job.text.toLowerCase().includes(targetRole.toLowerCase())) {

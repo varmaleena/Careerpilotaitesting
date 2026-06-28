@@ -14,12 +14,8 @@ interface AuthModalProps {
     isOpen: boolean;
     initialMode: 'login' | 'signup';
     onClose: () => void;
-<<<<<<< Updated upstream
     onAuthSuccess: (email: string) => Promise<void>;
-=======
-    onAuthSuccess: (uid: string, email: string) => Promise<void>;
     hasGuestAnalysis?: boolean;
->>>>>>> Stashed changes
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -96,13 +92,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     setAuthError(result.message || 'Login failed.');
                 }
             }
-<<<<<<< Updated upstream
-        } catch (err) {
-            setAuthError("An unexpected error occurred.");
-=======
         } catch (err: any) {
             setAuthError(err?.message || "An unexpected error occurred. Check console for details.");
->>>>>>> Stashed changes
         } finally {
             setIsAuthLoading(false);
         }
@@ -117,13 +108,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             } else {
                 setAuthError(result.message || 'Google Login failed.');
             }
-<<<<<<< Updated upstream
-        } catch (err) {
-            setAuthError("An unexpected error occurred during Google Login.");
-=======
         } catch (err: any) {
             setAuthError(err?.message || "An unexpected error occurred during Google Login.");
->>>>>>> Stashed changes
         }
     };
 
