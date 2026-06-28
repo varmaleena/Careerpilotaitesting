@@ -1,9 +1,9 @@
 import { GoogleGenAI } from "@google/genai";
 import { RequestLoadBalancer } from "./loadBalancer";
 
-// Model Constants - Using gemini-2.0-flash (VERIFIED to exist via API)
+// Model Constants - Using gemini-2.5-flash (VERIFIED to exist and have quota)
 // Available models: gemini-2.5-flash, gemini-2.0-flash, gemini-2.0-flash-exp
-export const GEMINI_MODEL = 'gemini-2.0-flash';
+export const GEMINI_MODEL = 'gemini-2.5-flash';
 
 // Initialize API Keys (7 keys for 105 RPM capacity)
 const keys = [

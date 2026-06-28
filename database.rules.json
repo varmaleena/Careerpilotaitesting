@@ -1,0 +1,23 @@
+{
+  "rules": {
+    /* 1. EXPLICITLY DENY ROOT ACCESS: 
+       This prevents the "any logged-in user can read/write your entire database" warning.
+       By setting this to false, no one can read or write the whole database at once. */
+    ".read": false,
+    ".write": false,
+
+    /* 2. USER-SPECIFIC SECURE ACCESS: */
+    "users": {
+      "$uid": {
+        // Only the exact logged-in user can read or write their own specific data node.
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        
+        /* 3. DATA VALIDATION:
+           Ensures that if data is written, it must be a valid object (has children).
+           Prevents users from accidentally overwriting their entire node with a primitive like a string or number. */
+        ".validate": "newData.hasChildren()"
+      }
+    }
+  }
+}
