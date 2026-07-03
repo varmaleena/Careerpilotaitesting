@@ -79,8 +79,42 @@ const getRelativeTime = (dateStr: string) => {
     }
 };
 
-// CORS Proxy to bypass browser restrictions if direct fetch is blocked
-const CORS_PROXY = 'https://api.codetabs.com/v1/proxy?quest=';
+// Multi-proxy fallback helper to bypass CORS blocks and recover from 429 Rate Limits
+const fetchWithProxy = async (url: string): Promise<any> => {
+    // 1. Try direct fetch first
+    try {
+        const response = await axios.get(url, { timeout: 4000 });
+        if (response.data) return response.data;
+    } catch (e) {
+        // Direct fetch failed (likely CORS block or timeout)
+    }
+
+    // 2. List of public CORS proxies to rotate through
+    const proxies = [
+        (targetUrl: string) => `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`,
+        (targetUrl: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
+        (targetUrl: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`
+    ];
+
+    for (const getProxyUrl of proxies) {
+        try {
+            const proxyUrl = getProxyUrl(url);
+            const response = await axios.get(proxyUrl, { timeout: 6000 });
+            if (response.data) {
+                // allOrigins wraps response in a wrapper: { contents: "..." }
+                if (proxyUrl.includes('allorigins.win')) {
+                    const contents = response.data.contents;
+                    return typeof contents === 'string' ? JSON.parse(contents) : contents;
+                }
+                return response.data;
+            }
+        } catch (err) {
+            // Fall back to next proxy
+        }
+    }
+
+    throw new Error(`Failed to fetch ${url} through all available CORS proxies`);
+};
 
 // --- 1. Adzuna API (Real Jobs, India/Global) ---
 const fetchAdzunaJobs = async (targetRole: string): Promise<VerifiedJob[]> => {
@@ -151,16 +185,8 @@ const fetchGreenhouseJobs = async (targetRole: string): Promise<VerifiedJob[]> =
     const promises = companies.map(async (company) => {
         try {
             const url = `https://boards-api.greenhouse.io/v1/boards/${company}/jobs`;
-            let response;
-            try {
-                // Try direct client-side fetch (CORS supported by default on Greenhouse boards)
-                response = await axios.get(url, { timeout: 5000 });
-            } catch (e) {
-                // Fallback to proxy
-                response = await axios.get(`${CORS_PROXY}${url}`, { timeout: 8000 });
-            }
-
-            const listings = response.data.jobs || [];
+            const data = await fetchWithProxy(url);
+            const listings = data.jobs || [];
 
             listings.forEach((job: any) => {
                 if (matchJobToRole(job.title, '', targetRole)) {
@@ -193,16 +219,7 @@ const fetchLeverJobs = async (targetRole: string): Promise<VerifiedJob[]> => {
     const promises = companies.map(async (company) => {
         try {
             const url = `https://api.lever.co/v0/postings/${company}?mode=json`;
-            let response;
-            try {
-                // Try direct client-side fetch (CORS supported by default on Lever postings)
-                response = await axios.get(url, { timeout: 5000 });
-            } catch (e) {
-                // Fallback to proxy
-                response = await axios.get(`${CORS_PROXY}${url}`, { timeout: 8000 });
-            }
-
-            const listings = response.data || [];
+            const listings = await fetchWithProxy(url);
 
             listings.forEach((job: any) => {
                 const desc = job.descriptionPlain || '';

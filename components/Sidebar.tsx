@@ -1,4 +1,4 @@
-import { BookOpen, Code, Compass, FileText, LayoutDashboard, LogOut, Menu, MessageSquare, Trash2, TrendingUp, X, Briefcase } from 'lucide-react';
+import { BookOpen, Briefcase, Code, Compass, FileText, LayoutDashboard, LogOut, Menu, MessageSquare, Trash2, TrendingUp, X } from 'lucide-react';
 import React, { useState } from 'react';
 import { AppView } from '../types';
 
@@ -18,82 +18,77 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
     { id: AppView.PROJECTS, label: 'Build Portfolio', icon: Code },
     { id: AppView.RESUME, label: 'Resume Architect', icon: FileText },
     { id: AppView.INTERVIEW, label: 'Interview Prep', icon: MessageSquare },
-    { id: AppView.JOBS, label: 'Job Hub', icon: Briefcase },
+    { id: AppView.JOBS, label: 'Job Board', icon: Briefcase },
   ];
 
   return (
-    <div className="hidden md:flex fixed top-0 left-0 z-50 h-screen w-64 bg-zinc-950 border-r border-zinc-800/60 flex-col shadow-2xl">
+    <div className="hidden md:flex fixed top-0 left-0 z-50 h-screen w-64 bg-white/60 backdrop-blur-2xl border-r border-white/40 shadow-[4px_0_24px_rgba(0,0,0,0.02)] flex-col font-['Plus_Jakarta_Sans',sans-serif]">
       {/* Desktop Logo Area */}
-      <div className="flex p-6 border-b border-zinc-800 items-center space-x-3">
-        <div className="w-10 h-10 rounded-lg overflow-hidden shadow-lg shadow-violet-500/20 flex items-center justify-center">
+      <div className="flex p-6 border-b border-[#e3e1dc] items-center space-x-3 bg-zinc-200/10">
+        <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center bg-white border border-[#e3e1dc] p-0.5">
           <img src="/logo.png" alt="CareerPilot Logo" className="w-full h-full object-contain" />
         </div>
-        <span className="text-xl font-bold text-white tracking-tight">CareerPilot</span>
+        <span className="text-xl font-bold text-zinc-900 tracking-tight">CareerPilot</span>
       </div>
 
       <nav className="p-4 space-y-1.5 overflow-y-auto flex-1 custom-scrollbar pt-8">
         <div className="px-2 mb-2">
-          <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest pl-2 mb-2">Main Menu</p>
+          <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest pl-2 mb-2">Main Menu</p>
         </div>
         {menuItems.map((item) => (
           <button
             key={item.id}
             onClick={() => onChangeView(item.id)}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-300 group relative overflow-hidden ${currentView === item.id
-              ? 'bg-violet-500/10 text-white border border-violet-500/20 shadow-[0_0_15px_rgba(139,92,246,0.1)]'
-              : 'text-zinc-500 hover:bg-zinc-900/80 hover:text-zinc-200 border border-transparent'
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 group relative overflow-hidden cursor-pointer border-0 ${currentView === item.id
+              ? 'bg-white text-zinc-900 font-bold border border-[#e3e1dc] shadow-sm'
+              : 'text-zinc-550 hover:bg-white/50 hover:text-zinc-900 bg-transparent'
               }`}
           >
-            {/* Active Indicator Bar */}
-            {currentView === item.id && (
-              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-violet-500 rounded-r-full shadow-[0_0_10px_#8b5cf6]"></div>
-            )}
-
-            <item.icon className={`w-5 h-5 transition-colors duration-300 ${currentView === item.id ? 'text-violet-400' : 'text-zinc-500 group-hover:text-zinc-300'}`} />
-            <span className={`font-medium tracking-wide ${currentView === item.id ? 'text-white' : ''}`}>{item.label}</span>
+            <item.icon className={`w-4.5 h-4.5 transition-colors duration-200 ${currentView === item.id ? 'text-zinc-900' : 'text-zinc-400 group-hover:text-zinc-650'}`} />
+            <span className="text-[13px] font-medium tracking-wide">{item.label}</span>
           </button>
         ))}
       </nav>
 
-      <div className="p-4 space-y-2 bg-zinc-950/80 backdrop-blur-sm border-t border-zinc-900/50">
+      <div className="p-4 space-y-2 border-t border-[#e3e1dc]">
         <div className="px-2 mb-1">
-          <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest pl-2 mb-2">Tools</p>
+          <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest pl-2 mb-2">Tools</p>
         </div>
 
         <button
           onClick={onSwitchTrack}
-          className="w-full flex items-center space-x-3 px-4 py-2.5 rounded-xl bg-zinc-900/50 hover:bg-zinc-900 text-zinc-400 hover:text-white transition-all border border-zinc-800/50 hover:border-zinc-700 group"
+          className="w-full flex items-center space-x-3 px-4 py-2.5 rounded-xl bg-white hover:bg-zinc-50 text-zinc-700 hover:text-zinc-900 transition-all border border-[#e3e1dc] group shadow-sm cursor-pointer"
         >
-          <div className="p-1.5 rounded-lg bg-zinc-800 text-zinc-400 group-hover:text-emerald-400 group-hover:bg-zinc-800 transition-colors">
-            <Compass className="w-4 h-4" />
+          <div className="p-1.5 rounded-lg bg-zinc-100 text-zinc-500 group-hover:text-zinc-700 transition-colors">
+            <Compass className="w-3.5 h-3.5" />
           </div>
-          <span className="font-medium text-sm">Explore Roles</span>
+          <span className="font-semibold text-xs">Explore Roles</span>
         </button>
 
         <button
           onClick={onOpenFeedback}
-          className="w-full flex items-center space-x-3 px-4 py-2.5 rounded-xl text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300 transition-colors text-sm"
+          className="w-full flex items-center space-x-3 px-4 py-2.5 rounded-xl text-zinc-550 hover:bg-white/50 hover:text-zinc-900 transition-colors text-[13px] cursor-pointer border-0 bg-transparent"
         >
-          <MessageSquare className="w-4 h-4" />
-          <span>Send Feedback</span>
+          <MessageSquare className="w-4 h-4 text-zinc-400" />
+          <span className="font-medium">Send Feedback</span>
         </button>
 
-        <div className="h-px bg-zinc-900 my-2"></div>
+        <div className="h-px bg-[#e3e1dc] my-2"></div>
 
         <button
           onClick={onLogout}
-          className="w-full flex items-center space-x-3 px-4 py-2.5 rounded-xl text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300 transition-colors text-sm"
+          className="w-full flex items-center space-x-3 px-4 py-2.5 rounded-xl text-zinc-550 hover:bg-white/50 hover:text-zinc-900 transition-colors text-[13px] cursor-pointer border-0 bg-transparent"
         >
-          <LogOut className="w-4 h-4" />
-          <span>Sign Out</span>
+          <LogOut className="w-4 h-4 text-zinc-450" />
+          <span className="font-medium">Sign Out</span>
         </button>
 
         <button
           onClick={onResetData}
-          className="w-full flex items-center space-x-3 px-4 py-2.5 rounded-xl text-zinc-600 hover:bg-red-950/10 hover:text-red-400 transition-all text-sm group"
+          className="w-full flex items-center space-x-3 px-4 py-2.5 rounded-xl text-zinc-400 hover:bg-red-500/5 hover:text-red-600 transition-all text-[13px] group cursor-pointer border-0 bg-transparent"
         >
-          <Trash2 className="w-4 h-4 group-hover:animate-pulse" />
-          <span>Reset Progress</span>
+          <Trash2 className="w-4 h-4 text-zinc-455 group-hover:text-red-500 group-hover:animate-pulse" />
+          <span className="font-medium">Reset Progress</span>
         </button>
       </div>
     </div>

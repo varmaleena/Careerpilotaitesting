@@ -11,13 +11,13 @@ export const SkillCard: React.FC<SkillCardProps> = ({ skill }) => {
 
   return (
     <div className={`px-3 py-1.5 rounded-md text-xs font-medium border flex items-center gap-1.5 ${isAcquired
-        ? 'bg-emerald-500/5 text-emerald-300 border-emerald-500/20'
-        : 'bg-zinc-800/50 text-zinc-400 border-zinc-700/50'
+        ? 'bg-[#fcfcfa] text-zinc-800 border-[#e3e1dc] shadow-sm'
+        : 'bg-transparent text-zinc-500 border-dashed border-[#e3e1dc]'
       }`}>
       {isAcquired ? (
-        <Check className="w-3 h-3" />
+        <Check className="w-3 h-3 text-zinc-500" />
       ) : (
-        <Circle className="w-3 h-3" />
+        <Circle className="w-3 h-3 text-zinc-300" />
       )}
       <span>{skill.name}</span>
     </div>

@@ -150,10 +150,10 @@ export class RequestLoadBalancer {
             }
 
             // Check if all keys are rate-limited
-            const waitTime = await this.getWaitTimeForNextAvailableKey();
-            if (waitTime > 0) {
-
+            let waitTime = await this.getWaitTimeForNextAvailableKey();
+            while (waitTime > 0) {
                 await new Promise(r => setTimeout(r, Math.min(waitTime, 10000))); // Wait max 10s at a time
+                waitTime = await this.getWaitTimeForNextAvailableKey();
             }
 
             const request = this.queue.shift();

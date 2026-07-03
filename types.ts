@@ -47,6 +47,7 @@ export interface JobApplication {
   notes?: string;
   status: 'Saved' | 'Applied' | 'Interviewing' | 'Offer' | 'Rejected';
   dateAdded: number;
+  dateSaved?: number;
   dateUpdated: number;
 }
 
