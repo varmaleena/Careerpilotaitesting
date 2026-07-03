@@ -306,3 +306,20 @@ export interface ATSResumeAnalysis {
     priorityImprovements: string[];
   };
 }
+
+export interface JobListing {
+  id: string;
+  title: string;
+  company: string;
+  location: string;
+  salary?: string;
+  postedAt: string;
+  matchScore: number;
+  description: string;
+  skillsMatched: string[];
+  skillsMissing: string[];
+  applyLink: string;
+  linkConfidence: string;
+  readinessStatus: string;
+  sourceType: string;
+}

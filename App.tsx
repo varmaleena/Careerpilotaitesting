@@ -110,8 +110,10 @@ import {
   Skill,
   UserProfile,
   WeeklyPlan,
-  JobApplication
+  JobApplication,
+  PastInterview
 } from './types';
+import { VerifiedJob } from './services/jobFetchers';
 
 const App = () => {
   // --- Global State ---
