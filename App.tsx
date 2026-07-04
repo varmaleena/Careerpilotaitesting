@@ -207,6 +207,7 @@ const App = () => {
   const [analysis, setAnalysis] = useState<CareerAnalysis | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [validationError, setValidationError] = useState<string>('');
+  const [mlMatches, setMlMatches] = useState<any[]>([]);
 
   // Learning Plan
   const [plan, setPlan] = useState<WeeklyPlan[] | null>(null);
@@ -525,6 +526,20 @@ const App = () => {
         targetRole: targetRole
       }));
 
+      // Fetch local ML matches
+      try {
+        const matchResult = await fetch("http://localhost:8000/api/jobs/match", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ resume_text: text })
+        }).then(res => res.json());
+        if (matchResult.success) {
+          setMlMatches(matchResult.matches);
+        }
+      } catch (err) {
+        console.error("Local ML Matcher failed:", err);
+      }
+
       setView(AppView.DASHBOARD);
       setIsAnalyzing(false);
     } catch (error: any) {
@@ -598,6 +613,22 @@ const App = () => {
 
         // PERF: Save streak update with granular method — fire-and-forget
         AuthService.saveProfile(uid, userData.userProfile);
+      }
+
+      // Hydrate local ML matches if resumeText is present
+      if (userData.userProfile?.resumeText) {
+        fetch("http://localhost:8000/api/jobs/match", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ resume_text: userData.userProfile.resumeText })
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            setMlMatches(data.matches);
+          }
+        })
+        .catch(err => console.error("Local ML Matcher hydration failed:", err));
       }
 
       // Hydrate State — all in one batch
@@ -1754,6 +1785,7 @@ const App = () => {
                 onShowShareModal={() => setShowShareModal(true)}
                 onGeneratePlan={handleGeneratePlan}
                 onNavigate={handleViewChange}
+                mlMatches={mlMatches}
               />
             )}
 

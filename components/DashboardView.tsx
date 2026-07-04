@@ -24,6 +24,7 @@ interface DashboardViewProps {
     onShowShareModal: () => void;
     onGeneratePlan: () => void;
     onNavigate: (view: AppView) => void;
+    mlMatches?: any[];
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -33,7 +34,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     isGeneratingPlan,
     onShowShareModal,
     onGeneratePlan,
-    onNavigate
+    onNavigate,
+    mlMatches = []
 }) => {
     // Calculate skills progress stats
     const totalSkills = analysis.skills?.length || 0;
@@ -215,6 +217,76 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                             </div>
                         </div>
                     </div>
+
+                    {/* Local NLP Matching Analytics Section */}
+                    {mlMatches && mlMatches.length > 0 && (
+                        <div className="lg:col-span-3 bg-white rounded-2xl border border-[#e3e1dc] p-7 shadow-sm hover:-translate-y-1 hover:shadow-lg transition-all duration-300 animate-slide-up" style={{ animationDelay: '600ms' }}>
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-2">
+                                <div>
+                                    <h3 className="text-sm font-bold text-zinc-900 flex items-center">
+                                        <Briefcase className="w-4 h-4 mr-2.5 text-zinc-400" />
+                                        Local NLP Career Matching Engine
+                                    </h3>
+                                    <p className="text-xs text-zinc-500 mt-1">
+                                        Term Frequency-Inverse Document Frequency (TF-IDF) & Cosine Similarity computed on FastAPI server
+                                    </p>
+                                </div>
+                                <span className="text-[10px] font-bold text-zinc-500 bg-zinc-100 border border-zinc-200 px-2 py-1 rounded-md uppercase tracking-wider">
+                                    scikit-learn Pipeline
+                                </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {mlMatches.slice(0, 4).map((match, idx) => (
+                                    <div key={idx} className="p-5 rounded-xl border border-zinc-100 hover:border-zinc-300 transition-all bg-zinc-50/30">
+                                        <div className="flex justify-between items-center mb-3">
+                                            <h4 className="text-sm font-bold text-zinc-800">{match.title}</h4>
+                                            <span className="text-xs font-bold text-zinc-900 bg-white border border-[#e3e1dc] px-2.5 py-1 rounded-full shadow-sm">
+                                                {match.match_score}% Match
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-zinc-500 mb-4 line-clamp-2">{match.description}</p>
+                                        
+                                        {/* Score Bar */}
+                                        <div className="w-full bg-zinc-100 h-1.5 rounded-full overflow-hidden mb-4">
+                                            <div 
+                                                className="bg-zinc-800 h-full rounded-full transition-all duration-1000" 
+                                                style={{ width: `${match.match_score}%` }} 
+                                            />
+                                        </div>
+
+                                        {/* Skill Tags */}
+                                        <div className="space-y-3">
+                                            {match.matched_skills?.length > 0 && (
+                                                <div>
+                                                    <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block mb-1.5">Matched Keywords</span>
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {match.matched_skills.map((skill: string) => (
+                                                            <span key={skill} className="text-[11px] font-medium text-emerald-800 bg-emerald-50/60 px-2 py-0.5 rounded border border-emerald-100/50">
+                                                                {skill}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {match.missing_skills?.length > 0 && (
+                                                <div>
+                                                    <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block mb-1.5">Target Skill Gaps</span>
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {match.missing_skills.map((skill: string) => (
+                                                            <span key={skill} className="text-[11px] font-medium text-amber-800 bg-amber-50/60 px-2 py-0.5 rounded border border-amber-100/50">
+                                                                {skill}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
             </div>
