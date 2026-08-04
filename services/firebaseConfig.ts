@@ -41,5 +41,16 @@ if (isFirebaseConfigured) {
 }
 
 export { auth, googleProvider, db };
-export const analytics = app ? isSupported().then(yes => yes ? getAnalytics(app!) : null) : Promise.resolve(null);
+export const analytics = app 
+    ? isSupported()
+        .then(yes => {
+            if (!yes) return null;
+            try {
+                return getAnalytics(app!);
+            } catch {
+                return null;
+            }
+        })
+        .catch(() => null)
+    : Promise.resolve(null);
 
