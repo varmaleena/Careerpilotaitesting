@@ -1,9 +1,37 @@
+import { GoogleGenAI } from "@google/genai";
 import { getCachedAIResponse, setCachedAIResponse } from "./aiCache";
+import { RequestLoadBalancer } from "./loadBalancer";
 
 export const GEMINI_MODEL = 'gemini-2.5-flash';
 
-// Force true as the Python backend handles keys securely server-side
-export const HAS_GEMINI_KEYS = true;
+// Helper to gather all exposed Gemini API keys for load balancer
+const getGeminiKeys = (): string[] => {
+    const keys = [
+        import.meta.env.VITE_GEMINI_API_KEY,
+        import.meta.env.VITE_GEMINI_API_KEY_2,
+        import.meta.env.VITE_GEMINI_API_KEY_3,
+        import.meta.env.VITE_GEMINI_API_KEY_4,
+        import.meta.env.VITE_GEMINI_API_KEY_5,
+        import.meta.env.VITE_GEMINI_API_KEY_6,
+        import.meta.env.VITE_GEMINI_API_KEY_7,
+    ].filter((k): k is string => Boolean(k && typeof k === 'string' && k.trim() !== ''));
+    return keys;
+};
+
+// Singleton load balancer instance for direct client-side requests
+let loadBalancerInstance: RequestLoadBalancer | null = null;
+const getLoadBalancer = (): RequestLoadBalancer => {
+    if (!loadBalancerInstance) {
+        const keys = getGeminiKeys();
+        loadBalancerInstance = new RequestLoadBalancer(keys);
+    }
+    return loadBalancerInstance;
+};
+
+// Returns true if either a custom backend URL or direct Gemini API keys are configured
+export const HAS_GEMINI_KEYS = Boolean(
+    import.meta.env.VITE_BACKEND_URL || getGeminiKeys().length > 0
+);
 
 // Robust JSON cleaner (runs on client for safety)
 export const cleanJson = (text: string): string => {
@@ -23,8 +51,11 @@ export const cleanJson = (text: string): string => {
 };
 
 /**
- * generateWithRetry — Proxies calls to the local Python FastAPI Backend.
- * Uses session-level cache to reduce redundant network hits.
+ * generateWithRetry — Bulletproof AI generation.
+ * 1. Checks session-level cache.
+ * 2. Uses VITE_BACKEND_URL if specified in production.
+ * 3. Falls back to direct @google/genai client load balancer if API keys are present.
+ * 4. Falls back to local http://localhost:8000 only if reachable.
  */
 export const generateWithRetry = async (
     modelName: string,
@@ -39,14 +70,67 @@ export const generateWithRetry = async (
         }
     }
 
-    const BACKEND_URL = "http://localhost:8000";
+    const backendUrl = import.meta.env.VITE_BACKEND_URL;
 
+    // Mode A: Configured Backend URL (e.g. Render / Railway / Cloud run backend)
+    if (backendUrl) {
+        try {
+            const response = await fetch(`${backendUrl}/api/generate`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    model: modelName,
+                    contents: params.contents,
+                    config: params.config
+                })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                const result = { text: data.text };
+                if (!skipCache) {
+                    setCachedAIResponse(modelName, params.contents, result);
+                }
+                return result;
+            }
+        } catch (backendErr) {
+            console.warn("Backend API call failed, attempting fallback modes:", backendErr);
+        }
+    }
+
+    // Mode B: Direct Client-Side Gemini SDK with Load Balancer
+    const keys = getGeminiKeys();
+    if (keys.length > 0) {
+        try {
+            const lb = getLoadBalancer();
+            const textResult = await lb.execute(async (apiKey: string) => {
+                const ai = new GoogleGenAI({ apiKey });
+                const modelToUse = modelName || GEMINI_MODEL;
+                const response = await ai.models.generateContent({
+                    model: modelToUse,
+                    contents: params.contents,
+                    config: params.config
+                });
+                return response.text || "";
+            });
+
+            const result = { text: textResult };
+            if (!skipCache) {
+                setCachedAIResponse(modelName, params.contents, result);
+            }
+            return result;
+        } catch (directErr: any) {
+            console.error("Direct Gemini API error:", directErr);
+            throw new Error(directErr.message || "Failed to generate AI response via Gemini API.");
+        }
+    }
+
+    // Mode C: Local Backend Fallback (development mode)
     try {
-        const response = await fetch(`${BACKEND_URL}/api/generate`, {
+        const defaultBackend = "http://localhost:8000";
+        const response = await fetch(`${defaultBackend}/api/generate`, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 model: modelName,
                 contents: params.contents,
@@ -60,27 +144,22 @@ export const generateWithRetry = async (
         }
 
         const data = await response.json();
-        
-        // Match the shape expected by the frontend calling code: { text: string }
-        const result = {
-            text: data.text
-        };
-
-        // Cache successful response
+        const result = { text: data.text };
         if (!skipCache) {
             setCachedAIResponse(modelName, params.contents, result);
         }
-
         return result;
 
     } catch (error: any) {
-        console.error("Backend API Request Error:", error);
-        throw new Error(error.message || "Failed to communicate with the Python backend server.");
+        console.error("Backend API Connection Refused:", error);
+        throw new Error(
+            "AI service unavailable. When deploying on Vercel, please set VITE_GEMINI_API_KEY or VITE_BACKEND_URL in your Vercel Environment Variables."
+        );
     }
 };
 
-// Export fallback mock for consistent interface (though raw 'ai' is not directly used)
 export const getAiInstance = () => {
     return null as any;
 };
 export const ai = null as any;
+

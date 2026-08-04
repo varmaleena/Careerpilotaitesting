@@ -528,16 +528,20 @@ const App = () => {
 
       // Fetch local ML matches
       try {
-        const matchResult = await fetch("http://localhost:8000/api/jobs/match", {
+        const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+        const matchResponse = await fetch(`${backendUrl}/api/jobs/match`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ resume_text: text })
-        }).then(res => res.json());
-        if (matchResult.success) {
-          setMlMatches(matchResult.matches);
+        });
+        if (matchResponse.ok) {
+          const matchResult = await matchResponse.json();
+          if (matchResult.success) {
+            setMlMatches(matchResult.matches);
+          }
         }
       } catch (err) {
-        console.error("Local ML Matcher failed:", err);
+        console.warn("ML Matcher skipped (backend not reachable):", err);
       }
 
       setView(AppView.DASHBOARD);
@@ -617,18 +621,22 @@ const App = () => {
 
       // Hydrate local ML matches if resumeText is present
       if (userData.userProfile?.resumeText) {
-        fetch("http://localhost:8000/api/jobs/match", {
+        const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+        fetch(`${backendUrl}/api/jobs/match`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ resume_text: userData.userProfile.resumeText })
         })
-        .then(res => res.json())
+        .then(res => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        })
         .then(data => {
-          if (data.success) {
+          if (data?.success) {
             setMlMatches(data.matches);
           }
         })
-        .catch(err => console.error("Local ML Matcher hydration failed:", err));
+        .catch(err => console.warn("ML Matcher hydration skipped (backend not reachable):", err));
       }
 
       // Hydrate State — all in one batch
