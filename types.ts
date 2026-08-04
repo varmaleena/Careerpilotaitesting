@@ -5,7 +5,8 @@ export enum AppView {
   PLAN = 'PLAN',
   INTERVIEW = 'INTERVIEW',
   PROJECTS = 'PROJECTS',
-  RESUME = 'RESUME'
+  RESUME = 'RESUME',
+  JOBS = 'JOBS'
 }
 
 export interface UserProfile {
@@ -14,6 +15,7 @@ export interface UserProfile {
   experienceLevel?: string; // student, fresher, junior, mid, senior
   graduationYear?: string;
   targetCompanies?: string; // Comma-separated dream companies
+  pastInterviews?: PastInterview[]; // History of completed interviews
   resumeText?: string;
   resumeFile?: {
     data: string; // Base64
@@ -21,6 +23,40 @@ export interface UserProfile {
   };
   isPremium?: boolean;
   isResumePremium?: boolean;
+  // Extracted from Resume
+  mobileNumber?: string;
+  location?: string;
+  githubProfile?: string;
+  linkedinProfile?: string;
+  leetcodeProfile?: string;
+  paymentHistory?: PaymentTransaction[];
+  streak?: number;
+  lastLoginDate?: string;
+  xp?: number;
+  jobApplications?: JobApplication[];
+}
+
+export interface JobApplication {
+  id: string;
+  jobId?: string;
+  company: string;
+  title: string;
+  location?: string;
+  salary?: string;
+  applyLink?: string;
+  notes?: string;
+  status: 'Saved' | 'Applied' | 'Interviewing' | 'Offer' | 'Rejected';
+  dateAdded: number;
+  dateSaved?: number;
+  dateUpdated: number;
+}
+
+export interface PaymentTransaction {
+  id: string;
+  date: string;
+  amount: number;
+  item: 'Mock Interview' | 'Resume Architect';
+  status: 'success' | 'failed';
 }
 
 export interface Skill {
@@ -75,12 +111,15 @@ export interface ProjectIdea {
   difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
   description: string;
   techStack: string[];
-  keyFeatures: string[];
+  userStories?: string[]; // User stories in "As a user, I want..." format
+  keyFeatures: string[]; // Core Features
   resumeValue: string; // Why this helps on a resume
   implementationFlow: string[]; // Step-by-step guide
   learningOutcomes: string[]; // What the student learns
   sourcePaper?: ResearchPaperSource;
   implementationResources?: Array<{ name: string; url: string }>;
+  referenceGithubUrl?: string; // Link to a reference GitHub repository or search query
+  completed?: boolean;
 }
 
 
@@ -123,11 +162,35 @@ export interface InterviewSession {
 }
 
 export interface InterviewFeedback {
-  score: number; // 0-10
+  score: number; // 0-10 or 0-100
   feedbackSummary: string;
   strengths: string[];
   improvements: string[];
   recommendedFocus: string;
+  // Premium Fields
+  communication?: number;
+  technicalCompetence?: number;
+  problemSolving?: number;
+  confidenceUnderPressure?: number;
+  timeManagement?: number;
+  decision?: 'Strong Hire' | 'Hire' | 'Borderline' | 'No-Hire';
+  blockingGaps?: string[];
+  improvementRoadmap?: {
+    immediate: string[];
+    shortTerm: string[];
+    longTerm: string[];
+  };
+  comparisonToHiringBar?: string;
+  detailedFeedback?: string;
+}
+
+export interface PastInterview {
+  id: string;
+  date: string;
+  targetRole: string;
+  companyName: string;
+  score: number;
+  feedback: InterviewFeedback;
 }
 
 export interface ResumeImprovement {
@@ -198,4 +261,65 @@ export interface LatexResumeData {
     issuer: string;
     date: string;
   }[];
+  achievements?: {
+    title: string;
+    description?: string;
+  }[];
+}
+
+// ATS Resume Analysis Types
+export interface ATSResumeAnalysis {
+  resumeOverview: {
+    resumeType: string;
+    experienceLevel: string;
+    domain: string;
+    overallATSScore: number;
+  };
+  extractedData: {
+    skills: string[];
+    education: string[];
+    experience: string[];
+    projects: string[];
+    certifications: string[];
+  };
+  strengths: string[];
+  weaknesses: string[];
+  criticalImprovements: string[];
+  atsKeywordOptimization: {
+    missingKeywords: string[];
+    suggestedKeywords: string[];
+    keywordDensityIssues: string[];
+  };
+  jobMatchAnalysis?: {
+    skillMatchPercent: number;
+    missingSkills: string[];
+    roleFitScore: number;
+  };
+  optimizationSuggestions: {
+    rewrittenLines: { original: string; improved: string }[];
+    betterActionVerbs: string[];
+    quantifiableMetrics: string[];
+  };
+  finalVerdict: {
+    isReady: boolean;
+    reason: string;
+    priorityImprovements: string[];
+  };
+}
+
+export interface JobListing {
+  id: string;
+  title: string;
+  company: string;
+  location: string;
+  salary?: string;
+  postedAt: string;
+  matchScore: number;
+  description: string;
+  skillsMatched: string[];
+  skillsMissing: string[];
+  applyLink: string;
+  linkConfidence: string;
+  readinessStatus: string;
+  sourceType: string;
 }

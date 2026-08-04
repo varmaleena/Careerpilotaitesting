@@ -128,6 +128,7 @@ NEXT RESPONSE RULES:
 - Keep responses concise (2-3 sentences max)
 - Sound human, not robotic
 - NO explanations, NO coaching, NO hints
+- CRITICAL: CHECK HISTORY. DO NOT REPEAT QUESTIONS.
 
 ENDING RULE:
 - Do NOT give feedback immediately.
@@ -142,15 +143,16 @@ Generate your next response as the interviewer:`;
             {
                 contents: systemPrompt,
                 config: {
-                    temperature: 0.8, // More natural, human-like responses
+                    temperature: 0.8,
                     thinkingConfig: { thinkingBudget: 0 }
                 }
-            }
+            },
+            true // skipCache — interview turns must be unique
         );
 
         return response.text || "Could you please repeat that?";
     } catch (error) {
-        console.error("Live Interview Response Failed:", error);
+
         throw error;
     }
 };
@@ -229,12 +231,13 @@ Be brutally honest. This is their career growth.`;
                     responseMimeType: "application/json",
                     thinkingConfig: { thinkingBudget: 0 }
                 }
-            }
+            },
+            true // skipCache — evaluation must be fresh
         );
 
         return JSON.parse(response.text || '{}');
     } catch (error) {
-        console.error("Interview Evaluation Failed:", error);
+
         throw error;
     }
 };

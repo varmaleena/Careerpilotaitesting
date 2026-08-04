@@ -84,7 +84,7 @@ Return a JSON array of 10 jobs:
             try {
                 jobs = JSON.parse(cleanJson(response.text));
             } catch (e) {
-                console.error("JSON Parse Failed", e);
+
             }
         }
 
@@ -111,7 +111,7 @@ Return a JSON array of 10 jobs:
         }));
 
     } catch (error) {
-        console.error("HiringHustle Scan Failed", error);
+
         return fallbackToSearchLinks(targetRole, experienceLevel, skills);
     }
 };

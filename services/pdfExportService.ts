@@ -228,6 +228,16 @@ export const downloadLatexPdf = (data: LatexResumeData) => {
             const dateWidth = doc.getTextWidth(edu.dates);
             doc.text(edu.dates, pageWidth - margin - dateWidth, cursorY);
             cursorY += 5;
+
+            // Row 3: GPA/CGPA (if present) - CRITICAL FOR FRESHERS
+            if (edu.gpa) {
+                doc.setFont("times", "normal");
+                doc.setFontSize(10);
+                doc.text(`CGPA: ${edu.gpa}`, margin, cursorY);
+                cursorY += 5;
+            }
+
+            cursorY += 3; // Space between education entries
         });
     }
 
@@ -244,6 +254,36 @@ export const downloadLatexPdf = (data: LatexResumeData) => {
             doc.text(bulletPrefix, margin + 2, cursorY);
             doc.text(certText, margin + 6, cursorY);
             cursorY += 5;
+        });
+    }
+
+    // --- Section: Achievements ---
+    if (data.achievements && data.achievements.length > 0) {
+        drawSectionTitle("Achievements");
+        doc.setFont("times", "normal");
+        doc.setFontSize(10);
+
+        data.achievements.forEach(achievement => {
+            checkPageBreak(8);
+            const bulletPrefix = "• ";
+            doc.text(bulletPrefix, margin + 2, cursorY);
+
+            // Achievement title (bold)
+            doc.setFont("times", "bold");
+            doc.text(achievement.title, margin + 6, cursorY);
+            cursorY += 5;
+
+            // Achievement description (if present)
+            if (achievement.description) {
+                doc.setFont("times", "normal");
+                const maxWidth = pageWidth - margin - margin - 10;
+                const descLines = doc.splitTextToSize(achievement.description, maxWidth);
+                checkPageBreak(descLines.length * 4);
+                doc.text(descLines, margin + 6, cursorY);
+                cursorY += (descLines.length * 4);
+            }
+
+            cursorY += 2;
         });
     }
 
@@ -321,7 +361,10 @@ export const downloadResumeAsPdf = (resumeResult: ResumeOptimizationResult, user
         }
         // 2. Bullet Points
         else if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
-            const text = line.trim().substring(2);
+            let text = line.trim().substring(2);
+            // strip bold markers
+            text = text.replace(/\*\*/g, '');
+
             doc.setFont("helvetica", "normal");
             doc.setFontSize(11);
 
@@ -338,11 +381,23 @@ export const downloadResumeAsPdf = (resumeResult: ResumeOptimizationResult, user
         }
         // 3. Normal Text
         else if (line.trim().length > 0) {
-            doc.setFont("helvetica", "normal");
+
+            // Check for bold syntax like **Text**
+            const cleanLine = line.replace(/\*\*/g, '');
+
+            // If the line *started* with bold, we might want to bold the whole line (heuristic)
+            const isHeaderLike = line.trim().startsWith('**') && line.trim().endsWith('**');
+
+            if (isHeaderLike) {
+                doc.setFont("helvetica", "bold");
+            } else {
+                doc.setFont("helvetica", "normal");
+            }
+
             doc.setFontSize(11);
 
             const maxWidth = pageWidth - margin * 2;
-            const textLines = doc.splitTextToSize(line, maxWidth);
+            const textLines = doc.splitTextToSize(cleanLine, maxWidth);
 
             checkPageBreak(textLines.length * lineHeight);
             doc.text(textLines, margin, cursorY);

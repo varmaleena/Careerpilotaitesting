@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <!-- Homepage - Main canonical URL -->
+  <url>
+    <loc>https://careerpilotai.co.in/</loc>
+    <lastmod>2026-02-05</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+  
+  <!-- 
+    Note: User-authenticated pages (dashboard, plan, projects, resumearchitect, mockinterview)
+    are not included in the sitemap as they:
+    1. Require authentication
+    2. Are blocked in robots.txt
+    3. Contain user-specific content that shouldn't be indexed
+    
+    Google Search Console recommendation: Only include pages you want indexed.
+    The canonical tags on these pages are set to noindex via the seoService.
+  -->
+</urlset>

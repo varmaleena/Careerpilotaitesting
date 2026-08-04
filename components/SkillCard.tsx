@@ -1,4 +1,4 @@
-import { CheckCircle2, Clock, XCircle } from 'lucide-react';
+import { Check, Circle } from 'lucide-react';
 import React from 'react';
 import { Skill } from '../types';
 
@@ -7,27 +7,18 @@ interface SkillCardProps {
 }
 
 export const SkillCard: React.FC<SkillCardProps> = ({ skill }) => {
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'acquired': return 'bg-emerald-900/30 text-emerald-400 border-emerald-800/50';
-      case 'missing': return 'bg-rose-900/30 text-rose-400 border-rose-800/50';
-      case 'in-progress': return 'bg-amber-900/30 text-amber-400 border-amber-800/50';
-      default: return 'bg-slate-800 text-slate-300';
-    }
-  };
-
-  const getIcon = (status: string) => {
-    switch (status) {
-      case 'acquired': return <CheckCircle2 className="w-4 h-4" />;
-      case 'missing': return <XCircle className="w-4 h-4" />;
-      case 'in-progress': return <Clock className="w-4 h-4" />;
-      default: return null;
-    }
-  };
+  const isAcquired = skill.status === 'acquired';
 
   return (
-    <div className={`px-3 py-1.5 rounded-full text-xs font-medium border flex items-center space-x-2 ${getStatusColor(skill.status)}`}>
-      {getIcon(skill.status)}
+    <div className={`px-3 py-1.5 rounded-md text-xs font-medium border flex items-center gap-1.5 ${isAcquired
+        ? 'bg-[#fcfcfa] text-zinc-800 border-[#e3e1dc] shadow-sm'
+        : 'bg-transparent text-zinc-500 border-dashed border-[#e3e1dc]'
+      }`}>
+      {isAcquired ? (
+        <Check className="w-3 h-3 text-zinc-500" />
+      ) : (
+        <Circle className="w-3 h-3 text-zinc-300" />
+      )}
       <span>{skill.name}</span>
     </div>
   );

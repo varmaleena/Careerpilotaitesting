@@ -1,7 +1,7 @@
 
 import { Type } from "@google/genai";
 import { ChatMessage, InterviewFeedback, UserProfile, CareerAnalysis } from "../types";
-import { getAiInstance, cleanJson, generateWithRetry, GEMINI_MODEL } from "./geminiClient";
+import { getAiInstance, cleanJson, generateWithRetry, GEMINI_MODEL, HAS_GEMINI_KEYS } from "./geminiClient";
 import axios from "axios";
 
 const INTERVIEW_API_URL = "https://api.example.com/interview";
@@ -87,6 +87,54 @@ export const generatePersonalizedInterview = async (
     analysis: CareerAnalysis,
     targetCompany?: string
 ): Promise<InterviewRound[]> => {
+
+    if (!HAS_GEMINI_KEYS) {
+        console.warn("No Gemini API keys found. Using mock interview rounds for local demo.");
+        const company = targetCompany || userProfile.targetCompanies?.split(',')[0]?.trim() || 'Top Tech Company';
+        return [
+            {
+                roundName: "Round 1: Behavioral & Introduction",
+                duration: "15 minutes",
+                questions: [
+                    {
+                        id: "q1",
+                        type: "behavioral",
+                        difficulty: "easy",
+                        question: `Tell me about yourself and why you want to join ${company}.`,
+                        context: "Standard opener - sets the tone",
+                        expectedKeyPoints: ["Background", "Relevant experience", "Why " + company, "Career goals"],
+                        followUps: ["What specifically excites you about our products?"]
+                    },
+                    {
+                        id: "q2",
+                        type: "behavioral",
+                        difficulty: "medium",
+                        question: "Tell me about a challenging project you worked on and how you handled obstacles.",
+                        context: "Evaluates problem-solving and persistence",
+                        expectedKeyPoints: ["STAR method (Situation, Task, Action, Result)", "Clear challenge", "Resolution", "Key learning"],
+                        followUps: ["What would you have done differently in hindsight?"]
+                    }
+                ],
+                tips: ["Be concise (2-3 minutes)", "Connect your story to " + company + "'s mission"]
+            },
+            {
+                roundName: "Round 2: Technical Fundamentals",
+                duration: "30 minutes",
+                questions: [
+                    {
+                        id: "q3",
+                        type: "conceptual",
+                        difficulty: "medium",
+                        question: `Explain core concepts and architectural components of ${userProfile.targetRole || 'Software Engineer'}.`,
+                        context: "Verifies technical baseline",
+                        expectedKeyPoints: ["Key definitions", "Standard frameworks", "Common patterns"],
+                        followUps: ["How do you handle scalability with this approach?"]
+                    }
+                ],
+                tips: ["Structure your answer logically", "Use examples where possible"]
+            }
+        ];
+    }
 
     const company = targetCompany || userProfile.targetCompanies?.split(',')[0]?.trim() || 'Top Tech Company';
     const experienceLevel = userProfile.experienceLevel || 'fresher';
@@ -174,7 +222,7 @@ Make it feel like a REAL ${company} interview. Use their actual question pattern
         const rounds = JSON.parse(response.text || '[]');
         return rounds as InterviewRound[];
     } catch (error) {
-        console.error("Interview Generation Failed:", error);
+
         throw error;
     }
 };
@@ -194,6 +242,17 @@ export const evaluateAnswer = async (
     improvements: string[];
     idealAnswer: string;
 }> => {
+
+    if (!HAS_GEMINI_KEYS) {
+        console.warn("No Gemini API keys found. Using mock answer evaluation for local demo.");
+        return {
+            score: 8,
+            feedback: "A well-structured answer addressing key points, showing a solid understanding of the topic.",
+            strengths: ["Clear communication", "Addressed the primary request"],
+            improvements: ["Add more specific examples", "Quantify the outcomes where applicable"],
+            idealAnswer: "A strong response would use the STAR method, detailing the technology used, action taken, and quantitative results achieved."
+        };
+    }
 
     const prompt = `You are a ${targetCompany} Senior Interviewer evaluating a ${userProfile.targetRole} candidate.
 
@@ -237,7 +296,7 @@ Be constructive but honest. This is practice, so help them improve.`;
 
         return JSON.parse(response.text || '{}');
     } catch (error) {
-        console.error("Answer Evaluation Failed:", error);
+
         throw error;
     }
 };

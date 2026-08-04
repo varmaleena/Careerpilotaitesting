@@ -7,7 +7,7 @@ async function listModels() {
     try {
         const models = await ai.models.list();
         console.log("Available models:");
-        models.forEach((model: any) => {
+        models.forEach((model) => {
             console.log(`- ${model.name} (${model.displayName})`);
         });
     } catch (error) {
