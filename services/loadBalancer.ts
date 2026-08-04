@@ -26,9 +26,9 @@ export class RequestLoadBalancer {
     private queue: QueuedRequest[] = [];
     private isProcessing: boolean = false;
     private lastRequestTime: number = 0;
-    private readonly minInterval: number = 1000; // 1 second between requests (more conservative)
-    private readonly maxRetries: number = 8; // More retries for quota recovery
-    private readonly keyBackoffMs: number = 120000; // 2 minute backoff per key when rate limited
+    private readonly minInterval: number = 300; // 300ms between requests
+    private readonly maxRetries: number = 5;
+    private readonly keyBackoffMs: number = 4000; // 4 second backoff per key when rate limited
 
     constructor(keys: string[]) {
         const validKeys = keys.filter(Boolean);
@@ -195,7 +195,7 @@ export class RequestLoadBalancer {
                         this.markKeyAsRateLimitedWithMs(this.currentKeyIndex, retryAfterMs);
                     } else {
                         // Apply exponential backoff based on retries for this request
-                        const exponential = Math.min(this.keyBackoffMs * Math.pow(2, request.retries), 5 * 60 * 1000); // cap at 5 minutes
+                        const exponential = Math.min(this.keyBackoffMs * Math.pow(1.5, request.retries), 30000); // cap at 30 seconds max
                         this.markKeyAsRateLimitedWithMs(this.currentKeyIndex, exponential);
                     }
 
