@@ -26,8 +26,8 @@ export class RequestLoadBalancer {
     private queue: QueuedRequest[] = [];
     private isProcessing: boolean = false;
     private lastRequestTime: number = 0;
-    private readonly minInterval: number = 300; // 300ms between requests
-    private readonly maxRetries: number = 5;
+    private readonly minInterval: number = 1500; // 1.5 seconds between requests (prevents burst 429s)
+    private readonly maxRetries: number = 6;
     private readonly keyBackoffMs: number = 4000; // 4 second backoff per key when rate limited
 
     constructor(keys: string[]) {
