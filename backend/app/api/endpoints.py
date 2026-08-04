@@ -9,7 +9,7 @@ router = APIRouter()
 # --- Request Schemas ---
 
 class GenerateRequest(BaseModel):
-    model: str = Field(default="gemini-2.5-flash", description="The Gemini model identifier.")
+    model: str = Field(default="gemini-2.0-flash", description="The Gemini model identifier.")
     contents: Any = Field(..., description="The user prompt or conversation messages.")
     config: Optional[Dict[str, Any]] = Field(default=None, description="Optional configuration parameters.")
 

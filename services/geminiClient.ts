@@ -98,20 +98,40 @@ export const generateWithRetry = async (
         }
     }
 
-    // Mode B: Direct Client-Side Gemini SDK with Load Balancer
+    // Mode B: Direct Client-Side Gemini SDK with Load Balancer & Model Fallback
     const keys = getGeminiKeys();
     if (keys.length > 0) {
         try {
             const lb = getLoadBalancer();
             const textResult = await lb.execute(async (apiKey: string) => {
                 const ai = new GoogleGenAI({ apiKey });
-                const modelToUse = modelName || GEMINI_MODEL;
-                const response = await ai.models.generateContent({
-                    model: modelToUse,
-                    contents: params.contents,
-                    config: params.config
-                });
-                return response.text || "";
+                // Fallback sequence: requested model -> gemini-2.5-flash -> gemini-1.5-flash -> gemini-2.0-flash
+                const candidateModels = Array.from(
+                    new Set([modelName || GEMINI_MODEL, 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.0-flash'])
+                );
+
+                let lastErr: any = null;
+                for (const m of candidateModels) {
+                    try {
+                        const response = await ai.models.generateContent({
+                            model: m,
+                            contents: params.contents,
+                            config: params.config
+                        });
+                        if (response && response.text) {
+                            return response.text;
+                        }
+                    } catch (mErr: any) {
+                        lastErr = mErr;
+                        const errMsg = (mErr?.message || '').toLowerCase();
+                        if (errMsg.includes('404') || errMsg.includes('not found')) {
+                            console.warn(`Model ${m} returned 404, attempting fallback candidate model...`);
+                            continue; // Try next model in sequence if 404 Not Found
+                        }
+                        throw mErr; // Throw rate limit (429) or invalid key error for load balancer to handle
+                    }
+                }
+                throw lastErr || new Error("All Gemini model candidates failed.");
             });
 
             const result = { text: textResult };

@@ -18,7 +18,7 @@ PORT = int(os.getenv("PORT", 8000))
 HOST = os.getenv("HOST", "127.0.0.1")
 
 # Models configuration
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-2.0-flash"
 EMBEDDING_MODEL = "text-embedding-004"
 
 if not API_KEY:
