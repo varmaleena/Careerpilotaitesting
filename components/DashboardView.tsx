@@ -43,9 +43,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     const skillsPercent = totalSkills > 0 ? Math.round((acquiredSkillsCount / totalSkills) * 100) : 0;
 
     return (
-        <div className="flex-1 flex flex-col overflow-hidden font-['Plus_Jakarta_Sans',sans-serif] bg-white">
+        <div className="flex-1 flex flex-col overflow-y-auto pb-24 md:pb-8 font-['Plus_Jakarta_Sans',sans-serif] bg-white">
             {/* Minimalist Header */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center px-8 py-8 border-b border-[#e3e1dc] gap-4 sm:gap-0">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center px-4 sm:px-6 md:px-8 py-4 sm:py-8 border-b border-[#e3e1dc] gap-4 sm:gap-0">
                 <div>
                     <h1 className="text-2xl font-bold text-zinc-900 tracking-tight">
                         Welcome back, {userProfile.name}

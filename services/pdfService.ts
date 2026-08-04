@@ -10,6 +10,12 @@ GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs
  * Also extracts hyperlinks from annotations (clickable icons/text).
  */
 export const extractTextFromPdf = async (file: File): Promise<string> => {
+    // Support plain text / markdown files directly
+    if (file.type.startsWith('text/') || file.name.endsWith('.txt') || file.name.endsWith('.md')) {
+        const plainText = await file.text();
+        if (plainText && plainText.trim()) return plainText.trim();
+    }
+
     try {
         const arrayBuffer = await file.arrayBuffer();
         // Load the document

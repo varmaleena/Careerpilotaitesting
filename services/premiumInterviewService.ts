@@ -240,6 +240,7 @@ Generate your next response (Keep it professional, concise, and moving forward):
             {
                 contents: systemPrompt,
                 config: {
+                    thinkingConfig: { thinkingBudget: 0 },
                     temperature: 0.7,
                 }
             },
@@ -354,6 +355,7 @@ Be constructively honest to maximize learning. Frame everything as growth opport
             {
                 contents: prompt,
                 config: {
+                    thinkingConfig: { thinkingBudget: 0 },
                     responseMimeType: "application/json",
                 }
             },

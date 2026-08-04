@@ -73,6 +73,7 @@ Return a JSON array of 10 jobs:
             {
                 contents: prompt,
                 config: {
+                    thinkingConfig: { thinkingBudget: 0 },
                     tools: [{ googleSearch: {} }],
                     responseMimeType: "application/json"
                 }

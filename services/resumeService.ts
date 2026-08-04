@@ -87,6 +87,7 @@ Be STRICT. If it doesn't look like a resume, reject it.
             {
                 contents: contents,
                 config: {
+                    thinkingConfig: { thinkingBudget: 0 },
                     responseMimeType: "application/json",
                     responseSchema: {
                         type: Type.OBJECT,
@@ -320,6 +321,7 @@ export const analyzeProfile = async (
             {
                 contents: contents,
                 config: {
+                    thinkingConfig: { thinkingBudget: 0 },
                     responseMimeType: "application/json",
                     responseSchema: {
                         type: Type.OBJECT,

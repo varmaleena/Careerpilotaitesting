@@ -74,7 +74,7 @@ export const JobsView: React.FC<JobsViewProps> = ({
   const savedJobIds = new Set(trackedJobs.map(j => j.jobId));
 
   return (
-    <div className="w-full space-y-6 p-6">
+    <div className="w-full space-y-6 p-4 sm:p-6 pb-24 md:pb-8">
       {/* Header & Tabs */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-zinc-50 p-6 rounded-2xl border border-zinc-200">
         <div>

@@ -226,7 +226,7 @@ export const InterviewView: React.FC<InterviewViewProps> = ({
                         <div ref={messagesEndRef} />
                     </div>
 
-                    <div className="p-6 bg-zinc-50/50 border-t border-zinc-200/80">
+                    <div className="p-4 sm:p-6 pb-20 md:pb-6 bg-zinc-50/50 border-t border-zinc-200/80">
                         <form onSubmit={handleSendMessage} className="flex space-x-3">
                             <input
                                 type="text"

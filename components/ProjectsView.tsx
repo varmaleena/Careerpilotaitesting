@@ -85,7 +85,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 pb-24 md:pb-8">
 
                 {/* Loading State - Full page centered */}
                 {isGeneratingProjects && projects?.length === 0 && (

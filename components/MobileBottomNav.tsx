@@ -61,27 +61,27 @@ const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
     return (
         <>
             {/* Bottom Navigation Bar */}
-            <div className="md:hidden fixed bottom-0 left-0 w-full z-50 pb-[env(safe-area-inset-bottom)]">
-                <div className="bg-white/95 backdrop-blur-xl border-t border-zinc-200 h-[65px] flex items-center justify-between px-4 shadow-lg">
+            <div className="md:hidden fixed bottom-0 left-0 w-full z-50 pb-[max(4px,env(safe-area-inset-bottom))] bg-white/95 backdrop-blur-xl border-t border-[#e3e1dc]">
+                <div className="h-[60px] flex items-center justify-around px-1 shadow-lg">
 
                     {navItems.map((item) => (
                         <button
                             key={item.id}
                             onClick={() => handleNavClick(item.id)}
-                            className="flex flex-col items-center justify-center w-auto flex-1 h-full gap-0.5 relative group cursor-pointer border-0 bg-transparent"
+                            className="flex flex-col items-center justify-center min-w-0 flex-1 h-full gap-0.5 relative group cursor-pointer border-0 bg-transparent px-0.5"
                         >
                             <item.icon
-                                className={`w-5 h-5 transition-all duration-200 ${isActive(item.id)
-                                    ? 'text-zinc-900'
+                                className={`w-4 h-4 sm:w-5 sm:h-5 transition-all duration-200 ${isActive(item.id)
+                                    ? 'text-zinc-900 scale-105'
                                     : 'text-zinc-400 group-hover:text-zinc-600'
                                     }`}
                             />
-                            <span className={`text-[9px] font-semibold transition-all duration-200 ${isActive(item.id) ? 'text-zinc-900 opacity-100' : 'text-zinc-500 opacity-70'}`}>
+                            <span className={`text-[8px] sm:text-[9px] font-semibold transition-all duration-200 truncate w-full text-center ${isActive(item.id) ? 'text-zinc-900 opacity-100 font-bold' : 'text-zinc-500 opacity-80'}`}>
                                 {item.label}
                             </span>
 
                             {isActive(item.id) && (
-                                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-[2px] bg-zinc-900 rounded-b-full"></div>
+                                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-5 h-[2px] bg-zinc-900 rounded-b-full"></div>
                             )}
                         </button>
                     ))}
@@ -89,15 +89,15 @@ const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                     {/* Menu Button */}
                     <button
                         onClick={toggleMenu}
-                        className="flex flex-col items-center justify-center w-auto flex-1 h-full gap-0.5 relative group cursor-pointer border-0 bg-transparent"
+                        className="flex flex-col items-center justify-center min-w-0 flex-1 h-full gap-0.5 relative group cursor-pointer border-0 bg-transparent px-0.5"
                     >
                         <Menu
-                            className={`w-5 h-5 transition-all duration-200 ${isMenuOpen
-                                ? 'text-zinc-900'
+                            className={`w-4 h-4 sm:w-5 sm:h-5 transition-all duration-200 ${isMenuOpen
+                                ? 'text-zinc-900 scale-105'
                                 : 'text-zinc-400 group-hover:text-zinc-600'
                                 }`}
                         />
-                        <span className={`text-[9px] font-semibold transition-all duration-200 ${isMenuOpen ? 'text-zinc-900 opacity-100' : 'text-zinc-500 opacity-70'}`}>
+                        <span className={`text-[8px] sm:text-[9px] font-semibold transition-all duration-200 truncate w-full text-center ${isMenuOpen ? 'text-zinc-900 opacity-100 font-bold' : 'text-zinc-500 opacity-80'}`}>
                             More
                         </span>
                     </button>

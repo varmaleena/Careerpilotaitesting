@@ -66,7 +66,7 @@ export const ResumeView: React.FC<ResumeViewProps> = ({
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6">
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-6 pb-24 md:pb-8">
 
                 {/* Profile Links - Compact Row */}
                 <div className="bg-white rounded-xl border border-[#e3e1dc] p-6 shadow-[0_4px_20px_-2px_rgba(0,0,0,0.02)]">

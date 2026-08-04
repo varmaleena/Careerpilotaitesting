@@ -81,6 +81,7 @@ export const generateLearningPlan = async (targetRole: string, missingSkills: st
             {
                 contents: prompt,
                 config: {
+                    thinkingConfig: { thinkingBudget: 0 },
                     responseMimeType: "application/json",
                     responseSchema: {
                         type: Type.ARRAY,
@@ -241,6 +242,7 @@ export const generateProjectIdeas = async (
             {
                 contents: prompt,
                 config: {
+                    thinkingConfig: { thinkingBudget: 0 },
                     responseMimeType: "application/json",
                     maxOutputTokens: 2048, // Increased for more details
                     temperature: 0.8

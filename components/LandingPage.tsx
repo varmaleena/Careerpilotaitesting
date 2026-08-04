@@ -17,6 +17,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin, onUplo
    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
    const [openFaq, setOpenFaq] = useState<number | null>(null);
    const [roleInput, setRoleInput] = useState('');
+   const [isDragging, setIsDragging] = useState(false);
    const fileInputRef = useRef<HTMLInputElement>(null);
 
    const scrollToSection = (id: string) => {
@@ -32,21 +33,25 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin, onUplo
    };
 
    const triggerUpload = (file: File) => {
-      if (!roleInput.trim()) {
-         alert("Please enter your target role first!");
-         return;
-      }
+      const targetRole = roleInput.trim() || 'Software Engineer';
       if (onUploadResume) {
-         onUploadResume(file, roleInput.trim());
+         onUploadResume(file, targetRole);
       }
    };
 
    const handleDragOver = (e: React.DragEvent) => {
       e.preventDefault();
+      setIsDragging(true);
+   };
+
+   const handleDragLeave = (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(false);
    };
 
    const handleDrop = (e: React.DragEvent) => {
       e.preventDefault();
+      setIsDragging(false);
       const file = e.dataTransfer.files?.[0];
       if (file) {
          triggerUpload(file);
@@ -203,20 +208,27 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin, onUplo
                   {/* Real File Upload Drag Zone */}
                   <div
                      onDragOver={handleDragOver}
+                     onDragLeave={handleDragLeave}
                      onDrop={handleDrop}
                      onClick={() => fileInputRef.current?.click()}
-                     className="max-w-[400px] border border-dashed border-[#e3e1dc] hover:border-zinc-450 bg-white hover:bg-zinc-50 rounded-lg p-5 text-center cursor-pointer transition-all duration-350 group shadow-sm"
+                     className={`max-w-[400px] border border-dashed rounded-lg p-5 text-center cursor-pointer transition-all duration-300 group shadow-sm ${
+                        isDragging
+                           ? 'border-zinc-900 bg-zinc-100/80 scale-[1.02]'
+                           : 'border-[#e3e1dc] hover:border-zinc-450 bg-white hover:bg-zinc-50'
+                     }`}
                   >
                      <input
                         type="file"
                         ref={fileInputRef}
                         onChange={handleFileChange}
-                        accept="application/pdf"
+                        accept=".pdf,.txt,.doc,.docx"
                         className="hidden"
                      />
-                     <UploadCloud className="w-6 h-6 text-zinc-400 mx-auto mb-2 transition-transform group-hover:-translate-y-0.5" />
-                     <div className="text-xs font-bold text-zinc-850 mb-0.5">Drag & drop your resume PDF here</div>
-                     <div className="text-[10px] text-zinc-500">or click to browse files</div>
+                     <UploadCloud className={`w-6 h-6 mx-auto mb-2 transition-all ${isDragging ? 'text-zinc-900 scale-110' : 'text-zinc-400 group-hover:-translate-y-0.5'}`} />
+                     <div className="text-xs font-bold text-zinc-850 mb-0.5">
+                        {isDragging ? 'Drop your resume here to analyze' : 'Drag & drop your resume PDF here'}
+                     </div>
+                     <div className="text-[10px] text-zinc-500">or click to browse files (PDF, TXT, DOCX)</div>
                   </div>
                </div>
 
