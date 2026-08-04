@@ -2,7 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import { getCachedAIResponse, setCachedAIResponse } from "./aiCache";
 import { RequestLoadBalancer } from "./loadBalancer";
 
-export const GEMINI_MODEL = 'gemini-2.5-flash';
+export const GEMINI_MODEL = 'gemini-2.0-flash';
 
 // Helper to gather all exposed Gemini API keys for load balancer
 const getGeminiKeys = (): string[] => {
@@ -98,16 +98,16 @@ export const generateWithRetry = async (
         }
     }
 
-    // Mode B: Direct Client-Side Gemini SDK with Load Balancer & Model Fallback
+    // Mode B: Direct Client-Side Gemini SDK with Load Balancer & Fast Model Resolution
     const keys = getGeminiKeys();
     if (keys.length > 0) {
         try {
             const lb = getLoadBalancer();
             const textResult = await lb.execute(async (apiKey: string) => {
                 const ai = new GoogleGenAI({ apiKey });
-                // Fallback sequence: requested model -> gemini-2.5-flash -> gemini-1.5-flash -> gemini-2.0-flash
+                // Prioritize gemini-2.0-flash and gemini-2.0-flash-lite (valid models in Google API)
                 const candidateModels = Array.from(
-                    new Set([modelName || GEMINI_MODEL, 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.0-flash'])
+                    new Set([modelName || GEMINI_MODEL, 'gemini-2.0-flash', 'gemini-2.0-flash-lite'])
                 );
 
                 let lastErr: any = null;
@@ -126,9 +126,9 @@ export const generateWithRetry = async (
                         const errMsg = (mErr?.message || '').toLowerCase();
                         if (errMsg.includes('404') || errMsg.includes('not found')) {
                             console.warn(`Model ${m} returned 404, attempting fallback candidate model...`);
-                            continue; // Try next model in sequence if 404 Not Found
+                            continue;
                         }
-                        throw mErr; // Throw rate limit (429) or invalid key error for load balancer to handle
+                        throw mErr;
                     }
                 }
                 throw lastErr || new Error("All Gemini model candidates failed.");
