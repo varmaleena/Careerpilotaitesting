@@ -3,16 +3,17 @@ import { GoogleGenAI } from "@google/genai";
 const apiKey = process.env.VITE_GEMINI_API_KEY || "AIzaSyD9X4zCAUCV90TowgQ20G3RpwRwDzY4oEc";
 const ai = new GoogleGenAI({ apiKey });
 
-async function listModels() {
+async function testGenerate36() {
     try {
-        const models = await ai.models.list();
-        console.log("Available models:");
-        models.forEach((model) => {
-            console.log(`- ${model.name} (${model.displayName})`);
+        console.log("Testing generation with gemini-3.6-flash...");
+        const response = await ai.models.generateContent({
+            model: "gemini-3.6-flash",
+            contents: "Say 'Gemini 3.6 Flash is active!'"
         });
+        console.log("SUCCESS Response:", response.text);
     } catch (error) {
-        console.error("Error listing models:", error);
+        console.error("ERROR generating with gemini-3.6-flash:", error);
     }
 }
 
-listModels();
+testGenerate36();

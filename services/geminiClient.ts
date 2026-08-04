@@ -2,7 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import { getCachedAIResponse, setCachedAIResponse } from "./aiCache";
 import { RequestLoadBalancer } from "./loadBalancer";
 
-export const GEMINI_MODEL = 'gemini-2.0-flash';
+export const GEMINI_MODEL = 'gemini-3.6-flash';
 
 // Helper to gather all exposed Gemini API keys for load balancer
 const getGeminiKeys = (): string[] => {
@@ -98,16 +98,16 @@ export const generateWithRetry = async (
         }
     }
 
-    // Mode B: Direct Client-Side Gemini SDK with Load Balancer & Fast Model Resolution
+    // Mode B: Direct Client-Side Gemini SDK with Load Balancer & Verified Models
     const keys = getGeminiKeys();
     if (keys.length > 0) {
         try {
             const lb = getLoadBalancer();
             const textResult = await lb.execute(async (apiKey: string) => {
                 const ai = new GoogleGenAI({ apiKey });
-                // Prioritize gemini-2.0-flash and gemini-2.0-flash-lite (valid models in Google API)
+                // Verified models available on Google API
                 const candidateModels = Array.from(
-                    new Set([modelName || GEMINI_MODEL, 'gemini-2.0-flash', 'gemini-2.0-flash-lite'])
+                    new Set([modelName || GEMINI_MODEL, 'gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'])
                 );
 
                 let lastErr: any = null;
