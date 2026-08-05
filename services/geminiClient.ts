@@ -2,7 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import { getCachedAIResponse, setCachedAIResponse } from "./aiCache";
 import { RequestLoadBalancer } from "./loadBalancer";
 
-export const GEMINI_MODEL = 'gemini-3.6-flash';
+export const GEMINI_MODEL = 'gemini-2.5-flash';
 
 // Helper to gather all exposed Gemini API keys for load balancer
 const getGeminiKeys = (): string[] => {
