@@ -3,7 +3,10 @@ import asyncio
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Optional
-from sse_starlette.sse import EventSourceResponse
+try:
+    from sse_starlette.sse import EventSourceResponse
+except ImportError:
+    from fastapi.responses import StreamingResponse as EventSourceResponse
 
 from app.agents.supervisor_agent import SupervisorAgent
 from app.config import logger

@@ -2,7 +2,7 @@ import json
 import re
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
-from app.services.llm_service import generate_llm_response, ai_client
+from app.services.llm_service import generate_llm_response
 from app.config import logger, GEMINI_MODEL
 
 class BaseAgent(ABC):
