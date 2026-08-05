@@ -21,7 +21,7 @@ class CircuitBreaker:
         self.state = "CLOSED"
         self.last_state_change = time.time()
 
-    def can_execute((self)) -> bool:
+    def can_execute(self) -> bool:
         now = time.time()
         if self.state == "OPEN":
             if now - self.last_state_change > self.recovery_timeout:
