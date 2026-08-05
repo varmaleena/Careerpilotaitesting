@@ -3,6 +3,7 @@ from typing import Any, Dict, Optional
 from google import genai
 from google.genai import types
 from app.config import API_KEYS, GEMINI_MODEL, logger
+from app.services.circuit_breaker import llm_circuit_breaker, CircuitBreakerOpenException
 
 # Multi-Key Server-Side Load Balancer Clients
 clients = []
@@ -22,9 +23,11 @@ def generate_llm_response(
     config_dict: Optional[Dict[str, Any]] = None
 ) -> str:
     """
-    Generates content using Gen AI client with automatic key rotation and load balancing.
-    Rotates through configured API keys to maximize quota & prevent rate limiting.
+    Generates content using Gen AI client with automatic key rotation, circuit breaker protection, and load balancing.
     """
+    if not llm_circuit_breaker.can_execute():
+        raise CircuitBreakerOpenException("Circuit Breaker is OPEN due to temporary external service outage. Please retry in 30s.")
+
     if not clients or not client_cycle:
         raise ValueError("Google GenAI client is not configured. Check your GEMINI_API_KEY environment variables.")
 
@@ -50,11 +53,13 @@ def generate_llm_response(
                 contents=contents,
                 config=types.GenerateContentConfig(**gen_config) if gen_config else None
             )
+            llm_circuit_breaker.record_success()
             return response.text or ""
         except Exception as err:
             last_err = err
             logger.warning(f"Key execution failed, attempting failover key... Error: {err}")
             continue
 
+    llm_circuit_breaker.record_failure()
     logger.error(f"All GenAI API keys failed. Last Error: {last_err}")
     raise last_err or Exception("All Gemini API keys failed.")
