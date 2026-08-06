@@ -75,9 +75,15 @@ export const generateWithRetry = async (
     // Mode A: Configured Backend URL (e.g. Render / Railway / Cloud run backend)
     if (backendUrl) {
         try {
+            const token = await getAuthToken();
+            const headers: Record<string, string> = { "Content-Type": "application/json" };
+            if (token) {
+                headers["Authorization"] = `Bearer ${token}`;
+            }
+
             const response = await fetch(`${backendUrl}/api/generate`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: headers,
                 body: JSON.stringify({
                     model: modelName,
                     contents: params.contents,
