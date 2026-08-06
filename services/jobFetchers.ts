@@ -25,6 +25,30 @@ const SERVICE_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour (matches Firestore cache 
 
 
 // Extract meaningful keywords from target role, filtering out generic career/role terms
+export const matchResumeToJobsViaBackend = async (resumeText: string): Promise<any> => {
+    const backendUrl = import.meta.env.VITE_BACKEND_URL;
+    if (backendUrl) {
+        try {
+            const { getAuthToken } = await import('./authService');
+            const token = await getAuthToken();
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const res = await fetch(`${backendUrl}/api/jobs/match`, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify({ resume_text: resumeText })
+            });
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            // Fallback
+        }
+    }
+    return null;
+};
+
 const getRoleKeywords = (role: string): string[] => {
     const genericWords = new Set([
         'senior', 'junior', 'developer', 'engineer', 'designer', 'architect', 
