@@ -236,6 +236,35 @@ export const generateProjectIdeas = async (
     ]
     `;
 
+    const backendUrl = import.meta.env.VITE_BACKEND_URL;
+    if (backendUrl) {
+        try {
+            const { getAuthToken } = await import("./authService");
+            const token = await getAuthToken();
+            const headers: Record<string, string> = { "Content-Type": "application/json" };
+            if (token) headers["Authorization"] = `Bearer ${token}`;
+
+            const res = await fetch(`${backendUrl}/api/projects/generate`, {
+                method: "POST",
+                headers: headers,
+                body: JSON.stringify({
+                    target_role: targetRole,
+                    experience_level: experienceLevel,
+                    difficulty: difficultyFilter || "Intermediate",
+                    skills: missingSkills
+                })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                const list = data.projects || data;
+                if (Array.isArray(list) && list.length > 0) return list;
+            }
+        } catch (e) {
+            // Fall through to direct AI fallback
+        }
+    }
+
     try {
         const response = await generateWithRetry(
             GEMINI_MODEL,
