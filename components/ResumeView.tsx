@@ -15,7 +15,9 @@ import {
     Sparkles,
     TrendingUp,
     UploadCloud,
-    ArrowRight
+    ArrowRight,
+    X,
+    AlertCircle
 } from 'lucide-react';
 import { UserProfile, ResumeOptimizationResult } from '../types';
 import { downloadLatexPdf, downloadResumeAsPdf } from '../services/pdfExportService';
@@ -46,9 +48,99 @@ export const ResumeView: React.FC<ResumeViewProps> = ({
 }) => {
     const [resumeFormat, setResumeFormat] = useState<'text' | 'latex'>('text');
     const [isCopied, setIsCopied] = useState(false);
+    const [showLinksModal, setShowLinksModal] = useState(false);
+    const [tempGithub, setTempGithub] = useState(userProfile.githubProfile || '');
+    const [tempLinkedin, setTempLinkedin] = useState(userProfile.linkedinProfile || '');
+
+    const handlePolishClick = () => {
+        if (!userProfile.githubProfile || !userProfile.linkedinProfile) {
+            setTempGithub(userProfile.githubProfile || '');
+            setTempLinkedin(userProfile.linkedinProfile || '');
+            setShowLinksModal(true);
+            return;
+        }
+        onOptimizeResume();
+    };
+
+    const handleSaveAndPolish = () => {
+        if (!tempGithub.trim() || !tempLinkedin.trim()) {
+            alert("Please provide both GitHub and LinkedIn profile URLs.");
+            return;
+        }
+        setUserProfile(prev => ({
+            ...prev,
+            githubProfile: tempGithub.trim(),
+            linkedinProfile: tempLinkedin.trim()
+        }));
+        setShowLinksModal(false);
+        setTimeout(() => {
+            onOptimizeResume();
+        }, 100);
+    };
 
     return (
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden relative">
+            {/* Required Social Profiles Popup Modal */}
+            {showLinksModal && (
+                <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+                    <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-zinc-200 relative animate-scale-up">
+                        <button
+                            onClick={() => setShowLinksModal(false)}
+                            className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-700 p-1.5 rounded-lg hover:bg-zinc-100 transition-colors"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+
+                        <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 flex items-center justify-center mb-4">
+                            <AlertCircle className="w-6 h-6" />
+                        </div>
+
+                        <h3 className="text-lg font-bold text-zinc-900 mb-1">Social Profiles Required</h3>
+                        <p className="text-sm text-zinc-500 mb-5">
+                            To polish your resume for <span className="text-zinc-900 font-semibold">{userProfile.targetRole || 'your target role'}</span>, please provide your GitHub and LinkedIn profile links.
+                        </p>
+
+                        <div className="space-y-4 mb-6">
+                            <div className="relative">
+                                <Github className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                                <input
+                                    type="url"
+                                    placeholder="GitHub Profile URL (e.g. https://github.com/username)"
+                                    value={tempGithub}
+                                    onChange={(e) => setTempGithub(e.target.value)}
+                                    className="w-full bg-zinc-50 border border-zinc-200 rounded-xl pl-10 pr-3 py-3 text-zinc-900 text-sm outline-none focus:border-zinc-900 focus:bg-white transition-all"
+                                />
+                            </div>
+                            <div className="relative">
+                                <Linkedin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                                <input
+                                    type="url"
+                                    placeholder="LinkedIn Profile URL (e.g. https://linkedin.com/in/username)"
+                                    value={tempLinkedin}
+                                    onChange={(e) => setTempLinkedin(e.target.value)}
+                                    className="w-full bg-zinc-50 border border-zinc-200 rounded-xl pl-10 pr-3 py-3 text-zinc-900 text-sm outline-none focus:border-zinc-900 focus:bg-white transition-all"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowLinksModal(false)}
+                                className="flex-1 px-4 py-2.5 rounded-xl border border-zinc-200 text-zinc-700 font-semibold text-sm hover:bg-zinc-50 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSaveAndPolish}
+                                className="flex-1 px-4 py-2.5 rounded-xl bg-zinc-900 text-white font-semibold text-sm hover:bg-zinc-800 transition-colors shadow-sm"
+                            >
+                                Save & Polish
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Compact Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center px-6 py-4 border-b border-[#e3e1dc] gap-4 sm:gap-0">
                 <div>
@@ -56,8 +148,8 @@ export const ResumeView: React.FC<ResumeViewProps> = ({
                     <p className="text-sm text-zinc-500 mt-0.5">Transform your resume for <span className="text-zinc-800 font-medium">{userProfile.targetRole}</span></p>
                 </div>
                 <button
-                    onClick={onOptimizeResume}
-                    disabled={isOptimizingResume || !userProfile.githubProfile || !userProfile.linkedinProfile}
+                    onClick={handlePolishClick}
+                    disabled={isOptimizingResume}
                     className="bg-zinc-900 hover:bg-zinc-800 text-white px-6 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center disabled:opacity-50 disabled:cursor-not-allowed shadow-sm border-0 cursor-pointer"
                 >
                     {isOptimizingResume ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}

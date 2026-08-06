@@ -72,6 +72,7 @@ import { DailyQuest } from "./components/DailyQuest";
 import { ConfirmResetModal } from "./components/ConfirmResetModal";
 import { EmptyState } from "./components/EmptyState";
 import { ShareSuccessModal } from "./components/ShareSuccessModal";
+import { ViewLoadingFallback } from "./components/ViewLoadingFallback";
 
 // ── Lazy-loaded: split into separate async chunks ────────────────────────────
 // These are large views never needed on initial render (landing / login page)
@@ -1046,18 +1047,15 @@ const App = () => {
         return skill;
       });
 
-      // Recalculate readiness score based on acquired skills
+      // Recalculate readiness score dynamically based on acquired skills
       const acquiredCount = newSkills.filter(s => s.status === 'acquired').length;
       const totalCount = newSkills.length;
-      const baseScore = totalCount > 0 ? Math.round((acquiredCount / totalCount) * 100) : analysis.readinessScore;
-
-      // Give a little boost for readiness if the score was lower
-      const newScore = Math.min(100, Math.max(analysis.readinessScore, baseScore));
+      const newScore = totalCount > 0 ? Math.round((acquiredCount / totalCount) * 100) : analysis.readinessScore;
 
       setAnalysis({
         ...analysis,
         skills: newSkills,
-        readinessScore: newScore
+        readinessScore: Math.min(100, Math.max(0, newScore))
       });
     }
 
@@ -1118,7 +1116,7 @@ const App = () => {
       }
 
       // Determine difficulty: strict adherence to filter if set, otherwise dropdown preference
-      const effectiveDifficulty = projectFilter !== 'All' ? projectFilter : generationDifficulty;
+      const effectiveDifficulty = projectFilter !== 'all' ? projectFilter : generationDifficulty;
 
       // Generate highly tailored projects based on User's Dream Role & Company
       const standardProjects = await generateProjectIdeas(
@@ -1558,8 +1556,13 @@ const App = () => {
 
   const toggleListening = () => {
     if (isListening) {
-      recognitionRef.current?.stop();
+      try {
+        recognitionRef.current?.stop();
+      } catch {
+        // Ignore InvalidStateError if already stopping
+      }
       setIsListening(false);
+      recognitionRef.current = null;
       return;
     }
 
@@ -1582,34 +1585,24 @@ const App = () => {
 
       recognition.onend = () => {
         if (recognitionRef.current) {
-          // Only stop if we meant to stop.
-          // If it stopped due to silence but we want continuous, we'd restart here,
-          // but for now we just reflect state.
           setIsListening(false);
           recognitionRef.current = null;
         }
       };
 
       recognition.onresult = (event: any) => {
-        // Ignore results if recognition was intentionally stopped (e.g., on message send)
         if (recognitionStoppedRef.current) {
           return;
         }
-
-        // Build the complete transcript from all results in this session
         let transcript = '';
         for (let i = 0; i < event.results.length; i++) {
           transcript += event.results[i][0].transcript;
         }
-        // Simply set the entire transcript as the current input
-        // This replaces the previous content, which is the expected behavior
         setChatInput(transcript);
       };
 
       recognition.onerror = (event: any) => {
-
         if (event.error === 'no-speech') {
-          // Ignore
           return;
         }
         setIsListening(false);
@@ -1617,16 +1610,18 @@ const App = () => {
 
         if (event.error === 'not-allowed') {
           alert("Microphone access blocked. Please enable permissions in your browser settings.");
-        } else {
-          // Silent fail for other minor errors to avoid spamming alerts
-
         }
       };
 
-      recognition.start();
-      recognitionRef.current = recognition;
+      try {
+        recognition.start();
+        recognitionRef.current = recognition;
+      } catch (err) {
+        setIsListening(false);
+        recognitionRef.current = null;
+      }
     } catch (e) {
-
+      setIsListening(false);
       alert("Could not start voice input.");
     }
   };
@@ -1782,153 +1777,110 @@ const App = () => {
 
             {/* Main Content Area in Clean Floating Panel */}
             <div className="flex-1 bg-white border border-[#e3e1dc] rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.03)] flex flex-col overflow-hidden">
+              <React.Suspense fallback={<ViewLoadingFallback />}>
+                {/* Dashboard View */}
+                {view === AppView.DASHBOARD && analysis && (
+                  <DashboardView
+                    analysis={analysis}
+                    userProfile={userProfile}
+                    plan={plan}
+                    isGeneratingPlan={isGeneratingPlan}
+                    onShowShareModal={() => setShowShareModal(true)}
+                    onGeneratePlan={handleGeneratePlan}
+                    onNavigate={handleViewChange}
+                    mlMatches={mlMatches}
+                  />
+                )}
 
-            {/* Dashboard View */}
-            {view === AppView.DASHBOARD && analysis && (
-              <DashboardView
-                analysis={analysis}
-                userProfile={userProfile}
-                plan={plan}
-                isGeneratingPlan={isGeneratingPlan}
-                onShowShareModal={() => setShowShareModal(true)}
-                onGeneratePlan={handleGeneratePlan}
-                onNavigate={handleViewChange}
-                mlMatches={mlMatches}
-              />
-            )}
+                {/* Learning Plan View */}
+                {view === AppView.PLAN && (
+                  <LearningPlanView
+                    userProfile={userProfile}
+                    plan={plan}
+                    isGeneratingPlan={isGeneratingPlan}
+                    addingTaskWeek={addingTaskWeek}
+                    newTaskTitle={newTaskTitle}
+                    onGeneratePlan={handleGeneratePlan}
+                    onToggleTask={handleToggleTask}
+                    onDeleteTask={handleDeleteTask}
+                    onAddTask={handleAddTask}
+                    setAddingTaskWeek={setAddingTaskWeek}
+                    setNewTaskTitle={setNewTaskTitle}
+                  />
+                )}
 
-            {/* Learning Plan View */}
-            {view === AppView.PLAN && (
-              <LearningPlanView
-                userProfile={userProfile}
-                plan={plan}
-                isGeneratingPlan={isGeneratingPlan}
-                addingTaskWeek={addingTaskWeek}
-                newTaskTitle={newTaskTitle}
-                onGeneratePlan={handleGeneratePlan}
-                onToggleTask={handleToggleTask}
-                onDeleteTask={handleDeleteTask}
-                onAddTask={handleAddTask}
-                setAddingTaskWeek={setAddingTaskWeek}
-                setNewTaskTitle={setNewTaskTitle}
-              />
-            )}
+                {/* Projects Hub View */}
+                {view === AppView.PROJECTS && (
+                  <ProjectsView
+                    userProfile={userProfile}
+                    projects={projects}
+                    selectedProject={selectedProject}
+                    isGeneratingProjects={isGeneratingProjects}
+                    generationDifficulty={generationDifficulty}
+                    projectFilter={projectFilter}
+                    onGenerateProjects={handleGenerateProjects}
+                    onSelectProject={setSelectedProject}
+                    onToggleProjectStatus={handleToggleProjectStatus}
+                    setGenerationDifficulty={setGenerationDifficulty}
+                    setProjectFilter={setProjectFilter}
+                    setSelectedProject={setSelectedProject}
+                  />
+                )}
 
-            {/* Projects Hub View */}
-            {view === AppView.PROJECTS && (
-              <ProjectsView
-                userProfile={userProfile}
-                projects={projects}
-                selectedProject={selectedProject}
-                isGeneratingProjects={isGeneratingProjects}
-                generationDifficulty={generationDifficulty}
-                projectFilter={projectFilter}
-                onGenerateProjects={handleGenerateProjects}
-                onSelectProject={setSelectedProject}
-                onToggleProjectStatus={handleToggleProjectStatus}
-                setGenerationDifficulty={setGenerationDifficulty}
-                setProjectFilter={setProjectFilter}
-                setSelectedProject={setSelectedProject}
-              />
-            )}
+                {/* Resume View */}
+                {view === AppView.RESUME && (
+                  <ResumeView
+                    userProfile={userProfile}
+                    resumeAnalysisResult={resumeAnalysisResult}
+                    optimizedResume={optimizedResume}
+                    latexResume={latexResume}
+                    latexData={latexData}
+                    isOptimizingResume={isOptimizingResume}
+                    setUserProfile={setUserProfile}
+                    onOptimizeResume={handleOptimizeResume}
+                    onResumeUpload={handleResumeUpload}
+                  />
+                )}
 
+                {/* Jobs View */}
+                {view === AppView.JOBS && (
+                  <JobsView 
+                    userProfile={userProfile}
+                    uid={currentUserUid || 'guest'}
+                    onSaveJob={handleSaveJob}
+                    onUpdateJobStatus={handleUpdateJobStatus}
+                    onDeleteJob={handleDeleteJob}
+                  />
+                )}
 
-
-            {/* Resume View */}
-            {view === AppView.RESUME && (
-              <ResumeView
-                userProfile={userProfile}
-                resumeAnalysisResult={resumeAnalysisResult}
-                optimizedResume={optimizedResume}
-                latexResume={latexResume}
-                latexData={latexData}
-                isOptimizingResume={isOptimizingResume}
-                setUserProfile={setUserProfile}
-                onOptimizeResume={handleOptimizeResume}
-                onResumeUpload={handleResumeUpload}
-              />
-            )}
-
-            {/* Jobs View */}
-            {view === AppView.JOBS && (
-              <JobsView 
-                userProfile={userProfile}
-                uid={currentUserUid || 'guest'}
-                onSaveJob={handleSaveJob}
-                onUpdateJobStatus={handleUpdateJobStatus}
-                onDeleteJob={handleDeleteJob}
-              />
-            )}
-
-            {/* Interview View - Payment Gate */}
-            {/* {view === AppView.INTERVIEW && !userProfile.isPremium && (
-            <div className="h-[calc(100vh-140px)] min-h-[600px] flex flex-col items-center justify-center bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 overflow-hidden shadow-2xl relative text-center px-4">
-              <div className="w-24 h-24 bg-violet-600/20 rounded-full flex items-center justify-center mb-6 ring-4 ring-indigo-600/10">
-                <Lock className="w-10 h-10 text-violet-400" />
-              </div>
-              <h2 className="text-3xl font-bold text-white mb-3">Premium Feature</h2>
-              <p className="text-zinc-400 max-w-lg mb-8 text-lg">
-                Unlock unlimited AI Mock Interviews with personalized feedback and scoring. Master your interviews for just <span className="text-white font-bold">₹1</span>.
-              </p>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 text-left max-w-lg w-full">
-                <div className="bg-white/5 p-4 rounded-xl border border-white/5 flex items-center">
-                  <div className="p-2 bg-emerald-500/20 rounded-lg mr-3">
-                    <MessageSquare className="w-5 h-5 text-emerald-400" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-white text-sm">Real-time Simulation</h4>
-                    <p className="text-xs text-zinc-400">Voice-enabled AI interviewer</p>
-                  </div>
-                </div>
-                <div className="bg-white/5 p-4 rounded-xl border border-white/5 flex items-center">
-                  <div className="p-2 bg-purple-500/20 rounded-lg mr-3">
-                    <Award className="w-5 h-5 text-purple-400" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-white text-sm">Detailed Scoring</h4>
-                    <p className="text-xs text-zinc-400">Get rated on 1-10 scale</p>
-                  </div>
-                </div>
-              </div>
-
-              <button
-                onClick={handlePayment}
-                className="bg-violet-600 hover:bg-violet-500 text-white px-10 py-4 rounded-xl font-bold text-lg shadow-[0_0_30px_rgba(79,70,229,0.3)] hover:shadow-[0_0_50px_rgba(79,70,229,0.5)] transition-all transform hover:-translate-y-1 flex items-center"
-              >
-                Unlock Now for ₹1
-                <ChevronRight className="w-5 h-5 ml-2" />
-              </button>
-              <p className="mt-4 text-xs text-zinc-500 flex items-center">
-                <Lock className="w-3 h-3 mr-1" /> Secure payment via Razorpay
-            {/* Interview View */}
-            {view === AppView.INTERVIEW && (
-              <InterviewView
-                userProfile={userProfile}
-                isGeneratingFeedback={isGeneratingFeedback}
-                interviewFeedback={interviewFeedback}
-                isInterviewStarted={isInterviewStarted}
-                showPastInterviewsDropdown={showPastInterviewsDropdown}
-                setShowPastInterviewsDropdown={setShowPastInterviewsDropdown}
-                setInterviewFeedback={setInterviewFeedback}
-                setChatMessages={setChatMessages}
-                startInterview={startInterview}
-                interviewElapsedSeconds={interviewElapsedSeconds}
-                isSpeakingEnabled={isSpeakingEnabled}
-                setIsSpeakingEnabled={setIsSpeakingEnabled}
-                handleEndInterview={handleEndInterview}
-                chatMessages={chatMessages}
-                isChatLoading={isChatLoading}
-                messagesEndRef={messagesEndRef}
-                handleSendMessage={handleSendMessage}
-                chatInput={chatInput}
-                setChatInput={setChatInput}
-                isSpeechRecognitionSupported={isSpeechRecognitionSupported}
-                toggleListening={toggleListening}
-                isListening={isListening}
-              />
-            )}
-
+                {/* Interview View */}
+                {view === AppView.INTERVIEW && (
+                  <InterviewView
+                    userProfile={userProfile}
+                    isGeneratingFeedback={isGeneratingFeedback}
+                    interviewFeedback={interviewFeedback}
+                    isInterviewStarted={isInterviewStarted}
+                    showPastInterviewsDropdown={showPastInterviewsDropdown}
+                    setShowPastInterviewsDropdown={setShowPastInterviewsDropdown}
+                    setInterviewFeedback={setInterviewFeedback}
+                    setChatMessages={setChatMessages}
+                    startInterview={startInterview}
+                    interviewElapsedSeconds={interviewElapsedSeconds}
+                    isSpeakingEnabled={isSpeakingEnabled}
+                    setIsSpeakingEnabled={setIsSpeakingEnabled}
+                    handleEndInterview={handleEndInterview}
+                    chatMessages={chatMessages}
+                    isChatLoading={isChatLoading}
+                    messagesEndRef={messagesEndRef}
+                    handleSendMessage={handleSendMessage}
+                    chatInput={chatInput}
+                    setChatInput={setChatInput}
+                    isSpeechRecognitionSupported={isSpeechRecognitionSupported}
+                    toggleListening={toggleListening}
+                    isListening={isListening}
+                  />
+                )}
+              </React.Suspense>
             </div>
           </div>
         </main >

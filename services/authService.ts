@@ -32,6 +32,16 @@ interface UserData {
 // In-memory cache to speed up repeated reads (keyed by UID)
 let userDataCache: { [userId: string]: UserData } = {};
 
+// Cross-tab cache invalidation listener
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key && e.key.startsWith(DATA_PREFIX)) {
+      const uid = e.key.replace(DATA_PREFIX, '');
+      delete userDataCache[uid];
+    }
+  });
+}
+
 export const getAuthToken = async (): Promise<string | null> => {
     try {
         if (auth && auth.currentUser) {

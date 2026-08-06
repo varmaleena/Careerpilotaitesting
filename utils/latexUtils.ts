@@ -21,10 +21,19 @@ export const generateLatexDocument = (data: LatexResumeData): string => {
     const { personalInfo, summary, skills, experience, education, projects, certifications, achievements } = data;
 
     // Header
+    const linkedinLink = personalInfo.linkedin ? `\\href{${personalInfo.linkedin}}{\\underline{LinkedIn}}` : "";
+    const websiteLink = personalInfo.website ? `\\href{${personalInfo.website}}{\\underline{GitHub}}` : "";
+    const contactParts = [
+        personalInfo.phone ? escapeLatex(personalInfo.phone) : "",
+        personalInfo.email ? `\\href{mailto:${personalInfo.email}}{\\underline{${escapeLatex(personalInfo.email)}}}` : "",
+        linkedinLink,
+        websiteLink
+    ].filter(Boolean).join(" $|$ ");
+
     const header = `
 \\begin{center}
     \\textbf{\\Huge \\scshape ${escapeLatex(personalInfo.fullName)}} \\\\ \\vspace{1pt}
-    \\small ${personalInfo.phone ? escapeLatex(personalInfo.phone) + " $|$ " : ""}${personalInfo.email ? `\\href{mailto:${personalInfo.email}}{\\underline{${escapeLatex(personalInfo.email)}}}` + " $|$ " : ""}${personalInfo.linkedin ? escapeLatex(personalInfo.linkedin) + " $|$ " : ""}${personalInfo.website ? escapeLatex(personalInfo.website) : ""}
+    \\small ${contactParts}
 \\end{center}
 `;
 
