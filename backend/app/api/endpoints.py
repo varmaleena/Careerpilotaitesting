@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Optional
 from app.services.llm_service import generate_llm_response
 from app.services.ml_service import calculate_match_scores
+from app.services.db_service import BackendDatabaseService
 from app.agents.resume_agent import ResumeAgent
 from app.agents.roadmap_agent import RoadmapAgent
 from app.agents.project_agent import ProjectAgent
@@ -66,14 +67,18 @@ class MarketInsightsRequest(BaseModel):
     target_role: Optional[str] = Field(default="Software Engineer")
     resume_text: Optional[str] = Field(default="")
 
+class UserProfileSaveRequest(BaseModel):
+    profile: Dict[str, Any] = Field(..., description="Candidate user profile dictionary.")
 
-# --- API Routes ---
+class UserDataSaveRequest(BaseModel):
+    payload: Any = Field(..., description="Data payload to store under data_type.")
+
+
+# --- AI & ML API Routes ---
 
 @router.post("/generate")
 async def generate_content(request: GenerateRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
-    """
-    Generic secure proxy endpoint. Appends server environment API credentials safely.
-    """
+    """Generic secure proxy endpoint."""
     try:
         text = generate_llm_response(
             contents=request.contents,
@@ -88,10 +93,7 @@ async def generate_content(request: GenerateRequest, current_user: Dict[str, Any
 
 @router.post("/jobs/match")
 async def match_resume_to_jobs(request: MatchRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
-    """
-    Local ML Scikit-Learn Vector Similarity Engine.
-    Calculates TF-IDF Cosine Similarity locally on the backend.
-    """
+    """Local ML Scikit-Learn Vector Similarity Engine."""
     try:
         if not request.resume_text.strip():
             raise HTTPException(status_code=400, detail="Resume text is empty.")
@@ -184,3 +186,34 @@ async def market_insights_endpoint(request: MarketInsightsRequest, current_user:
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Database Gateway API Routes ---
+
+@router.get("/user/profile")
+async def get_user_profile_endpoint(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Fetch Candidate Profile from Server DB."""
+    uid = current_user.get("uid", "anonymous")
+    profile = BackendDatabaseService.get_user_profile(uid)
+    return {"success": True, "profile": profile}
+
+@router.post("/user/profile")
+async def save_user_profile_endpoint(request: UserProfileSaveRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Save Candidate Profile to Server DB."""
+    uid = current_user.get("uid", "anonymous")
+    success = BackendDatabaseService.save_user_profile(uid, request.profile)
+    return {"success": success}
+
+@router.get("/user/data/{data_type}")
+async def get_user_data_endpoint(data_type: str, current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Fetch Candidate State Data (Analysis, Plan, Projects) from Server DB."""
+    uid = current_user.get("uid", "anonymous")
+    data = BackendDatabaseService.get_user_data(uid, data_type)
+    return {"success": True, "data": data}
+
+@router.post("/user/data/{data_type}")
+async def save_user_data_endpoint(data_type: str, request: UserDataSaveRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Save Candidate State Data (Analysis, Plan, Projects) to Server DB."""
+    uid = current_user.get("uid", "anonymous")
+    success = BackendDatabaseService.save_user_data(uid, data_type, request.payload)
+    return {"success": success}
