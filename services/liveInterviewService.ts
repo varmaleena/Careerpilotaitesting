@@ -210,6 +210,10 @@ export const evaluateLiveInterview = async (
     detailedFeedback: string;
 }> => {
 
+    const formattedTranscript = conversationHistory
+        .map(msg => `${msg.role === 'interviewer' ? 'Interviewer' : 'Candidate'}: ${msg.content}`)
+        .join('\n\n');
+
     const prompt = `You are a Senior Hiring Manager at ${config.companyName} evaluating a ${config.targetRole} interview.
 
 CANDIDATE PROFILE:
@@ -218,7 +222,7 @@ CANDIDATE PROFILE:
 - Readiness Score: ${config.candidateProfile.readinessScore}/100
 
 COMPLETE INTERVIEW TRANSCRIPT:
-${conversationHistory.map(msg => `${msg.role === 'interviewer' ? 'Interviewer' : 'Candidate'}: ${msg.content}`).join('\n\n')}
+${formattedTranscript}
 
 EVALUATION CRITERIA (${config.companyType} Standards):
 1. **Communication** (0-100): Clarity, structure, conciseness
