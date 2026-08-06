@@ -32,6 +32,17 @@ interface UserData {
 // In-memory cache to speed up repeated reads (keyed by UID)
 let userDataCache: { [userId: string]: UserData } = {};
 
+export const getAuthToken = async (): Promise<string | null> => {
+    try {
+        if (auth && auth.currentUser) {
+            return await auth.currentUser.getIdToken();
+        }
+    } catch {
+        return null;
+    }
+    return null;
+};
+
 export const AuthService = {
   // --- Validation Helpers ---
   isValidEmail: (email: string): boolean => {

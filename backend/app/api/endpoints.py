@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Optional
 from app.services.llm_service import generate_llm_response
@@ -8,6 +8,7 @@ from app.agents.roadmap_agent import RoadmapAgent
 from app.agents.project_agent import ProjectAgent
 from app.agents.interview_agent import InterviewAgent
 from app.agents.market_agent import MarketAgent
+from app.auth import get_current_user
 from app.config import logger
 
 router = APIRouter()
@@ -69,7 +70,7 @@ class MarketInsightsRequest(BaseModel):
 # --- API Routes ---
 
 @router.post("/generate")
-async def generate_content(request: GenerateRequest):
+async def generate_content(request: GenerateRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
     """
     Generic secure proxy endpoint. Appends server environment API credentials safely.
     """
@@ -86,7 +87,7 @@ async def generate_content(request: GenerateRequest):
 
 
 @router.post("/jobs/match")
-async def match_resume_to_jobs(request: MatchRequest):
+async def match_resume_to_jobs(request: MatchRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
     """
     Local ML Scikit-Learn Vector Similarity Engine.
     Calculates TF-IDF Cosine Similarity locally on the backend.
@@ -102,7 +103,7 @@ async def match_resume_to_jobs(request: MatchRequest):
 
 
 @router.post("/resume/validate")
-async def validate_resume_endpoint(request: ResumeValidateRequest):
+async def validate_resume_endpoint(request: ResumeValidateRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
     """Resume Document Classifier Endpoint."""
     try:
         result = await resume_agent.validate_resume(request.resume_text)
@@ -112,41 +113,48 @@ async def validate_resume_endpoint(request: ResumeValidateRequest):
 
 
 @router.post("/resume/analyze")
-async def analyze_resume_endpoint(request: ResumeAnalyzeRequest):
+async def analyze_resume_endpoint(request: ResumeAnalyzeRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
     """Full ATS Score & Skills Gap Analysis Endpoint."""
     try:
-        result = await resume_agent.process(request.model_dump())
+        context = request.model_dump()
+        context["user_id"] = current_user.get("uid")
+        result = await resume_agent.process(context)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/roadmap/generate")
-async def generate_roadmap_endpoint(request: RoadmapGenerateRequest):
+async def generate_roadmap_endpoint(request: RoadmapGenerateRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
     """Structured Learning Plan Endpoint."""
     try:
-        result = await roadmap_agent.process(request.model_dump())
+        context = request.model_dump()
+        context["user_id"] = current_user.get("uid")
+        result = await roadmap_agent.process(context)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/projects/generate")
-async def generate_projects_endpoint(request: ProjectGenerateRequest):
+async def generate_projects_endpoint(request: ProjectGenerateRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
     """Enterprise Portfolio Projects Blueprint Endpoint."""
     try:
-        result = await project_agent.process(request.model_dump())
+        context = request.model_dump()
+        context["user_id"] = current_user.get("uid")
+        result = await project_agent.process(context)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/interview/chat")
-async def interview_chat_endpoint(request: InterviewChatRequest):
+async def interview_chat_endpoint(request: InterviewChatRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
     """Real-Time Adaptive Mock Interview Endpoint."""
     try:
         context = request.model_dump()
         context["mode"] = "generate_response"
+        context["user_id"] = current_user.get("uid")
         result = await interview_agent.process(context)
         return result
     except Exception as e:
@@ -154,11 +162,12 @@ async def interview_chat_endpoint(request: InterviewChatRequest):
 
 
 @router.post("/interview/evaluate")
-async def interview_evaluate_endpoint(request: InterviewEvaluateRequest):
+async def interview_evaluate_endpoint(request: InterviewEvaluateRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
     """STAR Framework Interview Session Evaluation Endpoint."""
     try:
         context = request.model_dump()
         context["mode"] = "evaluate_session"
+        context["user_id"] = current_user.get("uid")
         result = await interview_agent.process(context)
         return result
     except Exception as e:
@@ -166,10 +175,12 @@ async def interview_evaluate_endpoint(request: InterviewEvaluateRequest):
 
 
 @router.post("/market/insights")
-async def market_insights_endpoint(request: MarketInsightsRequest):
+async def market_insights_endpoint(request: MarketInsightsRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
     """Market Demand & Salary Intelligence Endpoint."""
     try:
-        result = await market_agent.process(request.model_dump())
+        context = request.model_dump()
+        context["user_id"] = current_user.get("uid")
+        result = await market_agent.process(context)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
