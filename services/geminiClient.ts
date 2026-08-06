@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { getCachedAIResponse, setCachedAIResponse } from "./aiCache";
 import { RequestLoadBalancer } from "./loadBalancer";
+import { getAuthToken } from "./authService";
 
 export const GEMINI_MODEL = 'gemini-2.5-flash';
 
