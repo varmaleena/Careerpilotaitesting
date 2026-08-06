@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, File, UploadFile, Form
 from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Optional
 from app.services.llm_service import generate_llm_response
 from app.services.ml_service import calculate_match_scores
 from app.services.db_service import BackendDatabaseService
+from app.services.pdf_parser import extract_text_from_file
 from app.agents.resume_agent import ResumeAgent
 from app.agents.roadmap_agent import RoadmapAgent
 from app.agents.project_agent import ProjectAgent
@@ -89,6 +90,39 @@ async def generate_content(request: GenerateRequest, current_user: Dict[str, Any
     except Exception as e:
         logger.error(f"Generation endpoint failed: {e}")
         raise HTTPException(status_code=500, detail=f"Gemini generation error: {str(e)}")
+
+
+@router.post("/resume/upload")
+async def upload_and_parse_resume_endpoint(
+    file: UploadFile = File(...),
+    target_role: Optional[str] = Form("Software Engineer"),
+    target_companies: Optional[str] = Form("Top Tech Companies"),
+    experience_level: Optional[str] = Form("Intermediate"),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    High-Speed Server-Side Resume Upload & Analysis Endpoint.
+    Parses PDF/DOCX binary on the server using PyMuPDF and executes AI Micro-Agents in parallel.
+    """
+    try:
+        file_bytes = await file.read()
+        extracted_text = extract_text_from_file(file_bytes, file.filename)
+        if not extracted_text.strip():
+            raise HTTPException(status_code=400, detail="Could not extract readable text from uploaded file.")
+
+        context = {
+            "resume_text": extracted_text,
+            "target_role": target_role,
+            "target_companies": target_companies,
+            "experience_level": experience_level,
+            "user_id": current_user.get("uid")
+        }
+        result = await resume_agent.process(context)
+        result["extracted_text"] = extracted_text
+        return result
+    except Exception as e:
+        logger.error(f"Resume upload endpoint error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/jobs/match")

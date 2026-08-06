@@ -101,3 +101,38 @@ export const extractTextFromPdf = async (file: File): Promise<string> => {
         throw new Error("Failed to extract text from PDF. Please upload a clear PDF file.");
     }
 };
+
+/**
+ * Uploads raw PDF/DOCX file directly to Python FastAPI backend for PyMuPDF server parsing & parallel AI evaluation.
+ */
+export const uploadAndParseResume = async (
+    file: File,
+    targetRole: string = "Software Engineer",
+    targetCompanies: string = "Top Tech Companies",
+    experienceLevel: string = "Intermediate"
+): Promise<any> => {
+    const backendUrl = import.meta.env.VITE_BACKEND_URL;
+    if (backendUrl) {
+        try {
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("target_role", targetRole);
+            formData.append("target_companies", targetCompanies);
+            formData.append("experience_level", experienceLevel);
+
+            const response = await fetch(`${backendUrl}/api/resume/upload`, {
+                method: "POST",
+                body: formData
+            });
+
+            if (response.ok) {
+                return await response.json();
+            }
+        } catch (e) {
+            // Fall back to client extraction
+        }
+    }
+    const extractedText = await extractTextFromPdf(file);
+    return { extracted_text: extractedText };
+};
+
