@@ -1,6 +1,4 @@
-import { Type } from "@google/genai";
 import { generateWithRetry, GEMINI_MODEL } from "./geminiClient";
-import { UserProfile, CareerAnalysis } from "../types";
 
 /**
  * LIVE INTERVIEW SIMULATOR

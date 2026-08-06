@@ -250,8 +250,8 @@ export const generateProjectIdeas = async (
                 body: JSON.stringify({
                     target_role: targetRole,
                     experience_level: experienceLevel,
-                    difficulty: difficultyFilter || "Intermediate",
-                    skills: missingSkills
+                    difficulty: experienceLevel || "Intermediate",
+                    skills: focusTopics
                 })
             });
 
