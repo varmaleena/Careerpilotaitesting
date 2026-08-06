@@ -137,6 +137,38 @@ ENDING RULE:
 
 Generate your next response as the interviewer:`;
 
+    const backendUrl = import.meta.env.VITE_BACKEND_URL;
+    if (backendUrl) {
+        try {
+            const { getAuthToken } = await import("./authService");
+            const token = await getAuthToken();
+            const headers: Record<string, string> = { "Content-Type": "application/json" };
+            if (token) headers["Authorization"] = `Bearer ${token}`;
+
+            const userPrompt = conversationHistory.length > 0 
+                ? conversationHistory[conversationHistory.length - 1].content 
+                : `Start the mock interview for ${config.targetRole}.`;
+
+            const res = await fetch(`${backendUrl}/api/interview/chat`, {
+                method: "POST",
+                headers: headers,
+                body: JSON.stringify({
+                    prompt: userPrompt,
+                    target_role: config.targetRole,
+                    experience_level: config.experienceLevel,
+                    company_type: config.companyType
+                })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                if (data.responseText) return data.responseText;
+            }
+        } catch (e) {
+            // Fall through to direct AI fallback
+        }
+    }
+
     try {
         const response = await generateWithRetry(
             GEMINI_MODEL,
@@ -152,7 +184,6 @@ Generate your next response as the interviewer:`;
 
         return response.text || "Could you please repeat that?";
     } catch (error) {
-
         throw error;
     }
 };
@@ -222,6 +253,32 @@ OUTPUT JSON:
 
 Be brutally honest. This is their career growth.`;
 
+    const backendUrl = import.meta.env.VITE_BACKEND_URL;
+    if (backendUrl) {
+        try {
+            const { getAuthToken } = await import("./authService");
+            const token = await getAuthToken();
+            const headers: Record<string, string> = { "Content-Type": "application/json" };
+            if (token) headers["Authorization"] = `Bearer ${token}`;
+
+            const res = await fetch(`${backendUrl}/api/interview/evaluate`, {
+                method: "POST",
+                headers: headers,
+                body: JSON.stringify({
+                    transcript: formattedTranscript,
+                    target_role: config.targetRole
+                })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                if (data.overallScore !== undefined) return data;
+            }
+        } catch (e) {
+            // Fall through to direct AI fallback
+        }
+    }
+
     try {
         const response = await generateWithRetry(
             GEMINI_MODEL,
@@ -237,7 +294,6 @@ Be brutally honest. This is their career growth.`;
 
         return JSON.parse(response.text || '{}');
     } catch (error) {
-
         throw error;
     }
 };
