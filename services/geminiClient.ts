@@ -99,9 +99,17 @@ export const generateWithRetry = async (
                     setCachedAIResponse(modelName, params.contents, result);
                 }
                 return result;
+            } else {
+                const errorText = await response.text();
+                console.error(`Backend API /api/generate returned HTTP ${response.status}:`, errorText);
+                throw new Error(`Backend API error (${response.status}): ${errorText}`);
             }
-        } catch (backendErr) {
-            console.warn("Backend API call failed, attempting fallback modes:", backendErr);
+        } catch (backendErr: any) {
+            console.warn("Backend API call failed:", backendErr);
+            // If direct client API keys exist, proceed to Mode B fallback. Otherwise rethrow error.
+            if (getGeminiKeys().length === 0) {
+                throw new Error(backendErr.message || "Failed to fetch response from backend service.");
+            }
         }
     }
 
@@ -152,37 +160,46 @@ export const generateWithRetry = async (
         }
     }
 
-    // Mode C: Local Backend Fallback (development mode)
-    try {
-        const defaultBackend = "http://localhost:8000";
-        const response = await fetch(`${defaultBackend}/api/generate`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                model: modelName,
-                contents: params.contents,
-                config: params.config
-            })
-        });
+    // Mode C: Local Backend Fallback (ONLY for local dev on localhost / 127.0.0.1)
+    const isLocalhost = typeof window !== 'undefined' &&
+        (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
-        if (!response.ok) {
-            const errBody = await response.text();
-            throw new Error(errBody || `HTTP ${response.status}`);
+    if (isLocalhost) {
+        try {
+            const defaultBackend = "http://localhost:8000";
+            const response = await fetch(`${defaultBackend}/api/generate`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    model: modelName,
+                    contents: params.contents,
+                    config: params.config
+                })
+            });
+
+            if (!response.ok) {
+                const errBody = await response.text();
+                throw new Error(errBody || `HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            const result = { text: data.text };
+            if (!skipCache) {
+                setCachedAIResponse(modelName, params.contents, result);
+            }
+            return result;
+
+        } catch (error: any) {
+            console.error("Local Backend Connection Refused:", error);
+            throw new Error(
+                "Local AI service unavailable. Please ensure local backend server is running on http://localhost:8000."
+            );
         }
-
-        const data = await response.json();
-        const result = { text: data.text };
-        if (!skipCache) {
-            setCachedAIResponse(modelName, params.contents, result);
-        }
-        return result;
-
-    } catch (error: any) {
-        console.error("Backend API Connection Refused:", error);
-        throw new Error(
-            "AI service unavailable. When deploying on Vercel, please set VITE_GEMINI_API_KEY or VITE_BACKEND_URL in your Vercel Environment Variables."
-        );
     }
+
+    throw new Error(
+        "AI service unavailable. When deploying in production, please set VITE_BACKEND_URL or VITE_GEMINI_API_KEY in your hosting environment variables."
+    );
 };
 
 export const getAiInstance = () => {
